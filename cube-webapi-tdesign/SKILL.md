@@ -54,6 +54,26 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 - 违反判定：无 CLI 产物形态 / 主色非政务蓝或三处不同源 / `theme-dark.css` 未引入 或 `setting.load()` 未调用 或 `SettingPanel` 未挂载 —— 任一条即不合格。
 - 参考实现：`references/scaffold/`（已按 C1~C3 落实；`vue-tsc --noEmit` 与 `vite build` 均 0 错误；CDP 实测：默认 `--td-brand-color=#0f4c9e`，点齿轮 → 选「暗色」→ `<html>` 得 `t-theme-dark`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好落 `localStorage['cube-personalization']`）。
 
+## 铁律：父子表（主从表）前端只展现父表（不可违反）
+
+凡存在一对多父子关系的两个实体（父表 `Parent` + 子表 `ParentLine`/`ParentItem`，由 `ParentID` 外键关联），前端**只渲染父表**的列表/表单/详情，**不在菜单暴露子表控制器**：
+
+1. **菜单**：子表控制器**不生成、不显示独立菜单项**。即便后端 `GetMenuTree` 下发了子表节点，前端也只将其作为父表详情下的内嵌区，绝不进一级/二级导航。
+2. **列表页**：只展示父表列表；父表行内不铺子表行（子表行数不固定，平铺会破坏主表可读性）。
+3. **详情页**：父表行「详情」中**关联展示子表数据**——独立子表区域（内嵌 `t-table`）列出该父记录下的全部子行，只读呈现。
+4. **新增/编辑表单**：子表数据**直接在父表表单内录入**（不另开子表独立页面），二选一落地：
+   - 方案 A：父表表单新增「明细数据」**tab**（与基础信息 tab 并列），tab 内嵌可增删行的子表录入表格；
+   - 方案 B：父表表单主体直接增加**子表数据区域**（多行录入控件），随父表一并提交。
+   保存时父表与子表作为一个事务整体提交（后端 `Insert`/`Update` 含 `lines` 集合）。
+5. **路由**：子表不注册独立路由（`/entity/:area/:parentLine` 不进菜单）；如需直达，仅作父表详情锚点。
+6. **权限控制（前端职责：按钮可见性随父表，不可违反）**：子表**没有独立权限**，其权限**一律继承父表**。前端的职责只到「**按钮/操作的可见性随父表权限位**」：
+   - 进入父表详情即视为持有该父记录权限；子表区域「新增/修改/删除」按钮可见性＝**父表对应的操作权限位**（子表本无菜单权限位，不得以子表位判定）。
+   - 父表无某操作位（如无「修改」）→ 子表该操作按钮同样**隐藏**。
+   - **后端校验职责不在此重复**：子表写接口随父表权限位校验、`parentId` 入参校验父记录可见性与操作权限、数据范围随父表、`lines` 整体事务提交——一律归 **`cube-webapi-backend`「铁律：父子表后端权限与提交契约」**。前端只负责 UI 隐显，越权拦截由后端兜底（前端隐藏≠安全，后端须独立校验）。
+
+**判定依据**：`GetMenuTree` 下发的父子结构、`mapField` 中的 `ParentID` 关联、或字段命名 `*Line`/`*Item`/`*Detail` 约定。凡 `*Line` 实体一律视为子表，不单独建菜单与列表页。
+**与 §4.7 树形表格的区别**：本铁律针对**两个实体**的一对多关系；单实体 `ParentID` 自引用的树形（如 Department/Menu）仍走 §4.7 的 treeTable，二者不可混淆。
+
 ## 一、核心哲学：继承式（配置式）页面
 
 魔方 MVC（`List.cshtml` + `_Form_*` 分部视图 + `ListTree.cshtml`）「共享骨架 + 按字段选视图 + 树形局部特化」平移到 Vue：
@@ -257,6 +277,8 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 ### 4.12 菜单与导航（GetMenuTree）
 
+★ 父子表关系：子表控制器**不进菜单**（不在一级/二级导航暴露），只作为父表详情下的内嵌区——详见「铁律：父子表前端只展现父表」。凡 `*Line`/`*Item` 实体一律视为子表，菜单渲染时跳过其独立节点。
+
 `GetMenuTree`（`GET /Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
 
 - **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + `accordion` + 图标透传（后端未给 icon 时按名称/url 推断）；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
@@ -414,7 +436,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 ## 六、常见陷阱（高频精选 + 全量排障入口）
 
-> **全量 74+ 条陷阱（含症状→根因→修复→assets 指针）已外移至 `references/troubleshooting.md`，按 9 组分类**：G1 后端契约/权限 / G2 请求层与代理 / G3 字段映射选型 / G4 列表表格渲染 / G5 树形 / G6 表单校验控件 / G7 登录会话外壳 / G8 前端工程 / G9 Lov+CDP 验收。**异常先查该文件**（组目录定位 → 读条目），以下仅保留最高频行为警示：
+> **全量 96+ 条陷阱（含症状→根因→修复→assets 指针）已外移至 `references/troubleshooting.md`，按 9 组分类**：G1 后端契约/权限 / G2 请求层与代理 / G3 字段映射选型 / G4 列表表格渲染 / G5 树形 / G6 表单校验控件 / G7 登录会话外壳 / G8 前端工程 / G9 Lov+CDP 验收。**异常先查该文件**（组目录定位 → 读条目），以下仅保留最高频行为警示：
 
 1. **「源码改对了错误照旧」→ 先怀疑 stale 构建产物（第一名）**：改契约/登录类代码后四步闭环——① `npm run build` 退出码 0；② `grep dist/assets/index-*.js` 确认新关键字**存在**、旧 bug 关键字**消失**（如应见 `category:0` 且无 `category:""`）；③ 浏览器硬刷新；④ dev 模式重启会话。最快判定：node 直接跑 `normToken` 喂真实 JSON。
 2. **登录契约**：SPA 用 `POST /Auth/Login`（非 `/Admin/User/Login`）、`username` 非 `userName`、`category` 传枚举整数（`''`/`'Password'` → `code:-2`）、令牌 snake_case 走 `normToken` 三向兜底、`LoginConfig.oAuth` 大写 A。真实 HTTP 响应是字段名唯一权威。
@@ -428,6 +450,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 10. **`dist` 构建沙箱坑**：safe-delete 报错与代码无关；`dist` 被进程锁 → 先 `--outDir dist-check` 验证再 `cp -r` 覆盖，**勿 `mv`/`rm` 替换**；治本停占用进程。
 11. **「支持暗黑模式」= 三处接线，不是一个 css 文件**：`theme-dark.css` 存在 ≠ 用户能切。必须 ① `main.ts` 在 TDesign 样式**之后** `import '@/styles/theme-dark.css'`；② `main.ts` 调 `useSettingStore().load()`；③ `BasicLayout.vue` 挂 `<SettingPanel />`。缺任一处 → 齿轮不存在 / 类名不切换 / 首屏不还原，等同于没做。验收只认两件事：**右下角有齿轮**、**点「暗色」后 `<html>` 出现 `t-theme-dark`**（`--td-bg-color-page` 应变 `#181818`）。
 12. **技能资产必须与当前 `fieldRender` 契约同版本**：`assets/` 若混入早期组件（旧 `ListSearchBar`/`DetailContent` 引用 `formItemName`/`selectFormControl`/`LookupMap` 等已删导出），**拷贝即编译失败**。判断法：把待用资产临时放进 `references/scaffold/src/` 跑一次 `vue-tsc --noEmit`，0 错误才算可用。**当前真相源 = `references/scaffold/src/`**（已过 `vue-tsc` + `vite build`，并含 C1~C3 三约定）。
+13. **CDP 验收选 t-select 必踩 stale-popup（G9）**：同一弹窗内**连续点开两个下拉**（如仓库→单据类型）时，用 `[...document.querySelectorAll('.t-select-option,.t-option,.t-popup li')].find(e=>e.getBoundingClientRect().width>0)` 取「全局首个可见选项」会**误选上一个下拉的残留项**（值填错，如单据类型选成了「总务仓库」）。根因：TDesign `.t-popup` 关闭后仅 `display:none`/`visibility:hidden`，**不卸载**，重开别的 select 时 DOM 同时挂着多个 popup，「首个可见」可能是上次残留。**正确策略**：先过滤出所有可见 popup `[...document.querySelectorAll('.t-popup')].filter(p=>p.getBoundingClientRect().width>0)`，**取最后一个**（=最新打开的那个），在其内部再取首个可见 `.t-select-option` 点击。等 popup 就绪同样判「最后可见 popup 内有可见选项」而非全局。定位触发元素用 `t-form-item__<字段名>` class（探针实测 `t-form-item__warehouseID`）比 label 文本匹配稳。
 
 ## 七、推荐检查项（验收 checklist）
 
