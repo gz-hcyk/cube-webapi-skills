@@ -1,0 +1,571 @@
+---
+name: cube-webapi-tdesign
+agent_created: true
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、mapField 核查、组件约定核查、枚举下拉、外键下拉、verify-entity-form、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染。"
+---
+
+# cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
+
+从零创建基于 **TDesign Vue Next + TDesign Starter（tdesign-starter-cli）** 的前端工程，对接
+`cube-webapi-backend` 描述的魔方 WebApi 后端，用**元数据驱动 + 配置式基类组件**让每个实体的列表/表单/详情页
+"继承"同一套骨架（新增实体页 ≈ 复制 5 行），而非逐个手写。
+
+**资源导航（本文件只载入流程与铁律；细节按需读取）**：
+
+| 需要 | 去读 |
+|---|---|
+| 字段→控件全规则、选型优先级、校验规则 | `references/field-renderers.md` |
+| 排障（异常症状 → 根因 → 修复） | `references/troubleshooting.md`（9 组目录先定位症状组） |
+| 登录/令牌/请求层契约 | `references/metadata-contract.md` + troubleshooting G1/G7 |
+| ConfigController<T> 单表单 | `references/config-controller.md` + `assets/core/components/cube/ConfigView.vue` |
+| 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
+| LIST 型值集弹窗（LovListField）行为/FR/验证清单 | `references/lov-list-field.md` |
+| 演示工程（**源码级**，未装依赖/未编译；完整形态页面参考） | `references/demo/`（README 见 `references/demo/README.md`） |
+| 生产级编排层脚手架（**唯一真相源**，已 `vue-tsc`+`vite build`+CDP 实测） | `references/scaffold/` |
+| 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
+| 新增实体验收脚本 | `references/verify-entity-form.mjs` |
+| 资产体检（死文件/悬空引用/副本漂移） | `references/scripts/scan-assets-dead.mjs` + `scan-assets-refs.mjs`（见目录 README） |
+| LovListField CDP 端到端验收（3 套 53 项） | `references/scripts/lov/`（`lov_cdp.mjs` 27 / `lov_form_cdp.mjs` 15 / `lov_display_cdp.mjs` 11，含 README） |
+| 后端控制器/权限/JWT/部署 | `cube-webapi-backend` skill |
+
+后端契约（路由、响应信封、字段描述符）权威定义在 `cube-webapi-backend`；本技能聚焦**前端消费方式**。
+
+## 铁律：菜单必须后端动态生成 + 品牌点击回 dashboard（不可违反）
+
+- **M1** 业务菜单唯一权威 = 后端 `GET /Admin/Index/GetMenuTree`（只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。
+- **M2** 要加页面入口 → 改后端产出菜单节点（实体/API 控制器自动扫出，或显式挂菜单）；前端**只做「后端 url → 前端路由」归一化**（`BasicLayout.onNavigate()`，不产生新菜单项）。
+- **M3** 新项目默认 `dashboard` 首页（登录后 `redirect:'/dashboard'`）；点击左上角品牌（系统名/Logo）必须跳 `/dashboard`。
+- 例外：dashboard 及其品牌入口可内置。违反 M1=前端手工 push 菜单、违反 M2=前端硬补页面入口、违反 M3=无 dashboard 或品牌不跳转。
+
+## 铁律：唯一 HTTP 层（不可违反）
+
+- **H1** 一个前端工程只允许**一套** axios 实例：`assets/core/api/http.ts` → `src/api/http.ts`，令牌读写统一走 `assets/core/api/token.ts` → `src/api/token.ts`（localStorage 键 `assets_token`）。组件一律 `import { getApi, getRaw, postApi, ... } from '@/api/http'`，**禁止**并存第二套实例、第二套令牌键名（历史遗留 `api.ts` 用 `cube_token`，已删除）。
+- **H2** 后端只认 `Authorization: Bearer <jwt>`（实测）：发 `Authentication: Bearer <jwt>` → 401；不带 Authorization 只带 Cookie（`.Cube.Session`）→ 401。排障第一步永远是「请求头里有没有 `Authorization: Bearer`」。
+- 违反判定：仓库出现两个 HTTP 实例文件、出现 `@/api/api` 引用、或令牌键名不统一 → 必然「登录成功但列表/菜单全空」（典型症状：**左侧菜单栏没有任何显示**，因为 `/api/Admin/Index/GetMenuTree` 恒 401）。
+
+## 铁律：三条工程约定（新工程必须满足，不可违反）
+
+- **C1 由官方脚手架生成**：新工程一律先 `td-starter init <名> -type vue3 -bt vite -temp lite` 生成骨架（v0.5.3 实测），再拷入本技能 `assets/`；**禁止从零手搭**。工程配置保持 CLI 产物形态，仅做必要补丁：`@` 别名、dev 代理、`manualChunks` 分包，以及**补 `vue-router` / `pinia` / `axios`**（lite 模板默认不含这三项，不补则 vue-router/pinia 直接跑不起来）。
+- **C2 默认品牌色 = 政务蓝 `#0f4c9e`**：三处必须同源 —— `src/styles/tokens.css`（`--td-brand-color` 及全色阶）、`src/stores/setting.ts` 的 `DEFAULT_BRAND`、`src/theme/tokens.ts`。设置面板品牌色预设须把政务蓝**置首**。改主色时三处同步，否则首屏会闪色。
+- **C3 暗黑模式必须"能点得到"**：光有 `theme-dark.css` + `setting.ts` 只是能力，还须完成**三处接线**，缺一即为死代码：
+  ① `main.ts` 在 TDesign 样式**之后**依次 `import '@/styles/tokens.css'` → `import '@/styles/theme-dark.css'`；
+  ② `main.ts` 启动调用 `useSettingStore().load()`（还原偏好 + 把品牌色阶以 inline style 注入 `<html>`）；
+  ③ `BasicLayout.vue` **挂载 `<SettingPanel />`**（右下角悬浮齿轮 = 主题模式/品牌色的 UI 唯一入口）。
+- 违反判定：无 CLI 产物形态 / 主色非政务蓝或三处不同源 / `theme-dark.css` 未引入 或 `setting.load()` 未调用 或 `SettingPanel` 未挂载 —— 任一条即不合格。
+- 参考实现：`references/scaffold/`（已按 C1~C3 落实；`vue-tsc --noEmit` 与 `vite build` 均 0 错误；CDP 实测：默认 `--td-brand-color=#0f4c9e`，点齿轮 → 选「暗色」→ `<html>` 得 `t-theme-dark`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好落 `localStorage['cube-personalization']`）。
+
+## 一、核心哲学：继承式（配置式）页面
+
+魔方 MVC（`List.cshtml` + `_Form_*` 分部视图 + `ListTree.cshtml`）「共享骨架 + 按字段选视图 + 树形局部特化」平移到 Vue：
+
+| MVC 理念 | Vue 实现 |
+|---|---|
+| 共享 `List.cshtml` | **`ListPage.vue`** 基类组合根 |
+| `_List_Data` 按字段循环 | `buildColumns(GetPage.list)` 动态生成列 |
+| `_Form_*` 按类型选分部 | `controlOf(field)` → `t-input/select/switch/...` |
+| `ListTree.cshtml` | `isTreeSchema(全部字段组聚合)` 为真 → `<t-enhanced-table>` |
+| 实体页极薄 | 实体页只传 `area`+`controller` |
+
+字段增删/类型变更/是否树形全由后端元数据决定，前后端不重复定义。
+
+## 二、前置条件
+
+Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。
+
+## 三、标准工作流（从零搭建）
+
+| 步骤 | 动作 | 拷贝源 → 目标 | 要点 |
+|---|---|---|---|
+| 1 脚手架 | `td-starter init`（Vue3+TS+Vite+Pinia） | — | 结构：`api/ store/ pages/ layouts/ router/`；新工程一律走此 CLI，禁止从零手搭（§九） |
+| 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **唯一 axios 实例**（铁律 H1）；头只发 `Authorization: Bearer`（H2）；`X-Tenant`+`X-Tenant-Id`；响应 `code`+401 跳登录；`baseURL='/'` 故调用方写全 `/api`；`getRaw` 供非实体端点（`/Auth/*`、`/api/Admin/Index/GetMenuTree`） |
+| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts`；`permissions.ts` | `references/demo/src/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
+| 4 资源/渲染器 | `useEntityResource.ts`/`fieldRender.ts`/`useLookups.ts`/`useLov.ts` → `src/api/` | 同上 | 见 §4.4/§4.8/§4.20 |
+| 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
+| 6 实体页 | `<ListPage area controller title />` | — | 见 §4.6 |
+| 7 外壳 | `menuTitles.ts`/`BasicLayout`/`tokens.css`/`SettingPanel` 等 | `assets/` + `references/scaffold/src/**` | 见 §4.12/§4.14-16/§4.18（菜单树归一化**无独立模块**：已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`；旧 `menuTree.ts` 已归档于 `assets/archive/`，勿用） |
+| 8 验收 | checklist（§六）+ 新增实体跑 `verify-entity-form.mjs`（§4.21） | — | 编译 0 错误铁律 |
+
+**登录契约（当前版本 AuthController，SPA 用，实测）**：端点 `POST /Auth/Login` + `GET /Auth/LoginConfig` + `/Auth/Challenge` + `/Auth/Refresh` + `/Mfa/*`（**均不带 `/api` 前缀**；`/Admin/User/Login` 只留 MVC/SSO）。请求体 `{ username, password, category(枚举整数: Password=0/Mobile=1/Mail=2/OAuth=3，禁字符串), remember, challengeId, captchaId, captchaCode }`。响应令牌键名实测 **snake_case**（`access_token`/`refresh_token`/`expire_in`），`auth.ts` 的 `normToken` 三向兜底（snake/camel/Pascal），统一读 camelCase。`challengeRequired===true` 才走 RSA-OAEP Challenge；其余开关同理 `===true` 才启用。`LoginConfig` 的 `oAuth` 键名实测**大写 A**（文档写小写），`getLoginConfig` 双向归一、页面读 `config.oAuth`。详见 troubleshooting G1/G7。
+
+### 4.1 脚手架
+
+```bash
+npm i tdesign-starter-cli@latest -g
+td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -type vue3
+```
+
+### 4.2 落地 API 请求层（唯一 HTTP 层）
+
+拷贝 `assets/core/api/http.ts` → `src/api/http.ts`、`assets/core/api/token.ts` → `src/api/token.ts`、`assets/core/utils/camel.ts` → `src/utils/camel.ts`。这是**全项目唯一**的请求层（铁律 H1）。
+
+- **令牌**：`token.ts` 统一读写 `localStorage['assets_token']`（配套 `normToken` 三向兜底 + `getUsernameFromToken`）；`http.ts` 请求拦截调 `getToken()`，头写 **`Authorization: Bearer ${token}`**（实测后端只认这一个头，见 H2）。登录/登出/401 清令牌一律经 `token.ts`，**任何组件不得自行 `localStorage.getItem/setItem` 令牌**。
+- **两套实例同一份拦截逻辑**：`http`（`baseURL:'/'`，实体接口用）与 `rawHttp`（`baseURL:'/'`，登录/菜单等）。二者都以 `/` 为基址 → **调用方自己写全前缀**：实体写 `/api/{area}/{controller}`，非实体写 `/Auth/Login`、`/api/Admin/Index/GetMenuTree`。
+- **便捷方法**：`getApi/postApi/putApi/deleteApi`（返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw<T>`（同 http 实例，语义上用于非实体端点）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 清令牌并跳 `/login`**）与 `camelize`（PascalCase→camelCase，缩写白名单见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
+- **多租户**：请求头 `X-Tenant`（租户 Code，主）+ `X-Tenant-Id`（兼容旧后端），Code 由登录响应头 `X-Tenant` 捕获后持久化。
+- ⚠️ **反面教材（该文件现已不存在，仅作历史记录）**：技能早期版本附带过一套 `api.ts`（另一套 axios 实例）（键名 `cube_token`，`baseURL:'/api'`，双令牌头）。它与 `token.ts` 键名冲突，任何组件误引即产生「请求不带令牌 → 全接口 401 → 菜单树恒空」。**不要再引入它**；如遇老项目残留，删除并全量 `grep "api/api"` 清零引用。
+
+### 4.3 落地鉴权与权限
+
+- `auth.ts`：`loginWithPassword`（含 Challenge-Response 门控）/`loginWithCode`（category 传 Mobile/Mail 枚举整数）/`sendCode`（channel 大小写 `Sms`/`Mail`）/`verifyMfa`（`message` 以 `mfa_required:` 开头时进二步）/`refresh`（令牌轮换）/`resetPassword`/`registerUser`/`loadMenu`/`setTenant`。MFA 可用性以 `LoginConfig.security.mfaAvailable===true` 为准。
+- 按钮/操作显隐真源：`GetPage.setting`（§4.10）+ 菜单树 + `/Auth/Info`（权限位）。`permissions.ts` 仅作位语义参考。
+- **`Message` 是组件，函数式调用必须 `MessagePlugin.success/error/...`**（误用 `Message.success` 会 `is not a function`，登录成功不跳转）。
+
+### 4.4 落地实体资源与渲染器
+
+> ★ **元数据端点 ≠ 数据行端点（实测，最易踩）**：实体 schema 与数据行来自**两个不同 URL**，不可混用、不可互猜：
+>
+> | 端点 | 方法 | 返回 | 前端用途 |
+> |---|---|---|---|
+> | `/api/{area}/{ctrl}/GetPage` | GET | **只有字段描述符**：`data.{setting,list,allList,addForm,editForm,detail,search}`，每项都是 `DataField[]`，**没有任何数据行** | `loadSchema()`：列/表单/搜索/详情字段定义 + `setting.*` 按钮开关 |
+> | `/api/{area}/{ctrl}`（**无 action 段**） | GET | **数据行**：`data:[rows]` + `page:{pageIndex,pageSize,totalCount,longTotalCount}`（+ 可选 `stat`） | `loadData()` / `loadAll()`（树形取全量） |
+>
+> - ⚠️ **别把 `GetPage.data.list` 当数据行**——它是**列定义数组**；`data.list.length` = **列数**不是行数（实测 Department 为 11 列）。
+> - ⚠️ `extractListPayload` 只从 `rows / page.rows / Page.Rows / data` 取行，**从不读 `list` 键**（`list` 在 GetPage 里是列定义，读它必然拿不到行）。
+> - 实测锚点（可作回归基线）：`GET /api/Admin/Department/GetPage` → `data.list` = 11 条字段描述符、**无 `rows`**；`GET /api/Admin/Department?pageIndex=1&pageSize=1000` → `data` = 7 行、`page.totalCount = 7`。
+> - 推论：凡遇「列表空白但 `GetPage` 有返回」「把 `data.list` 当行数统计」类症状，先回本表核对端点。
+
+- `useEntityResource.ts`：封装 `GetPage`(schema)/`Index`(数据)/CRUD；`normalizeRows` 行键归一到 camelCase；`getById` 候选链 `/Detail?id=`→`/Get?id=`→`?id=`→`/{id}`（**单条接口 id 在 query**）；`update` 走 `PUT /{base}`（主键在 body）、`remove` 走 `DELETE /{base}?id=xxx`（id 在 query，**不放 URL path** → 405）；`isTree`；`loadAll`（树形取全量）。
+- `fieldRender.ts`：`controlOf`/`selectFormControl`/`selectListComponent`（选型）、`mapFieldKind`/`mapDictOf`/`parseMapSource`（mapField 双语义）、`labelOf`/`resolveOptions`（回显/选项）、`isTreeSchema`/`buildTree`、`buildColumns`（**只由 fields 生成，字典经 `getLookups()` 渲染时读取** → 列引用稳定）、`buildFormItems`/`buildFormRules`/`groupFormItemsByCategory`、`serializeRangeValue`/`deserializeMultiValue` 等。
+- `useLookups.ts`：约定式外键字典（`xxxID` → 同 area 同名控制器 Index；404 自动回退 `Cube` area；`LOOKUP_ALIASES` 修名实不符，`{category:'Blog/ProductCategory'}`）；排除审计字段 `createUserID/updateUserID`。
+
+### 4.5 落地基类页面组件
+
+按 MVC `List.cshtml` 的关注点划分；**当前参考实现是「自包含 ListPage」**（搜索栏/工具条/统计行内联在 `ListPage.vue` 中），子组件不持有业务状态：
+
+| 组件 | 职责 |
+|---|---|
+| `ListPage.vue`（组合根，**自包含**） | 编排搜索栏 + 工具条 + 统计行 + 表格（`t-table`/树形 `t-enhanced-table`）+ FormDialog/DetailDrawer，持有业务状态 |
+| `FormDialog.vue` | 新增/编辑弹窗：`addForm`/`editForm` 驱动，映射下拉、`fieldErrors` 回显、rules 校验、按 `category` 分 tab |
+| `DetailDrawer.vue` | 详情抽屉：遍历原始 `DataField[]`，`xxxID`/`ParentID` 经 `labelOf` 回显名称（非原始 ID） |
+| `MenuSidebar.vue` | 侧栏菜单（垂直/顶部双形态、accordion、图标透传），数据源为 `GetMenuTree` |
+| `SettingPanel.vue` | 个性化配置抽屉（主题模式/品牌主色/布局/尺寸）= **暗黑模式的 UI 唯一入口**，随 `BasicLayout` 挂载 |
+| `ConfigView.vue` / `DbView.vue` | 非实体控制器专属页（见 §4.17 / §4.18） |
+
+> **已移除**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter` 四个拆分件与 `DetailContent.vue`。
+> 它们停留在早期的 `fieldRender` 契约（引用 `FormItem.name`、`buildFormRules`、`formItemName`、`selectFormControl`、`LookupMap` 等已不存在的导出），
+> 直接拷贝会编译失败；其能力已并入自包含的 `ListPage.vue` / `DetailDrawer.vue`。若确需拆分，以 `references/scaffold/src/components/cube/ListPage.vue` 的当前实现为基准重新拆，勿复用旧件。
+
+### 4.6 实体页"继承"基类
+
+```vue
+<ListPage area="IoTHub" controller="Device" title="设备管理" />   <!-- 普通实体 -->
+<ListPage area="IoTHub" controller="DeviceGroup" title="设备分组" /> <!-- 含 ParentID 自动树形，无需特判 -->
+```
+
+树形判定用**全部字段组聚合**（list+addForm+editForm+detail+search）命中「字段名=ParentID」或「mapField=ParentID（如 ParentName）」；不能只看 list 组（ParentID 常被隐藏仅以 ParentName 映射列出现，漏判成平铺表）。
+
+### 4.7 树形表格自动判定（treeTable）
+
+规则详见 `references/field-renderers.md` §4/§7。要点：
+- 数据为扁平行（含 `id`+`parentID`），前端 `buildTree(rows)` 组树。
+- 树形**必须用 `<t-enhanced-table>`**（`t-table` 是 PrimaryTable 不支持树形），`:tree` 只传**对象**（`{ childrenKey:'children', defaultExpandAll:true, treeNodeColumnIndex:0 }`），勿写静态布尔。
+- 树形列表基于**完整数据集**（`loadAll`，超大 pageSize），分页当前页会树断链塌平。
+
+### 4.8 字段映射（xxxID 双模式：列表显名 / 表单下拉）
+
+映射字段 = 字段名以 `ID`/`Id` 结尾且非主键（如 `StatusID`/`CategoryID`/`CreateUserID`/`ParentID`）。两条硬规则（详见 `references/field-renderers.md` §3）：
+1. **列表**：`xxxID` 列显示映射名称（`labelOf` 回显），**绝不显示原始 ID**。
+2. **表单**：`xxxID` 渲染映射源下拉（选项 = 映射源解析）。
+
+**提交/回填键名（关键契约）**：映射字段（`mapField` 非空）表单键**必须用原始列名**（`RoleName(mapField=RoleID)` → `roleID`）——映射字段是虚拟属性，按自身名提交被后端静默忽略 → 外键存不进。统一走 `fieldRender.formItemName(f)`（防键漂移），编辑回填依赖同一键 + camelCase 行。
+
+**枚举/映射源解析顺序**（列表显名与表单下拉共用）：① `field.dataSource`（**Cube 6.15.2026.901 实测的枚举字典通道**，键为数值字符串、值为中文 Description）→ ② `field.map`（少数变体）→ ③ `mapField` 字典串（仅旧变体；6.15 的 `mapField` 只承载外键字段名）→ ④ `lookups[基名]`（外键实体 Index）。四者皆空按页面策略隐藏。
+
+> **6.15 已推翻的旧结论（2026-09 实测，务必按新版写代码）**：
+> ① 枚举字典**不用** `mapField`，走独立的 **`dataSource`**（26 实体 17 枚举类型 105 处全覆盖、缺口 0）；读 `field.map` 或只认 `mapField` 字典串都会把枚举渲染成原始 Int32。
+> ② **`required` 键全量缺失（1452 个描述符里出现 0 次）**，后端不提供独立必填信号 —— 但这**不等于**无法推必填，见 ③。
+> ③ ★ **Cube 省略取值为 `false` 的布尔键**（本契约最易踩的坑）：键只在为 `true` 时出现，**键缺失即 false**。实证 `StockFlow.ID` = `{"name":"ID",…,"typeName":"Int64","primaryKey":true}`，没有 `nullable`/`readOnly`/`visible`/`required` 键。
+> ⇒ **绝不能写 `f.nullable === false`**（该表达式永不成立，必填推断会**全体失效**，表单 0 个必填标记）；推必填只能用 **`f.nullable !== true`**（键缺失 ⇒ 列 NOT NULL ⇒ 必填），并**排除主键与服务端填充的审计字段**（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`），否则新增表单被系统字段卡死。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定；`length`/`maxWidth`/`textAlign` 也可能缺失，TS 须声明可选。
+> ④ 未填字段仍须由 `FormDialog.defaultValue` 给「数值 0 / 布尔 false / 空串」，否则 `null` 会被 NOT NULL 列拒绝（实测 400）。
+> ⑤ 全量属性出现频次（1452 个字段描述符）：`dataSource` 105 / `mapField` 236 / `nullable` 387 / `length` 322 / `category` 373 / `itemType` 12 / `required` **0**。
+> ⑥ **实测校验值**（可作回归基线）：某业务实体新增表单应得 **17 个必填标记**，其中 `nullable: true` 的字段（如 `BillNo`/`Remark`）正确豁免。拿到 0 个必填标记 ⇒ 必是踩了 ③。
+
+**外键 lookup 回退与别名（实测 2026-09）**：`useLookups` 要找的是「字段名基」对应的控制器，但字段名基常与真实控制器名不一致，且外键可能指向框架内置表（业务库里根本没有）。落地两条表 + 命中率优先的候选顺序：
+
+| 表 | 内容 | 例子 |
+|---|---|---|
+| 同区别名 | 字段基 → 真实控制器 | `DefaultWarehouse`→`Warehouse`、`DefaultLocation`/`Location`→`StorageLocation`、`Bill`→`StockBill`、`Batch`→`StockBatch`、`Flow`→`FlowDefinition`、`Category`→`AssetCategory` |
+| Admin 回退 | 框架内置（业务库无此表） | `Dept`→`/api/Admin/Department`、`User`/`CreateUser`/`UpdateUser`/`Applicant`/`Initiator`→`/api/Admin/User` |
+
+候选顺序**别按「先本区再 Admin」写**：已知本区不存在的基（User/Dept/…）先打 Admin，别名基先打别名，否则每页白送 4~5 个 404 探路请求（实测 168 请求里 8 条 404 → 优化后 0 条，详见下方「实体/动作控制器判别」）。
+
+**实体 vs 动作控制器判别（避免必然 404 的统计/取数请求）**：`Mobile`（移动端聚合）、`Import`（数据导入）、`Report`（报表）、`Widget`（桌面挂件）等**没有实体列表**（无 `Index`/`GetPage`），对它们发起 `GET /api/{area}/{ctrl}` 必然 404。
+
+> ★ **权威判定源 = `GET /Cube/Apis`（详见 §4.12.2），不是权限位启发式**：实测 `/Cube/Apis` 返回全部 API 签名，按 `Index`+`GetPage` 两动作是否存在可 100% 判定实体/动作。菜单节点的 `permissions` 权限位只能作**快速启发式**（实体含 CRUD 位 2/4/8，动作只有 1+业务位），但**有反例**：
+> - `Log`（审计日志）在 Apis 中**确含 `Index`+`GetPage`**（是只读实体控制器，取数 `GET /api/Admin/Log` 正常可用），但菜单权限位**仅 `[1]`（查看）**——若按 `bits.has(2,4,8)` 启发式会误判为动作控制器，对 `Log` 发统计取数反而漏掉一个真实可用的实体页。
+> - 反之 `Mobile`/`Import`/`Report`/`Widget`/`Cube`/`Sys`/`XCode` 等确实无 `Index`/`GetPage`，是动作/特殊控制器。
+> ⇒ **落地以 Apis 的 `Index`+`GetPage` 为权威**；`permissions` 启发式仅用于「菜单节点未命中 Apis」的兜底，且对反例显式白名单放行。
+
+| 控制器 | Apis 含 `Index`+`GetPage` | `permissions`（菜单视角） | 判定 |
+|---|---|---|---|
+| `AssetItem` | ✅ | 1,2,4,8 | 实体 |
+| `StockBill` | ✅ | 1,2,4,8,16,64,128（业务位叠加在 CRUD 之上） | 实体 |
+| `Log` | ✅（只读） | 1 | 实体（**反例：权限位启发式会误判为动作**） |
+| `Mobile` | ❌ | 1,64 | 动作 |
+| `Import` | ❌ | 1,16 | 动作 |
+| `Report` / `Widget` | ❌ | 1 | 动作 |
+
+实测锚点（`/Cube/Apis` 解析，可作回归基线）：**883 签名 / 67 控制器**；实体控制器 51（含 `Log`/`Department`/`Menu`/`User` 等），动作/特殊控制器 16（`Import`/`Mobile`/`Report`/`Widget`/`Core`/`Cube`/`Db`/`File`/`Index`/`Star`/`Sys`/`XCode`/`Ai`/`Auth`/`Mfa`/`Sso`）。`kindOf` 落地：`apisHasIndexAndGetPage(ctrl) ? 'entity' : 'action'`。
+
+**Action-only 控制器**：菜单里既有实体控制器也有只带自定义 Action 的控制器（如 `Mobile`/`Import`/`Report`/`Widget`），它们的 `/Index` 必 404。`GetPage` 404 时要给出「该模块需要专用页面」的友好提示，而不是把原始 404 抛给用户；仪表盘计数卡片遇到 404 也应退化为纯入口。
+
+### 4.8.1 `mapField` 双语义判别法（核心契约）
+
+同一 `mapField` 承载两种语义，**判别只看值**：
+
+| `mapField` 值形态 | 语义 | 例子 |
+|---|---|---|
+| 在字段集能命中同名字段 | 虚拟映射字段（显示名→真实列） | `ClassName.mapField="ClassID"` |
+| 纯标识符但**不在**当前字段集 | 同样是虚拟映射字段（目标列在其他分组，常态） | addForm 的 `WarehouseName.mapField="WarehouseID"` |
+| 含 `=` / `,` | `[Map]` 枚举字典源（**仅旧变体**；6.15 已改走 `dataSource`） | `PersonType.mapField="1=学生,2=教职工"` |
+
+`mapFieldKind(f, fields)` 落地于 `fieldRender.ts`。**判别顺序**：先看能否在字段集命中同名字段 ⇒ 映射字段；否则**按形状**——纯标识符 ⇒ 映射字段，含 `=`/`,` ⇒ 字典串。⚠️ 旧实现「字段集非空且命中不到 ⇒ dict」是**错的**：`GetPage` 的 `list/addForm` 只给虚拟名称列（`WarehouseName`），目标列 `WarehouseID` 不在同组，误判会让外键退化成文本框（2026-09 实测复现并修复）。
+
+**键名硬约束**：字典源 → 提交键 `f.name`；映射字段 → 提交键 `mapField` 真实列名。控件细分：`xxxIDs/xxxIds`→`multi-select`、`ParentID`→`tree-select`、其余→`select`。
+
+### 4.8.2 实战坑：HMR 陈旧 + headless 验收
+
+- **HMR 陈旧会反向渲染控件**（与修复相反、两次不一致）：先 `curl http://127.0.0.1:5173/src/api/fieldRender.ts` 核对 served 模块与磁盘一致；不一致则杀旧 vite 重启拿干净模块图。排查「实时 DOM 与 probe 矛盾」先怀疑 HMR。
+- **headless 下 `t-select` 弹窗点不开**：改直接写绑定 model——沿 `.__vueParentComponent` 找 `setupState.model`，`model.value[key] = options[0].value`（等价选中）。定位弹窗用 header 文本 + `!t-dialog--hidden` 过滤。
+
+### 4.9 多租户
+
+请求拦截注入 `X-Tenant`（租户 Code，主）+ `X-Tenant-Id`（legacy 兼容）；Code 由登录响应头捕获存 localStorage；切换器调 `auth.setTenant(id)` + 刷新数据；无有效租户头后端 403。
+
+### 4.10 权限与按钮显隐
+
+以 `GetPage.setting`（`enableAdd`/`isReadOnly`/`enableSelect`/`enableTableDoubleClick`/`enableKey`/`enableFooter`/`orderByKey`/`doubleDelete`）+ `GetMenuTree` + `/Auth/Info` 为准。`setting` 全量属性落点见 troubleshooting/field-renderers 相关条目。**前端显隐仅为 UX，真实鉴权永远在后端**（`[EntityAuthorize]` + 403）。
+
+### 4.11 组件 / 页面选型策略
+
+核心：列表表格、表单控件**全部由 `GetPage` 字段集合决定**。两个选型函数（`fieldRender.ts`）：`selectListComponent(fields)→'flat'|'tree'`（全字段组聚合判定）；`selectFormControl(field)→控件`。完整决策表见 `references/field-renderers.md` §7（含 `setting.*` 全量落点、`lovCode` 优先级、`url+title` 链接操作列、`maxWidth/length` 语义等）。快速要点：
+
+| 字段特征 | 列表 | 表单 |
+|---|---|---|
+| `ParentID`/`mapField=ParentID` | `t-enhanced-table` | `t-tree-select` |
+| `mapField` 字典源/映射字段/`xxxID` | 列回显 label | `t-select`/`multi-select`/`tree-select` |
+| `itemType=image` | `t-image` 缩略图(点击开大图) | `t-upload`(requestMethod 上传回写 URL) |
+| `itemType=mail` | 文本 | `t-input type=email` + `{type:'email'}` 校验 |
+| `itemType=mobile` | 文本 | `t-input type=tel` + 内置 `{telnumber:true}` 校验 |
+| `itemType=html` | 富文本(v-html) | `rich`(wangEditor, 弹窗自动加宽) |
+| `Boolean` | ✓/✗ 标签 | `t-switch` |
+| `DateTime` | 文本 | `t-date-picker`(带时间) |
+| 数字 | 文本 | `t-input-number`(Int64 字符串) |
+| `String`(len>200)/其它 | 文本(截断) | `t-textarea`/`t-input` |
+
+**上传端点契约**：`POST /{area}/{controller}/UploadFile`（form-data 字段 `file`；返回 `data:{attId,filePath,...}`，**`filePath` 形如 `/cube/image?id=...`**，存字段/展示用；`uploadUrl` 不带 `/api` 前缀 → 双前缀 405；`/cube` 必须加 dev 代理否则图片 404）。详见 troubleshooting「image」。
+
+### 4.12 菜单与导航（GetMenuTree）
+
+`GetMenuTree`（`GET /Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
+
+- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + `accordion` + 图标透传（后端未给 icon 时按名称/url 推断）；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
+- **url → 路由归一化 = `assets/core/layouts/BasicLayout.vue` 的 `onNavigate()`**：剥 `~` / 前导斜杠 / `api` 前缀后取前两段 → `/entity/{Area}/{Ctrl}`。后端 url 双格式（业务区相对 `~/Sync`、系统区绝对 `/Admin/User`）在此一并抹平。
+- ★ **节点 `permissions` 是权限位字典**（`{"1":"查看","2":"添加","4":"修改","8":"删除"}`，业务动作叠加 16/32/64/128…），除驱动按钮级权限外，可作**控制器类别的启发式**：含 2/4/8 大概率为实体控制器（有 `Index`/`GetPage`），否则大概率为动作控制器（`Mobile`/`Import`/`Report`/`Widget` 等，取数必然 404）。⚠️ **该启发式有反例**（`Log` 权限位仅 `[1]` 但实为含 `Index`+`GetPage` 的只读实体控制器），**权威判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为准**（见 §4.12.2）。仪表盘/统计页据此跳过非实体节点，避免刷屏 404（实测 3 条 → 0 条）。判别式与实测数据见 §4.8 附近「实体 vs 动作控制器判别」。
+- ⚠️ **真实端点是 `/api/Admin/Index/GetMenuTree`**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
+- 🗄️ **已归档 `assets/archive/api/menuTree.ts`**：早期「独立归一化模块 + `CUSTOM_PATHS`（前端专属路由）+ `EXCLUDED`（非实体控制器隐藏）+ Element→TDesign 图标映射」方案。主链路零引用，且上述能力已被 `MenuSidebar` + `BasicLayout` 内联实现取代 → **两套并存必然打架**。若确需 `EXCLUDED` 那类"隐藏非实体菜单"能力，按 `assets/archive/README.md` 的复活说明**合并为一处**，不要两份都留。
+
+### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
+
+`Role.Permission` 契约：逗号分隔 `菜单ID#权限位掩码`（`1#3`；`3=查看+新增`；`-1`=全动作；位 `1查看/2新增/4修改/8删除`）。通用表单把 Permission 渲染成 `t-input`——**必须换成勾选 UI**。
+
+**资产（已按 Cube MVC SetPermission 形态定型，开箱即用）**：`assets/optional/components/cube/RoleMenuEditor.vue` = **行内勾选平铺版**（菜单树 DFS 平铺、每行 查看/新增/修改/删除 独立 checkbox；父子位级联动——勾父动作位自动授予/收回全部子孙、不误伤其它位；全展开/全折叠工具栏 + 授权菜单数 Tag + 列头；序列化仅输出 `perm>0`，`-1` 透传）。完整接入三步 + 验收清单 + 坑表见 `references/permission-editor-integration.md`：
+
+1. **拷贝** `assets/optional/components/cube/RoleMenuEditor.vue` → `src/components/cube/`（依赖 `getApi`/TDesign，菜单源 `/api/Admin/Menu`）。
+2. **ListPage**：`isRolePage = area==='Admin' && controller==='Role'`；formItems（add/edit 共用）把 `String(it.key).toLowerCase()==='permission'` 的项改写为 `{ control:'role-permission', category:'权限设置', rules:[] }` → `groupByCategory` 自动生成「权限设置」页签。
+3. **FormDialog**：懒加载该组件；含该项时 `dialogWidth=1000px`；模板 `template v-for` 分流把 `role-permission` **整块渲染**（全宽 div，勿套带 label 的 `t-form-item`，避免表单标签栏残留）。
+
+高频坑（详见指南）：特判 key 是 camelCase `permission`（勿写 `'Permission'`）；组件数据源必须 `/api/Admin/Menu`（vite 下无前缀打到 SPA）；Role 详情/列表记得过滤 permission 明文；自动化验收以 PUT body 真实 postData 为最终判据（父勾「查看」→ `1#1,...,56#1` 级联；取消 → `Permission:""`）。
+
+### 4.12.2 API 清单接口 `GET /Cube/Apis`（权威接口清单 + 实体/动作判定）
+
+魔方自带一个**全量 API 签名清单端点**，是「系统到底有哪些控制器/动作」的权威来源（菜单树只给当前用户有权限的节点，且不含系统级控制器）。
+
+- **端点**：`GET /Cube/Apis`（**大小写无关**，`/cube/apis` 同 200；**必须无 `/api` 前缀**——`/api/Cube/Apis` → 404；**匿名可访问**，无需 token，带 token 返回相同）。与登录类 `/Auth/*`、菜单 `/api/Admin/Index/GetMenuTree` 同属「无 `/api` 前缀系统端点」家族（对照铁律 H2）。
+- **返回**：信封 `{"code":0,"data":["METHOD Controller/Action(params)", ...]}`，`data` 是**字符串签名数组**（非对象），格式固定 `"METHOD Controller/Action(param, ...)"`（如 `"GET AssetCategory/Delete(String id)"`、`"POST AssetCategory/Insert(AssetCategory model)"`）。**无 area 前缀**——控制器名裸列（业务区靠路由约定 + GetMenuTree 反查）。⚠️ 签名是字符串，需正则解析（正则 `^(\w+)\s+([^/]+)/([^\(]+)\((.*)\)$` 拆出 method/controller/action/params）。
+- **规模（2026-09 实测，可作回归基线）**：**883 签名 / 67 控制器**。
+- **实体 vs 动作判定（权威法，详见 §4.8）**：签名按 `Controller` 聚合，含 `Index` 且含 `GetPage` ⇒ 实体控制器（51 个），否则动作/特殊控制器（16 个：`Import`/`Mobile`/`Report`/`Widget`/`Core`/`Cube`/`Db`/`File`/`Index`/`Star`/`Sys`/`XCode`/`Ai`/`Auth`/`Mfa`/`Sso`）。此法 100% 可靠，不依赖权限位（§4.8 的 `Log` 反例即依赖权限位会误判）。
+- **与 GetMenuTree 互补**：菜单树仅含当前用户可见业务节点（实测 distinct ctrl ≈ 45），Apis 多出的约 22 个均为系统/特殊控制器（`Auth`/`Mfa`/`Sso`/`Core`/`Sys`/`XCode`/`Cube`/`Db`/`File`/`Index`/`Star`/`Ai`/`Import`/`Mobile`/`Report`/`Widget`…）。前端若只扫菜单树会漏掉这些——需独立处理：登录/鉴权/MFA 走 `/Auth/*`/`/Mfa/*`、数据库管理走 `DbView`（§4.18）、`Cube` 区是魔方自带后台（Area/App/Attachment/指令/定时作业等）。
+- **用途**：① 接后端新版本时一键核对「实体控制器全集」与「动作控制器全集」，避免凭记忆漏接/误接；② 仪表盘/统计页确定哪些节点值得并发取 `totalCount`；③ 排查「某模块取数 404」时先查它是否有 `Index`+`GetPage`。
+- **落地**：`useEntityResource` 或 `specialControllers.ts` 初始化时可选拉一次 `/Cube/Apis` 缓存 `entityControllers:Set<string>`，`kindOf(ctrl)` 直接查集合；菜单节点未命中 Apis 时回退权限位启发式（§4.8，且对 `Log` 等反例白名单放行）。
+
+### 4.13 搜索栏与统计行
+
+- 搜索栏由 `GetPage.search` 驱动；**Search 参数契约**：数值/枚举/布尔/日期走字段参数（`?parentID=1`）；**字符串必须并入 `Q` 关键词**（`?name=xx` 不生效）；多值走 `?xxxIds=1,2`；日期范围映射 `dtStart/dtEnd`。`onSearch` 按 typeName 分流。**虚拟映射字段后端不参与查询**（`User.RoleID` 只是 Map 虚拟映射，`?roleID=` 被忽略，须 `?roleIds=`）→ `searchParamMap` prop（如 `{roleID:'roleIds'}`）。
+- 控件覆盖必须完整：`select/multi-select/switch`（typeName=Boolean 用 `t-switch`）/`tree-select`/`datetime`/`number`/`image`/文本兜底——缺 `switch`/`multi-select` 分支会掉进 `t-input`。**`image` 字段（ItemType=image，如封面）必须渲染 上传+URL 双输入**（`t-upload theme="image"` 调 `uploadFile` 回填 + URL 文本框），否则用户只能手填 URL（FormDialog 通用分支已内置，复用即可）。
+- **单位语义字段（分/元）须专用换算控件，勿让用户直接填库值**：后端金额常为 `Int32` 单位分（如 `Product.Price`、`ProductOrder.Amount`），表单直接渲染 number 会让用户按「元」填 `29.9` 触发后端 JSON Int32 绑定报 `-2 请求数据格式不正确 …could not be converted to System.Int32`（按元填整数则静默存成 0.3 元）。落地配方（MyBlog 2026-09 实测）：① `assets/optional/components/cube/PriceYuanInput.vue` 自包含换算组件——对外 `v-model` 绑「分」，内部以「元」编辑，`change` 时 `Math.round(yuan*100)` 回写、外部值变化 `÷100` 回显；② ListPage 对实体页特判 `key.toLowerCase()==='price'` → `{control:'price-yuan', label:'价格(元)'}`；③ 列表列 cell 覆盖：`分→¥元`（`(v/100).toFixed(2)`）；④ 详情行经 `DataField.formatter`（fieldRender 接口已加可选 `formatter`，DetailDrawer 消费：`f.formatter ? f.formatter(raw) : labelOf(...)`）。
+- **FormDialog 打开竞态（通用 bug，必防）**：打开弹窗瞬间 `props.items` 常随后端 schema 异步到达——若此时 `buildModel()` 空跑，`model` 为空壳，全部必填字段误报「请填写xx」且控件无默认值。修法双保险：`watch(visible)` 内轮询等待 `formItems.value.length`（≤8s）再 buildModel；再加 `watch(formItems)` 兜底——`visible && items 就绪 && model 为空` 时补建一次。
+- **script setup 组件 import 必须置于文件顶部**：写在 `const xxx = defineAsyncComponent(...)` 之后会导致 `Failed to resolve component: xxx`（组件解析不到、模板渲染为空元素）。
+- **`@submit` 勿加 `.prevent`**（TDesign form 内部已阻止，回调参数是 `{validateResult,firstError,e}` 对象，`.prevent` 会 `e.preventDefault is not a function`）。
+- 统计行：`Index` 信封 `stat` 字段在表格下方展示。
+
+### 4.13.1 ListPage 扩展点
+
+`assets/core/components/cube/ListPage.vue` 内置三个零代码扩展点：`rowActions`（行操作按钮，如「测试连接」）、`cellRenders`（`Record<camelCase字段名, (h,params)=>VNode>` 自定义列渲染，语义化 `t-tag` 状态）、`@saved`（保存后冒泡刷新父页统计）。业务页**无需改 ListPage 源码**。
+
+### 4.14 设计令牌与主题（TDesign 变量覆盖）
+
+- `assets/core/styles/tokens.css`（单一事实源）：`:root` 覆盖 `--td-brand-color*`/语义色/圆角/阴影/字号 + 业务扩展 `--cube-*` 令牌。
+- `assets/core/theme/tokens.ts`：同源 TS 导出（图表/ECharts 配色用）。**两文件必须同源**，改主色/渐变同步改（当前默认政务蓝 `#0f4c9e`，与 `setting.ts` `DEFAULT_BRAND`、tokens.css 兜底值一致，防首屏闪色）。
+- 接入：`main.ts` 在 TDesign 样式**之后**依次 `import tokens.css` → `import theme-dark.css`。完整规范见 `references/design-tokens.md`；可视化验证 `assets/optional/components/cube/ThemeShowcase.vue`（**DEV 路由 `/theme`**，随 scaffold 提供；生产构建不注册）。
+- **三处同源（铁律 C2）**：`tokens.css` 的 `--td-brand-color`、`setting.ts` 的 `DEFAULT_BRAND`、`tokens.ts` 的主色必须同为政务蓝 `#0f4c9e`；只改一处会在首屏或重置时闪色（`setting.load()` 注入的 inline style 优先级最高）。
+
+### 4.15 生产级编排层脚手架（references/scaffold/）
+
+`references/scaffold/` 是**完整可运行工程**（不是片段集合），由官方 `tdesign-starter-cli`（`-type vue3 -bt vite -temp lite`）生成后注入本技能 `assets/`，并补 `vue-router`/`pinia`/`axios`：
+
+- **工程文件**：`package.json` / `vite.config.ts`（`@` 别名 + 代理 `/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content` + `manualChunks` 分包）/ `tsconfig.json`（含 `paths: {"@/*": ["src/*"]}`）/ `index.html` / `.gitignore`。
+- **编排层**：`BasicLayout.vue`（侧栏 `MenuSidebar` + 顶栏面包屑/用户菜单 + 内容区 + **`SettingPanel` 挂载**）、`pages/EntityPage.vue`（`area/controller` 驱动、按 `specialControllers.ts` 分发专用页/ListPage）、`pages/LoginView.vue`（门禁，系统名读 `/Auth/LoginConfig`）、`router/index.ts`（登录拦截 + `/dashboard` + `/entity/:area/:controller` 泛型兜底）、`main.ts`（TDesign → tokens.css → theme-dark.css → `setting.load()`）。
+- **分支（非实体控制器）**：`src/specialControllers.ts` + `components/cube/ConfigView.vue` / `DbView.vue`（见 §4.17 / §4.18）。
+- 用法：`npm install` → `VITE_API_TARGET=http://127.0.0.1:<port> npm run dev`。**唯一必改项是代理 target**；`/Admin`、`/Asset` 等 SPA 路由**切勿**代理（硬刷新 404）。
+- 质量门槛：`vue-tsc --noEmit` 与 `vite build` 必须 0 错误（本目录已达标）。旧版片段式说明（只给 `src/**` 片段、缺工程文件）已废弃。
+
+### 4.16 品牌主色系统 + 暗色模式
+
+核心机制：**JS 运行时推导 + inline 注入 `<html>`**（优先级高于样式表）——`color.ts` `getBrandPalette(base)` 推导全套 `--td-brand-color*` 与 chrome 令牌（`--cube-sidebar-bg/-active-bar/-topbar-border/--cube-brand-gradient-iot`）；`setting.ts` `useSettingStore`（mode/brandColor/layout/collapsed）+ `apply()` 写 CSS 变量 + 切 `t-theme-dark`；`SettingPanel.vue` 悬浮抽屉即时预览；偏好持久化，`main.ts` 启动 `load()`。
+样式表只做**兜底 + 暗色中性值**：tokens.css §1 品牌块（首屏兜底）+ §9 chrome 块；`theme-dark.css` 提供暗色令牌 + chrome 三处 `!important` 暗化 + 侧栏 `color-mix` 叠 8% 品牌色。
+**坑**：chrome 组件 scoped 样式若写死颜色会盖过 theme-dark.css（同级晚注入胜出）→ scoped 只用令牌变量、暗色统一交 `!important` 覆盖层；侧栏品牌皮肤底色与文字令牌必须成对改。
+
+**三处接线（铁律 C3，缺一即为死代码）**：① `main.ts` 引入 `theme-dark.css`（在 TDesign 样式之后）；② `main.ts` 调 `useSettingStore().load()`；③ `BasicLayout.vue` 挂 `<SettingPanel />`。
+实测判据（CDP）：默认 `<html>` 无类名且 `--td-brand-color=#0f4c9e`；点齿轮 → 选「暗色」→ `<html class="t-theme-dark">`、`--td-bg-color-page: #f3f3f3 → #181818`、`--td-bg-color-container: #ffffff → #242424`、`localStorage['cube-personalization']={"mode":"dark",...}`；暗色下品牌色仍为所选主色（不被覆盖）。
+**常见误判**：只写了 `theme-dark.css` 就宣称"支持暗黑"——文件存在但没人 import、或 `load()` 没调、或 `SettingPanel` 没挂，用户点不到，等同于没做。
+
+### 4.17 特殊基础控制器 ConfigController<T>（无 GetPage，单列处理）
+
+`ConfigController<T>`（后端见 backend §9）：只提供 Get（读 `Config<T>.Current` 单对象）+ Update（Copy+Save）；**无 `GetPage`/`Index` 列表接口，但有 `GetFields`**（`?kind=EditForm` 返回 `DataField[]`）。**绝不能塞进 `ListPage`**（`loadSchema` 调 GetPage 404 → 空白表）。
+处理：① 路由识别——不能靠命名启发式（`MailConfig`/`OAuthConfig`/`SmsConfig`/`Parameter` 实际都是 `EntityController`；真 `ConfigController<T>` 反而不带 Config 名：`Cube`/`Sys`/`XCode`/`Core`），必须走 `SPECIAL_CONTROLLERS` 注册表显式声明；② 取数：`GetFields?kind=EditForm`（元数据）+ `GET /{area}/{controller}`（单对象，**不走 `extractListPayload`**）；③ 渲染：复用 `buildFormItems`/`buildFormRules` 元数据驱动（不可用时静态/推断兜底）+ 按 `category` 分 tab（复用 `groupFormItemsByCategory`，默认分组「基础设置」可 `defaultCategory` 覆盖）；④ 保存 `POST /{area}/{controller}` 回存。可复用：`assets/core/components/cube/ConfigView.vue`、`references/config-controller.md`。
+
+### 4.18 非实体 ControllerBaseX 控制器（自定义端点专属页）
+
+直接继承 `ControllerBaseX` 的自定义控制器（如 `DbController` 数据库管理：`GET /api/Admin/Db` 返回 `data` **直接是数组**（无 rows/page 包裹、无 GetPage）、`Backup`/`Download` 等动作端点）。**不能进 `ListPage` 也不能用 `ConfigView`**，写专属页（`assets/core/components/cube/DbView.vue`）。
+统一机制：`EntityPage.vue` + `src/specialControllers.ts` 区域作用域注册表（`SPECIAL_CONTROLLERS['{area}/{controller}'] = {kind:'config'|'db', view}`），命中即 `<Component :is>`、否则走标准 ListPage；新增只追加一条。**注册表必须显式策划**（命名不可靠）。`ListPage`/`EntityPage.loadSchema` 另加探针兜底：GetPage 404/无 list → 渲染「需自定义界面」占位，不空白。
+**防坑**：`DbView` 取 `r.data` 数组（别走 `extractListPayload`）；下载端点用 http 实例 `responseType:'blob'`（裸 `<a href>` 无 token 401）；列键/`row-key` 一律 camelCase；端点不带 `/api` 前缀。
+
+### 4.19 强制规则：表单 / 详情按 category 分 tab 组织字段（R3）
+
+字段元数据 `DataField.category` 用于分组，**不可违反**：
+- 存在非空 `category` → 表单页（FormDialog 新增/编辑）与详情页（DetailDrawer）一律按 `category` 分 `t-tabs`；null/空归默认分组（`基础设置`，`ConfigView` 可 `defaultCategory` 覆盖）**置顶**，其余按首次出现顺序；仅 1 组退化为扁平、不显示 tab 头。
+- 统一实现（单真相源，勿各页重写）：`fieldRender.ts` 的 `groupByCategory(items, defaultCategory?)`（或 `groupFormItemsByCategory`）；`FormDialog` 单 `t-form` 包 `t-tabs`（theme=card，隐藏 tab 仍挂载、整表校验全覆盖）；`activeTab` 打开重置 `groups[0].category`；**`focusErrorTab(result)` 必须**：validate 出错时定位首个错误字段所在 tab 并自动切换（否则用户在别的 tab 点保存"无反应"）。
+- 详情用 `groupDataFieldsByCategory`；分类只有 1 个时不显示 tab 头。
+
+### 4.20 LovController 值集对接（枚举下拉 + 列表弹窗，权威源）
+
+`Admin/Lov` 是枚举型与列表型值集的权威管理系统（前端 `assets/core/api/useLov.ts` 落地，接入字段映射链路）。值集两种类型（`lovCode` 前缀区分）：`Enum.{命名空间}.{枚举名}`（静态字典，下拉/回显）；`List.{area}.{controller}`（动态数据，**LOV 弹窗表格**）。
+**Meta 接口契约**：`GET /api/Admin/Lov/Meta?lovCode=Code1,Code2`（逗号多 code 一次拉取）→ ENUM 型 `data.Meta[].Options:[{Value,Label}]`；LIST 型 **`data.meta`（小写）**`[].type==='LIST'` + `ListConfig{RequestUrl,...}` + `SearchFields[]` + `TableColumns[]`（ENUM/LIST 大小写并存是历史约定，勿混抄）。另有 `BatchLabel`（批量翻译）、`ListData`（服务端代理拉取，需 `AddCubeLov()` 注册——**未注册时演示值集必须 `ProxyRequest=false` 即前端直连**；注意 **6.13 运行库 `LovListConfig` 无 `ProxyRequest` 属性**，不写该字段即 false，写则 CS0117）。
+**值集三通道优先级**（`resolveOptions`/`labelOf`）：① 官方 `/Cube/Lookup`（未配 lovCode 的纯枚举，按 `typeName` 批量拉，先探 `/api/Cube/Lookup` 404 再回退根路径 `/Cube/Lookup`）→ ② LovController `Meta`（`lovCode` 显式声明；枚举→`lovOptions`、列表→`lovListConfig`）→ ③ 约定式 `useLookups`（仅兜底外键 id→名，对纯枚举天然失效）。
+**落地**：`useLov.load(fields)` 收集字段 `lovCode` 批量拉 Meta，归一到 `lovOptions`/`lovListConfig`；`resolveOptions`/`labelOf` 顺序 字典源→dataSource→**lovOptions→lookups**；`buildColumns`/`buildFormItems` 加 getter/prop 注入；`ListPage.init()` `loadLookups` 后 `loadLov`；`FormDialog` LOV 弹窗读 `lovListConfig[code]`（权威路径/列），无配置退化 `parseLovListCode` 猜控制器。**LovController 不可达必须静默退化**（catch 吞掉，退回约定式，不阻断主页面）；大小写归一（PascalCase→camelCase）。
+
+### 4.20.1 实战落地（WeComAddressBook 已验证：自建 EnumController + Lov 并入 useLookups）
+
+比 §4.20 通用模板更轻的已验证范式：后端自建 `EnumController`（`GET /{Area}/Enum/Items?typeName=X` 反射枚举返回 `{type,items:[{value,name,description}]}`，**0 值兜底合成 `{value:0,name:'未分类'}`**；`SeedBuiltinLovs` 把内置枚举镜像为 `Enum.{TypeName}` 值集，幂等）；前端**不建 useLov 独立组合式**，直接在 `useLookups.load()` 循环里并入：解析优先级 `code = f.lovCode || 'Enum.'+f.typeName` → `fetchLovMeta`（`GET /Admin/Lov/Meta` 取 `Options` 归一 `{值:标签}`），回退 `fetchEnumDict`（CLR 反射），均带会话级缓存、失败缓存 null 不阻断；`labelOf`/`resolveOptions` 零改动复用。LovCode 前缀强制：ENUM 必须 `Enum.`、LIST 必须 `List.`（`LovController.Valid`）；Meta 对不存在 code 返回空（优雅回退）。已 CDP 验收：内置枚举列（Menu 类型/User 性别/Role 类型）全部显名。
+
+### 4.20.2 LIST 型（列表型值集）实战落地
+
+后端静态构造 `SetLov(fields, "字段名")` 下发 `DataField.LovCode`（`List.{Area}.{Ctrl}`）；Seed 动作幂等建 LovDefinition + LovListConfig/SearchField/TableColumn 子表（存 `Parameter`，Migration=Off；**不写 `ProxyRequest`**——6.13 运行库 `LovListConfig` 无该属性，写了 CS0117）。
+
+**前端（本技能已带可直接落地的模板，四步；组件完整行为说明 / FR / 验证清单见 `references/lov-list-field.md`）**：
+
+| 步骤 | 落点 | 说明 |
+|---|---|---|
+| ① 拿元数据 | `assets/core/api/useLov.ts` → `src/api/useLov.ts` | `useLov().load(fields)` 批量拉 `GET /api/Admin/Lov/Meta`，LIST 型进 `lovListConfig[lovCode]`（`listConfig`/`searchFields`/`tableColumns`）。⚠️ 响应已被 http 层 camelize，**必须读 `data.meta` / `data.inlineEnums`（小写）**；只读 `data.Meta` 恒 `undefined`（历史缺陷，已修）。另导出 `lovFetchRows(meta,params,pageIndex,pageSize)`——LIST 型**取数共用函数**（直连/代理二选一 + 解包），宿主（FormDialog）做 id→名称回显时直接复用它，不必重写取数分支。 |
+| ② 弹窗控件 | `assets/core/components/cube/LovListField.vue` → `src/components/cube/` | 搜索栏 + 单选/多选选择列 + 分页 + 「已选 N 项」+ 取消/确定 + `refLovCode` 列字典翻译。props：`dialogVisible` / `lovCode` / `lovMeta` / `inlineEnums` / `multiple` / `modelValue`（另有可选 `fetcher` 逃生舱，便于单测/无后端演示）；emits：`update:dialogVisible` / **`select({row,display})`** / **`confirm({values,rows,display})`**——`display` 是组件按 `meta.labelField` 解析出的**名称串**（顿号连接），宿主只读框直接显示它，提交仍用 id（见 ④）。 |
+| ③ 控件选型 | `fieldRender.controlOf` 头部 | `if (isListLov(f)) return 'lov-list'`（`isListLov` = `lovCode` 以 `List.` 开头），**必须置于 `isMappedField` 之前**（否则 LIST 型被误判成外键下拉）；`FormItem` 加 `lovCode` 透传，`multiple` 由字段名 `xxxIDs` 判定。 |
+| ④ 挂模板分支 | `FormDialog` | `<LovListField v-else-if="it.control==='lov-list'">` + 只读展示输入（点击开弹窗）+ `useLov().load(props.fields)`；**显示名称、提交 id 分离**：`model[it.key]` 存 id（单选单值 / 多选逗号串），`lovDisplay[it.key]` 存名称（只读框绑它）；单选 `@select` 回填 `payload.row` 的 id + `payload.display`，多选 `@confirm` 回填 `payload.values.join(',')` + `payload.rows` 解析的名称；**编辑态回显**由 `seedDisplay` 完成（先原值兜底，再经 `lovFetchRows` 整表取数匹配 id→名称，映射字段命中 `fallbackKey` 时免请求）。**只 import 不挂模板分支 = 死代码**（`vue-tsc` 不报错但永不渲染）。搜索栏由 `buildSearchItems` 把 `lov-list` **降级为文本输入**（LIST 是动态数据、无静态候选，弹窗不适配内联搜索栏）。 |
+
+**契约要点（TDesign 版，均为实测结论）**：
+
+- **选择列用 TDesign 内置 `row-select`**：多选 `type:'multiple'`、单选 `type:'single'`；受控 `:selected-row-keys` + `@select-change`，跨页由 `reserveSelectedRowOnPaginate` 保留。**因此不需要** Element Plus 版那套 `restoringSelection` 守卫——"程序化重放勾选时，selection-change 只回传当前页从而裁掉权威集合"的 bug 类，在受控模式下结构上不存在（对齐 NewLife.Cube 官方 `LovSelectTable.vue` 的 C2/C3 修复结论）。
+- 行点击事件是**单 context 对象** `{row,index,e}`（非 `(e,ctx)` 双参；写错则点行永远选不中）；`t-dialog` 默认 `destroyOnClose=false`（DOM 永久存在），本模板显式置 `true`。
+- **取数二选一**：`listConfig.requestUrl` 以 `/` 开头 ⇒ 前端直连 `getApi`；否则按 `proxyRequest` 决定是否走 `POST /api/Admin/Lov/ListData` 服务端代理（需后端 `AddCubeLov()` 注册；未注册时值集须 `ProxyRequest=false`）。
+- **搜索参数**：字符串并入 **`Q` 关键词**，数值/枚举/日期走字段参数（与 `fieldRender.buildSearchParams` 同源）。
+- **⚠️ `InlineEnums` 的键会被 camelize 破坏（实测缺陷）**：http 层 camelize 是「**首字母小写**」，`Enum.Admin.RoleKind` → `enum.Admin.RoleKind`；而字段 `RefLovCode` 的**值**是普通字符串、保持原样 ⇒ 字典键与引用值对不上 ⇒ **`refLovCode` 列字典翻译恒失效（显示原始 0/1/2）**。`useLov` 已按「本次请求的规范 lovCode」大小写不敏感复原键（无匹配再首字母还原大写）。新增值集后**必须实测翻译列已出中文**。
+- **选中即自关闭**：单选 `pickRow`、多选 `onConfirm` 均在 emit 后 `close()`（官方实现只 emit、关闭交父组件；本模板内聚关闭以免"忘了关"，即差异 #6）。如需恢复「父组件决定关闭」契约，删掉对应 `close()` 即可。
+- `LovController` 不可达必须**静默退化**，不阻断主页面。
+- **端到端验证入口**：scaffold 的 DEV 路由 `/lov-demo`（`src/pages/LovDemoView.vue`）+ `npm run mock`（Mock 已实现 `/api/Admin/Lov/Meta` 与 ListData 代理，含 24 行数据供跨页验证）。
+
+### 4.21 新增实体后必做验收：mapField 与组件约定核查（硬约束）
+
+实体含**枚举字段**或**外键字段**时必须核查：① 后端 `mapField`/枚举字典源是否正确下发（枚举须加 `[Map("0=文本1,...")]`、映射虚拟字段 `mapField` 指向真实列）；② 前端是否渲染成下拉（select/multi-select/tree-select）而非文本/数字框。缺 `[Map]` → 前端只能渲染 Int32/文本框。
+**可执行门禁**：`node references/verify-entity-form.mjs <Area> <Controller> [baseUrl] [user] [pass]`（如 `Blog Product http://localhost:5000 admin admin`）——登录→抓 GetPage addForm/editForm→逐字段镜像 `controlOf`/`mapFieldKind` 规则判定，报告 `BACKEND:枚举字段缺[Map]`/`FRONTEND:枚举/外键未出下拉`，违规退出码 1（可作 CI）。**改动 fieldRender.ts 后须同步本脚本逻辑**。
+
+## 四、字段类型 → 组件映射速查
+
+完整规则与优先级见 `references/field-renderers.md`（§1 优先级、§2 速查表）。要点：
+
+| DataField 特征 | 列表回显 | 表单控件 | 备注 |
+|---|---|---|---|
+| 字段名 `ParentID` | 树形节点 | `t-tree-select` | 自引用树，选项排除自身 |
+| `mapField` 字典源（`[Map]` 串） | 映射名称 | `t-select` | 权威源在 `mapField` 不在 `field.map` |
+| `mapField`=真实字段名（虚拟映射列） | 映射名称 | `t-select`/`tree-select` | 提交键用 `mapField` |
+| `xxxID`（非主键、无字典） | 映射名称 | `t-select` | `lookups` 兜底 |
+| `Boolean` | ✓/✗ 标签 | `t-switch` | |
+| `DateTime` | 文本 | `t-date-picker`(带时间) | |
+| 数字 | 文本 | `t-input-number` | Int64 以字符串 |
+| `String`(len>200)/其它 | 文本(截断) | `t-textarea`/`t-input` | |
+
+> **DTO 边界（已核实源码）**：`GetPage` 返回 `DataField`（`NewLife.Cube/ViewModels/DataField.cs`），仅含 `Name/DisplayName/.../TypeName/ItemType/Length/Nullable/PrimaryKey/ReadOnly/Visible/Required/MapField/LovCode/Category/...`。文档中的 `Width/Align/Format/Placeholder/Min/Max/DefaultValue` **未实现为可序列化字段**，前端不要读；列宽/对齐由前端按 TypeName/ItemType 决策。
+
+## 五、与 cube-webapi-backend 的分工
+
+| 关注点 | 技能 |
+|---|---|
+| 控制器选型、CRUD、响应信封、字段元数据契约、权限位/数据范围、JWT | `cube-webapi-backend` |
+| 前端脚手架、基类组件、字段→控件映射、treeTable、字段映射、多租户/权限前端消费 | 本技能 |
+
+## 六、常见陷阱（高频精选 + 全量排障入口）
+
+> **全量 74+ 条陷阱（含症状→根因→修复→assets 指针）已外移至 `references/troubleshooting.md`，按 9 组分类**：G1 后端契约/权限 / G2 请求层与代理 / G3 字段映射选型 / G4 列表表格渲染 / G5 树形 / G6 表单校验控件 / G7 登录会话外壳 / G8 前端工程 / G9 Lov+CDP 验收。**异常先查该文件**（组目录定位 → 读条目），以下仅保留最高频行为警示：
+
+1. **「源码改对了错误照旧」→ 先怀疑 stale 构建产物（第一名）**：改契约/登录类代码后四步闭环——① `npm run build` 退出码 0；② `grep dist/assets/index-*.js` 确认新关键字**存在**、旧 bug 关键字**消失**（如应见 `category:0` 且无 `category:""`）；③ 浏览器硬刷新；④ dev 模式重启会话。最快判定：node 直接跑 `normToken` 喂真实 JSON。
+2. **登录契约**：SPA 用 `POST /Auth/Login`（非 `/Admin/User/Login`）、`username` 非 `userName`、`category` 传枚举整数（`''`/`'Password'` → `code:-2`）、令牌 snake_case 走 `normToken` 三向兜底、`LoginConfig.oAuth` 大写 A。真实 HTTP 响应是字段名唯一权威。
+3. **`mapField` 双语义 + 表单只下发虚拟映射字段**：字典源在 `mapField` 不在 `field.map`；`mapField` 纯标识符一律判映射字段（目标不必在字段集）；提交键用真实列名（§4.8/4.8.1）。
+4. **405 = 主键放 URL path**：改 `PUT /{base}`（body 带主键）、删 `DELETE /{base}?id=xxx`；**双 `/api` 前缀 → 404**（路径不再写 `/api`）。
+5. **树形三连**：`t-enhanced-table`（t-table 不支持）+ `:tree` 传对象 + `loadAll` 全量构建；判定聚合全部字段组、认 `mapField=ParentID`。
+6. **字段命名 PascalCase → camel 归一**（`ID→id`、`ParentID→parentID` 缩写规则）；★ **两端点别混用（详见 §4.4 首表）：`GetPage`=元数据、`GET /api/{area}/{ctrl}`=数据行**——`GetPage` 的 `data.list` 是**列定义数组**（`data.list.length` = 列数，非行数），行数据只在**无 action 段**的 `GET /api/{area}/{ctrl}` 的 `data:[rows]`；`extractListPayload` 只从 `rows/page.rows/Page.Rows/data` 取行、**不读 `list` 键**。
+7. **TDesign 特有签名/写法**：列是 `columns` 配置式 API（**无 `<t-column>` 组件**）；`cell` 回调 `(h, params)` 非 `({row})`；`@submit` 勿加 `.prevent`；`MessagePlugin` 非 `Message`；`<script setup>` 新用 watch/computed 必须 import。
+8. **多选 value 恒为数组**（`deserializeMultiValue` 兜 null）；daterange 存实体单列逗号串（与搜索 dtStart/dtEnd 两参数契约**不同**）；★ **布尔键省略规则**：Cube 省略取值为 false 的布尔键，`nullable`/`readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定，推必填用 `nullable !== true`（写 `=== false` 会全体失效，见 §4.8 ②③）。
+9. **代理**：dev 代理 `/api` `/Auth` `/Mfa` `/cube` `/Content` → 后端（target 写 `127.0.0.1` 勿 localhost）；**切勿代理 `/Admin` 等 SPA 路由**（硬刷新 404）。
+10. **`dist` 构建沙箱坑**：safe-delete 报错与代码无关；`dist` 被进程锁 → 先 `--outDir dist-check` 验证再 `cp -r` 覆盖，**勿 `mv`/`rm` 替换**；治本停占用进程。
+11. **「支持暗黑模式」= 三处接线，不是一个 css 文件**：`theme-dark.css` 存在 ≠ 用户能切。必须 ① `main.ts` 在 TDesign 样式**之后** `import '@/styles/theme-dark.css'`；② `main.ts` 调 `useSettingStore().load()`；③ `BasicLayout.vue` 挂 `<SettingPanel />`。缺任一处 → 齿轮不存在 / 类名不切换 / 首屏不还原，等同于没做。验收只认两件事：**右下角有齿轮**、**点「暗色」后 `<html>` 出现 `t-theme-dark`**（`--td-bg-color-page` 应变 `#181818`）。
+12. **技能资产必须与当前 `fieldRender` 契约同版本**：`assets/` 若混入早期组件（旧 `ListSearchBar`/`DetailContent` 引用 `formItemName`/`selectFormControl`/`LookupMap` 等已删导出），**拷贝即编译失败**。判断法：把待用资产临时放进 `references/scaffold/src/` 跑一次 `vue-tsc --noEmit`，0 错误才算可用。**当前真相源 = `references/scaffold/src/`**（已过 `vue-tsc` + `vite build`，并含 C1~C3 三约定）。
+
+## 七、推荐检查项（验收 checklist）
+
+- [ ] `src/api/`（api/http/camel/permissions/auth/useEntityResource/fieldRender/useLookups）与三个基类组件已落地 `src/components/cube/`
+- [ ] 实体页仅传 `area`+`controller` 复用基类，未重复手写表格/表单
+- [ ] 含 `ParentID` 实体自动 treeTable + 表单树形下拉；列表 `xxxID` 显名非原始 ID；详情经 `labelOf` 回显（遍历原始 DataField[]）
+- [ ] 实体/动作控制器判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为权威（非权限位 `{2,4,8}` 启发式；`Log` 权限位仅 `[1]` 却是只读实体控制器，已白名单放行；见 §4.12.2）
+- [ ] 选型由元数据驱动（selectListComponent/selectFormControl），未硬编码控件类型
+- [ ] 新增/编辑/删除按钮按 `GetPage.setting` 与菜单树显隐
+- [ ] 令牌双头 `Authentication`+`Authorization`；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
+- [ ] 登录页按 `LoginConfig` 动态组装（系统名/Logo/背景/login 开关/注册/oAuth/版权/备案），静态资源走 `/Content`
+- [ ] 侧栏菜单 = `MenuSidebar` + `/api/Admin/Index/GetMenuTree`，按设计系统落地（图标/激活态/手风琴），submenu `:value` 唯一
+- [ ] 搜索栏由 `GetPage.search` 驱动（字符串入 Q、数值/枚举/布尔/日期走字段参数、日期范围 dtStart/dtEnd），`Index.stat` 已展示
+- [ ] 未把 GetPage schema 当行数据（**数据行端点 = `GET /api/{area}/{ctrl}`（无 action 段），`GetPage` 只给字段描述符、`data.list` 是列定义非行**）；`extractListPayload` 不读 `list`
+- [ ] ConfigController/ControllerBaseX 非实体控制器经 `SPECIAL_CONTROLLERS` 单列处理（ConfigView/DbView），未塞 ListPage
+- [ ] 表单/详情按 `category` 分 tab（R3），`focusErrorTab` 就位
+- [ ] tokens.css/theme-dark.css 在 TDesign 样式后引入；品牌色/暗色 chrome 用令牌变量；`DEFAULT_BRAND` 与 tokens 兜底一致
+- [ ] 401 自动刷新令牌（排除认证端点 + 单飞守卫）；HTTP 401 与信封 code=401 双形态处理
+- [ ] 审计字段不拉字典（useLookups 排除 createUserID/updateUserID）
+- [ ] 多选 value 恒数组、daterange 落单列逗号串、`itemType=image/mail/mobile` 三端特化（email `{type:'email'}`、mobile `{telnumber:true}` 内置规则）
+- [ ] `MessagePlugin` 用法；`@submit` 无 `.prevent`；路由视图 `:key="route.path"`；`pagination` 稳定 reactive；init 幂等
+- [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（响应已 camelize）；**`InlineEnums` 的键也须复原**（camelize 首字母小写会把 `Enum.X` 变成 `enum.X`，导致 `refLovCode` 列翻译失效——`useLov` 已按请求 code 复原，改后实测翻译列出中文）
+- [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
+- [ ] 新增实体已跑 `verify-entity-form.mjs` 0 违规；改契约/登录代码已做 dist 产物核验闭环
+- [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
+- [ ] **C1** 工程由 `td-starter init -type vue3 -bt vite -temp lite` 生成（配置保持 CLI 产物形态；`vue-router`/`pinia`/`axios` 已补）
+- [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
+- [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
+
+## 八、最小可运行 Demo（端到端验证脚手架）
+
+`references/demo/`（README 见目录内 `README.md`）：
+
+> ⚠️ **本目录当前未装 `node_modules`、未构建**（源码级参考）。它的价值是展示
+> **完整形态**页面（登录含 MFA/注册/找回密码、令牌板、权限编辑等），
+> 拷贝其中的文件到业务工程前**必须先在 `references/scaffold/` 内过一遍 `vue-tsc`**。
+> 已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。
+```bash
+cd references/demo
+npm install
+npm run mock   # 终端1：Mock 后端 :3001（server.mjs，实现《认证接口设计.md》契约）
+npm run dev    # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
+npm run typecheck   # vue-tsc --noEmit（当前 0 错误）
+```
+登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
+
+demo 与 `references/scaffold/` **同源**：已按铁律 C1~C3 落实（政务蓝默认 + 右下角齿轮可切暗黑，实测 `--td-bg-color-page` `#f3f3f3`→`#181818`），并遵守 H1/H2（唯一 HTTP 层 `src/api/http.ts`、只发 `Authorization: Bearer`；旧 `api.ts` 已删除改名）。
+> 组件对 `src/api/*` 的引用用 `@/api/...`（已配 `@` 别名）；已下线 `ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent`（早期契约，拷贝即报错）。
+
+## 九、以真实魔方后端替换 Mock（对接说明）
+
+`references/demo`/`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
+1. **改代理 target**（唯一必改项）：vite proxy 的 `/api` `/Auth` `/Mfa` `/cube` `/Content` target 指向真实后端（`VITE_API_TARGET`）；勿代理 SPA 路由。
+2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的 `baseURL` 指向后端基址或保持 `'/'` 同源部署。
+3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌双头 / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
+
+## 十、生成生产部署包（前端构建与同步）
+
+后端部署配套见 `cube-webapi-backend` §十五。
+```bash
+npm install --registry=https://registry.npmmirror.com   # registry 卡死换镜像
+npm run build                                            # 产物 dist/
+# 同步（勿用 vite --outDir 相对路径 → 后台进程解析异常清空不写入）：
+python - <<'PY'
+import shutil, os
+src, dst = 'dist', 'publish/frontend'
+if os.path.exists(dst): shutil.rmtree(dst)
+shutil.copytree(src, dst)
+print('synced:', os.path.exists(os.path.join(dst, 'index.html')))
+PY
+```
+- `base`：根路径 `/`；子路径 `/blog/` → `vite.config base` + `createWebHistory('/blog/')` + Nginx 子路径反代同步。
+- `manualChunks` 拆 `vue/tdesign/markdown/axios` vendor（消除 chunk>500KB 告警）。
+- 上线前：`baseURL` 指向真实后端/同源 `/`，去掉 dev proxy；改契约后重 build 并核验 dist 产物（§六 第 1 条闭环）。
+
+## 十一、新工程初始化与内置模块页面模板复用（tdesign-starter-cli）
+
+**默认规则**：新建「魔方 WebApi + TDesign 前端」工程一律用 tdesign-starter-cli 初始化 + 拷入本技能模板，禁止从零手搭。
+```bash
+npm i tdesign-starter-cli@latest -g
+td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -type vue3
+```
+
+### 11.1 拷入技能模板（assets/ → 目标路径映射）
+
+> **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、编译 0 错误、自带 Mock 后端可端到端跑），只改 `vite.config.ts` 的代理 target。下表用于「并入既有工程」的对照拷贝。
+
+`assets/` **按「核心 / 可选 / 已归档」三分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
+
+```bash
+cp -r assets/core/.                     <工程>/src/        # 必拷（27 文件，见 assets/README.md）
+cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components/cube/   # 以下为按需
+```
+
+| 分类 | assets/ 路径 → 目标路径 | 内容 |
+|---|---|---|
+| **core** | `assets/core/api/*.ts` → `src/api/` | `http`(唯一请求层，铁律 H1) / `token` / `fieldRender` / `useEntityResource` / `useLookups` / `useLov`(§4.20 值集加载) / `menuTitles` |
+| **core** | `assets/core/utils/*.ts` → `src/utils/` | `camel`(PascalCase→camelCase) / `color`(品牌色阶推导) |
+| **core** | `assets/core/stores/*.ts` → `src/stores/` | `auth`(登录态与令牌) / `setting`(个性化偏好) |
+| **core** | `assets/core/theme/tokens.ts` → `src/theme/` | 与 `tokens.css` 同源的 TS 令牌（图表配色，铁律 C2 三处同源之一） |
+| **core** | `assets/core/styles/*.css` → `src/styles/` | `tokens.css`(政务蓝兜底) / `theme-dark.css`(暗色令牌，`main.ts` 在 TDesign 样式**之后**引入) |
+| **core** | `assets/core/components/cube/*.vue` → `src/components/cube/` | `ListPage` / `FormDialog` / `DetailDrawer` / `MenuSidebar` / `SettingPanel`(铁律 C3 必须由 `BasicLayout` 挂载) / `ConfigView` / `DbView` / `LovListField`(§4.20.2 值集表格弹窗，被 FormDialog 静态 import) |
+| **core** | `assets/core/layouts/BasicLayout.vue` → `src/layouts/` | 侧边导航壳（含 `SettingPanel` 挂载位 + `onNavigate()` url 归一化） |
+| **core** | `assets/core/pages/*.vue` → `src/pages/` | `EntityPage`(泛型实体页，按 `specialControllers` 分发) / `DashboardView` / `LoginView` |
+| **core** | `assets/core/specialControllers.ts` → `src/` | 非实体控制器注册表（§4.17 / §4.18） |
+| **optional** | `assets/optional/components/cube/RoleMenuEditor.vue` | 角色权限设置（§4.12.1）✅ 已随 scaffold 验证 |
+| **optional** | `assets/optional/components/cube/PriceYuanInput.vue` | 金额（分/元）换算输入（§4.13）✅ 已随 scaffold 验证 |
+| **optional** | `assets/optional/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 |
+| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 无副本、仅 demo 有源码实现，**取用前须先过 `vue-tsc`** |
+| — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
+| **archive** | `assets/archive/*`（**勿拷**） | `api/menuTree.ts` / `api/permissions.ts`——主链路零引用的历史残留，归档原因见 `assets/archive/README.md` |
+
+> **已删除 `CodeEditor.vue`**（原 `assets/optional/components/cube/`；2026-09 资产清理）：零引用 +
+> 从未编译验证（依赖 `@codemirror/*` 未装），且**当前 `fieldRender` 根本不产出
+> `code-editor` 控件**（`json`/`markdown` 关键字在 `fieldRender.ts` 中不存在）——
+> 即 `itemType=json/markdown` 的富编辑**主链路并未实现**，留着只会误导。
+> 若确需该能力：先给 `fieldRender.controlOf` 加 `json/markdown → 'code-editor'` 分支，
+> 再自行封装 CodeMirror 6（`npm i codemirror @codemirror/state @codemirror/view @codemirror/commands @codemirror/lang-json @codemirror/lang-markdown`），
+> 并放进 `references/scaffold/` 跑 `vue-tsc` 验证。**在此之前，json/markdown 字段按普通多行文本渲染即可。**
+
+> **已下线**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter`、`DetailContent.vue`（早期 `fieldRender` 契约，拷贝即编译失败，能力已并入自包含 `ListPage.vue` / `FormDialog.vue`，见 §4.5）。
+> **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `tdesign-icons.d.ts` / `vite-env.d.ts`）不在 `assets/` 里——它们随 `td-starter` 生成、随 `references/scaffold/` 提供。
+> 分类依据与同步铁律（**唯一真相源 = `references/scaffold/src/`**）见 `assets/README.md`。
+
+### 11.2 魔方框架内置功能页面（以 GetMenuTree 为唯一权威）
+
+后端 `AddCube()` 即内置标准后台，前端**必须完整接入**（通用 EntityPage 零新增页）。**模块清单以 `GetMenuTree` 为唯一权威来源**（固定清单会漏 Lov/地区/附件/定时作业等节点）。实测模块：业务区（如 WeCom 17 项：同步中心/班级/教职工/...）、系统管理 18 项（`Admin`：User/Role/Department/Lov/Menu/Tenant/Log/Parameter/OAuthConfig/...）、魔方管理 7 项（`Cube`：Area/App/Attachment/指令/定时作业/...）。代表性路由：`/Admin/User` `/Admin/Role` `/Admin/Menu` `/Admin/Department` `/Admin/Lov` `/Admin/Log` `/Admin/Tenant` `/Cube/Area` `/Cube/App` `/Cube/Attachment`。
+- Cube 6.x：日志统一 `Log`、字典/配置统一 `Parameter`（旧 `Dic/Config/UserLog` 等不存在，404 勿接入）。
+- 导航用动态菜单树 + 仪表盘（统计卡并发 `GET /{area}/{ctrl}?pageSize=1` 取 `env.page.totalCount`），不写静态菜单。
+- 纯 MVC 非实体页（File/Db/Core/Index/Sys/XCode/Cube 等）GetPage 404：**后端本就不会把它们挂进业务菜单**（框架自带节点不含）；若确有残留节点，由 `BasicLayout.onNavigate()` 归一化后落到泛型页，再由 `ListPage.loadSchema` 的 404 探针渲染「需自定义界面」占位，不空白（不要在前端硬造 `EXCLUDED` 隐藏表——归档的 `assets/archive/api/menuTree.ts` 就是这么做的，已废弃）。
+
+### 11.3 侧边栏布局（Starter 最佳实践）
+
+`t-layout + t-aside + t-menu` 组件化导航，禁手写 `<nav>+router-link`。折叠 `collapsed` 默认 true（`t-menu :collapsed` + Header 触发按钮，`t-aside :width` 64/232 + transition）；二级分组用 `t-submenu`（勿 `t-menu-group`，折叠后无法弹出）；单开互斥用 TDesign 内置 `expand-mutex`；图标 `tdesign-icons-vue-next`（`<component :is>` 渲染，存在性以包 `dist/index.js` 字符串为准，如 `SyncIcon` 不存在用 `SwapIcon`）；防挤压三件套（aside `flex-shrink:0` + 内层 `min-width:0` + 菜单独立滚动容器）。
+
+## 推荐检查项（收尾自检）
+
+- [ ] 前端 `vue-tsc --noEmit` 0 错误（编译清零铁律）
+- [ ] 登录 → 跳 `/dashboard`；菜单与权限来自 GetMenuTree
+- [ ] 全量陷阱排障走 `references/troubleshooting.md`，不再依赖正文内联
+- [ ] 新增引用文件路径有效（assets/、references/ 下的引用路径均存在）

@@ -1,0 +1,11 @@
+# CDP 验收脚本的运行产物（截图 / 日志 / 结果 JSON），每次运行重新生成，勿入库
+references/scripts/lov/*.png
+references/scripts/lov/*.log
+references/scripts/lov/*_result.json
+references/scripts/lov/result.json
+
+# 验证工程依赖与构建产物（体积大、可重建）
+references/*/node_modules/
+references/*/dist/
+references/*/.vite/
+references/*/package-lock.json.bak
