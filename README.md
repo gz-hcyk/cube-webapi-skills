@@ -5,7 +5,10 @@
 ## 落地案例
 
 我在WorkBuddy使用cube-webapi-backend技能通过一句话生成了我的博客系统
-《不会写代码，如何用「对话」造出能上线的系统》https://www.hcyk.net/article/4
+
+### 《不会写代码，如何用「对话」造出能上线的系统》
+
+https://www.hcyk.net/article/4
 
 ## 包含的技能
 - `cube-webapi-backend/` — NewLife.Cube 第三代 WebApi 开发技能
