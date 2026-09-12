@@ -1,6 +1,6 @@
 ﻿---
 name: cube-webapi-backend
-description: 使用 NewLife.Cube（魔方）第三代 WebApi 快速开放框架开发前后端分离的后台 REST API 时使用。适用场景：基于 EntityController/ReadOnlyEntityController/EntityTreeApiController/ControllerBaseX 暴露 /api 标准 CRUD 接口；用 GetFields/GetPage 字段元数据驱动动态列表/表单；配置 AddCube/UseCube 启动、数据层预热（EntityFactory.InitAll/InitConnection）、登录与 JWT（Auth/Login、Bearer/X-Token）；设计自定义权限体系（PermissionFlags 权限位、Menu 菜单、EntityAuthorize 鉴权、401/403）；实现数据范围权限（Role.DataScopes、IDataScope/DataScopeInterceptor、DataPermission 表达式、IFieldScope 脱敏）；多租户隔离、自定义业务权限（审批/下发指令等）、导出。触发词：魔方 WebApi、NewLife.Cube、Cube API、EntityController、GetFields、元数据驱动接口、权限位、数据权限、前后端分离后台、数据库预热、InitConnection。挂链开号场景触发词：给业务人员开登录账号、魔方建 User、初始密码、首登强制改密、批量补开账号。不适用于 MVC 服务器渲染后台（用 cube-mvc-backend）与前端页面生成（用 cube-webapi-tdesign）。触发词：生成部署包、生产部署包、发布部署包、上线部署、Linux+Nginx+systemd 反向代理、SQLite 部署、dotnet publish 跨平台、appsettings.Production、Nginx 反向代理模板、冒烟验证、新增实体验收、mapField 验收、[Map] 枚举字典源、外键映射字段、verify-entity-form、实体验收网关。
+description: 使用 NewLife.Cube（魔方）第三代 WebApi 快速开放框架开发前后端分离的后台 REST API 时使用。适用场景：基于 EntityController/ReadOnlyEntityController/EntityTreeApiController/ControllerBaseX 暴露 /api 标准 CRUD 接口；用 GetFields/GetPage 字段元数据驱动动态列表/表单；配置 AddCube/UseCube 启动、数据层预热（EntityFactory.InitAll/InitConnection）、登录与 JWT（Auth/Login、Bearer/X-Token）；设计自定义权限体系（PermissionFlags 权限位、Menu 菜单、EntityAuthorize 鉴权、401/403）；实现数据范围权限（Role.DataScopes、IDataScope/DataScopeInterceptor、DataPermission 表达式、IFieldScope 脱敏）；多租户隔离、自定义业务权限（审批/下发指令等）、导出。触发词：魔方 WebApi、NewLife.Cube、Cube API、EntityController、GetFields、元数据驱动接口、权限位、数据权限、前后端分离后台、数据库预热、InitConnection。挂链开号场景触发词：给业务人员开登录账号、魔方建 User、初始密码、首登强制改密、批量补开账号。不适用于 MVC 服务器渲染后台（用 cube-mvc-backend）与前端页面生成（用 cube-webapi-tdesign）。触发词：生成部署包、生产部署包、发布部署包、上线部署、Linux+Nginx+systemd 反向代理、SQLite 部署、dotnet publish 跨平台、appsettings.Production、Nginx 反向代理模板、冒烟验证、新增实体验收、枚举 LOV 值集（SetLov）、外键映射字段、实体验收核查。
 agent_created: true
 argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控制器基类选型（CRUD/只读/树形/自定义）、定制字段元数据（GetFields/GetPage）、添加鉴权 Action 与自定义权限位、接入登录与 JWT、配置多租户与数据范围权限，还是排查 401/403/FieldErrors/路由 404 问题。
 ---
@@ -70,7 +70,24 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 - **两次编译检查是硬闸门**：③ 生成后、⑤ 业务补充后各一次，任何修复后编译错误数必须为 0。
 - **技能衔接**：① 依赖 `project-architecture` 技能确定分层（两层起步、按需渐进）；② 依赖 `xcode-data-modeling` 技能（Model.xml 完整属性体系、主键设计、Map 外键、ShowIn、分表字段）；⑦ 依赖 `cube-webapi-tdesign` 技能，其零代码列表/表单正是本 skill 第五节元数据接口的消费端。
 - **联调常见坑**：前端字段名映射（后端 FastJson CamelCase 输出、Int64 字符串化）、`GetFields` 匿名可取但数据接口需登录、区域路由 `[XxxArea]` 缺失导致 404。
-- **新增实体后验收网关（mapField 与组件约定，硬约束）**：实体含**枚举字段**须加 `[Map("0=文本1,1=文本2")]`（如 `Product.Kind` → `[Map("0=免费,1=收费")]`），否则 `GetPage` 的 `mapField` 非字典源、前端只能渲染原始 Int32 / 文本框；外键字段须命名 `xxxID` 且虚拟显示字段的 `mapField` 指向真实列。前端是否按约定渲染为下拉由 `cube-webapi-tdesign` §4.21 的 `references/verify-entity-form.mjs` 门禁脚本核查（退出码非 0 即未通过）。**每次新增/修改实体后必须跑一遍**；改动 `fieldRender.ts` 须同步该脚本。
+- **新增实体后验收网关（枚举 / 外键字段与前端组件约定，硬约束）**：
+  - **枚举字段 → 首选 LOV 值集（权威通道）**：在控制器 `static XxxController()` 中显式下发值集编码，前端 `useLov` 据此拉 `/api/Admin/Lov/Meta` 显示 `[Description]` 中文标签，**无需前端改动**：
+    ```
+    var lovCode = $"Enum.{typeof(YourEnum).FullName}";   // 与 LovAutoRegisterService 注册码一致
+    SetLov(ListFields,     Entity._.Kind, lovCode);
+    SetLov(AddFormFields,  Entity._.Kind, lovCode);
+    SetLov(EditFormFields, Entity._.Kind, lovCode);
+    SetLov(DetailFields,   Entity._.Kind, lovCode);
+    SetLov(SearchFields,   Entity._.Kind, lovCode);
+    // 辅助：static void SetLov(FieldCollection f, Field field, String code)
+    //       { var df = f.GetField(field); if (df != null) df.LovCode = code; }
+    ```
+    权威源：`CubeDemo/Areas/Test/Controllers/TestFieldController.cs`。
+    **前提**：`AddCubeLov(o => o.ScanNamespace("你的实体命名空间"))` + `UseCubeLov()`，且枚举项带 `[Description]`。
+    实测（Cube 6.13.2026.802）：`list/addForm/editForm/detail/search` 五组字段集合均下发 `lovCode=Enum.{FullName}`。
+  - **`[Map("0=文本1,1=文本2")]` 为兼容降级通道，非首选**：仅在标量枚举无 LOV 注册时使用；它**不**驱动前端 LOV 下拉 / 中文标签链路，且 `mapField` 对枚举恒为 `null`。
+  - **外键字段**：命名 `xxxID`，虚拟显示字段的 `mapField` 指向真实列。
+  - 前端渲染核查见 `cube-webapi-tdesign` §4.20/§4.21。
 
 ---
 

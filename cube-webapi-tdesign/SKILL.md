@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-tdesign
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、mapField 核查、组件约定核查、枚举下拉、外键下拉、verify-entity-form、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染。"
 ---
 
 # cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
@@ -23,7 +23,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | 演示工程（**源码级**，未装依赖/未编译；完整形态页面参考） | `references/demo/`（README 见 `references/demo/README.md`） |
 | 生产级编排层脚手架（**唯一真相源**，已 `vue-tsc`+`vite build`+CDP 实测） | `references/scaffold/` |
 | 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
-| 新增实体验收脚本 | `references/verify-entity-form.mjs` |
+| 新增实体验收清单 | 本文件 §4.21（枚举 LOV / 外键渲染人工核查） |
 | 资产体检（死文件/悬空引用/副本漂移） | `references/scripts/scan-assets-dead.mjs` + `scan-assets-refs.mjs`（见目录 README） |
 | LovListField CDP 端到端验收（3 套 53 项） | `references/scripts/lov/`（`lov_cdp.mjs` 27 / `lov_form_cdp.mjs` 15 / `lov_display_cdp.mjs` 11，含 README） |
 | 后端控制器/权限/JWT/部署 | `cube-webapi-backend` skill |
@@ -106,7 +106,7 @@ Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计
 | 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
 | 6 实体页 | `<ListPage area controller title />` | — | 见 §4.6 |
 | 7 外壳 | `menuTitles.ts`/`BasicLayout`/`tokens.css`/`SettingPanel` 等 | `assets/` + `references/scaffold/src/**` | 见 §4.12/§4.14-16/§4.18（菜单树归一化**无独立模块**：已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`；旧 `menuTree.ts` 已归档于 `assets/archive/`，勿用） |
-| 8 验收 | checklist（§六）+ 新增实体跑 `verify-entity-form.mjs`（§4.21） | — | 编译 0 错误铁律 |
+| 8 验收 | checklist（§六）+ §4.21 枚举/外键渲染核查 | — | 编译 0 错误铁律 |
 
 **登录契约（当前版本 AuthController，SPA 用，实测）**：端点 `POST /Auth/Login` + `GET /Auth/LoginConfig` + `/Auth/Challenge` + `/Auth/Refresh` + `/Mfa/*`（**均不带 `/api` 前缀**；`/Admin/User/Login` 只留 MVC/SSO）。请求体 `{ username, password, category(枚举整数: Password=0/Mobile=1/Mail=2/OAuth=3，禁字符串), remember, challengeId, captchaId, captchaCode }`。响应令牌键名实测 **snake_case**（`access_token`/`refresh_token`/`expire_in`），`auth.ts` 的 `normToken` 三向兜底（snake/camel/Pascal），统一读 camelCase。`challengeRequired===true` 才走 RSA-OAEP Challenge；其余开关同理 `===true` 才启用。`LoginConfig` 的 `oAuth` 键名实测**大写 A**（文档写小写），`getLoginConfig` 双向归一、页面读 `config.oAuth`。详见 troubleshooting G1/G7。
 
@@ -196,6 +196,8 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 > **6.15 已推翻的旧结论（2026-09 实测，务必按新版写代码）**：
 > ① 枚举字典**不用** `mapField`，走独立的 **`dataSource`**（26 实体 17 枚举类型 105 处全覆盖、缺口 0）；读 `field.map` 或只认 `mapField` 字典串都会把枚举渲染成原始 Int32。
+>
+> **版本前提（重要）**：`dataSource` 为 Cube **6.15.x** 观测通道。**6.13.x** 下枚举列由后端 `SetLov` 下发 **`lovCode = "Enum.{命名空间}.{枚举名}"`**，前端 `useLov` 拉 `/api/Admin/Lov/Meta` 消费（列/表单/详情/搜索五组均生效）；`dataSource`/`mapField` 字典串在该版本对枚举均为空。落地前先抓一次 `GetPage` 确认实际通道，勿跨版本套用。
 > ② **`required` 键全量缺失（1452 个描述符里出现 0 次）**，后端不提供独立必填信号 —— 但这**不等于**无法推必填，见 ③。
 > ③ ★ **Cube 省略取值为 `false` 的布尔键**（本契约最易踩的坑）：键只在为 `true` 时出现，**键缺失即 false**。实证 `StockFlow.ID` = `{"name":"ID",…,"typeName":"Int64","primaryKey":true}`，没有 `nullable`/`readOnly`/`visible`/`required` 键。
 > ⇒ **绝不能写 `f.nullable === false`**（该表达式永不成立，必填推断会**全体失效**，表单 0 个必填标记）；推必填只能用 **`f.nullable !== true`**（键缺失 ⇒ 列 NOT NULL ⇒ 必填），并**排除主键与服务端填充的审计字段**（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`），否则新增表单被系统字段卡死。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定；`length`/`maxWidth`/`textAlign` 也可能缺失，TS 须声明可选。
@@ -411,6 +413,8 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 `Admin/Lov` 是枚举型与列表型值集的权威管理系统（前端 `assets/core/api/useLov.ts` 落地，接入字段映射链路）。值集两种类型（`lovCode` 前缀区分）：`Enum.{命名空间}.{枚举名}`（静态字典，下拉/回显）；`List.{area}.{controller}`（动态数据，**LOV 弹窗表格**）。
 **Meta 接口契约**：`GET /api/Admin/Lov/Meta?lovCode=Code1,Code2`（逗号多 code 一次拉取）→ ENUM 型 `data.Meta[].Options:[{Value,Label}]`；LIST 型 **`data.meta`（小写）**`[].type==='LIST'` + `ListConfig{RequestUrl,...}` + `SearchFields[]` + `TableColumns[]`（ENUM/LIST 大小写并存是历史约定，勿混抄）。另有 `BatchLabel`（批量翻译）、`ListData`（服务端代理拉取，需 `AddCubeLov()` 注册——**未注册时演示值集必须 `ProxyRequest=false` 即前端直连**；注意 **6.13 运行库 `LovListConfig` 无 `ProxyRequest` 属性**，不写该字段即 false，写则 CS0117）。
 **值集三通道优先级**（`resolveOptions`/`labelOf`）：① 官方 `/Cube/Lookup`（未配 lovCode 的纯枚举，按 `typeName` 批量拉，先探 `/api/Cube/Lookup` 404 再回退根路径 `/Cube/Lookup`）→ ② LovController `Meta`（`lovCode` 显式声明；枚举→`lovOptions`、列表→`lovListConfig`）→ ③ 约定式 `useLookups`（仅兜底外键 id→名，对纯枚举天然失效）。
+**后端下发前提（枚举走通道② 的关键，实测 2026-09）**：`AddCubeLov(o => o.ScanNamespace("你的实体命名空间"))` + `UseCubeLov()` 注册值集（`LovAutoRegisterService` 注册码 = `Enum.{枚举 FullName}`），且控制器静态构造 `SetLov(fields, 字段, lovCode)` **显式**下发 `lovCode`——Cube **不会**自动为枚举列下发。缺 `lovCode` ⇒ 通道②不触发、退化到通道① `/Cube/Lookup`（只给英文成员名 label，且该通道键名大小写敏感，易再取空）。详见 `cube-webapi-backend` 的「新增实体后验收网关」。
+
 **落地**：`useLov.load(fields)` 收集字段 `lovCode` 批量拉 Meta，归一到 `lovOptions`/`lovListConfig`；`resolveOptions`/`labelOf` 顺序 字典源→dataSource→**lovOptions→lookups**；`buildColumns`/`buildFormItems` 加 getter/prop 注入；`ListPage.init()` `loadLookups` 后 `loadLov`；`FormDialog` LOV 弹窗读 `lovListConfig[code]`（权威路径/列），无配置退化 `parseLovListCode` 猜控制器。**LovController 不可达必须静默退化**（catch 吞掉，退回约定式，不阻断主页面）；大小写归一（PascalCase→camelCase）。
 
 ### 4.20.1 实战落地（WeComAddressBook 已验证：自建 EnumController + Lov 并入 useLookups）
@@ -441,10 +445,14 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - `LovController` 不可达必须**静默退化**，不阻断主页面。
 - **端到端验证入口**：scaffold 的 DEV 路由 `/lov-demo`（`src/pages/LovDemoView.vue`）+ `npm run mock`（Mock 已实现 `/api/Admin/Lov/Meta` 与 ListData 代理，含 24 行数据供跨页验证）。
 
-### 4.21 新增实体后必做验收：mapField 与组件约定核查（硬约束）
+### 4.21 新增实体后必做验收：枚举 LOV / 外键渲染核查（硬约束）
 
-实体含**枚举字段**或**外键字段**时必须核查：① 后端 `mapField`/枚举字典源是否正确下发（枚举须加 `[Map("0=文本1,...")]`、映射虚拟字段 `mapField` 指向真实列）；② 前端是否渲染成下拉（select/multi-select/tree-select）而非文本/数字框。缺 `[Map]` → 前端只能渲染 Int32/文本框。
-**可执行门禁**：`node references/verify-entity-form.mjs <Area> <Controller> [baseUrl] [user] [pass]`（如 `Blog Product http://localhost:5000 admin admin`）——登录→抓 GetPage addForm/editForm→逐字段镜像 `controlOf`/`mapFieldKind` 规则判定，报告 `BACKEND:枚举字段缺[Map]`/`FRONTEND:枚举/外键未出下拉`，违规退出码 1（可作 CI）。**改动 fieldRender.ts 后须同步本脚本逻辑**。
+实体含**枚举字段**或**外键字段**时必须核查：① 后端枚举字段已由控制器 `SetLov` 下发 `lovCode`（`Enum.{FullName}`，见 `cube-webapi-backend` 的「新增实体后验收网关」），外键映射虚拟字段 `mapField` 指向真实列；② 前端是否渲染成下拉（select/multi-select/tree-select）而非文本/数字框。**枚举缺 `lovCode`（且无 `dataSource`）→ 前端只能渲染 Int32/文本框**。
+**人工核查清单**（登录后抓 `GetPage` 的 `addForm`/`editForm`/`list`/`search`/`detail`）：
+1. 枚举字段：确认 `lovCode === "Enum.{命名空间}.{枚举名}"`（后端 `SetLov` 下发），且 `/api/Admin/Lov/Meta?lovCode=...` 返回中文 `label`；
+2. 外键字段：确认虚拟显示字段 `mapField` 指向真实列，且 `lookups` 能取到 id→名；
+3. 前端：字段渲染为 select/multi-select/tree-select，而非文本/数字框。
+> 待补：上述清单的自动化门禁脚本（未来可置于 `references/scripts/` 下、与 `fieldRender.ts` 同源维护），落地前勿在文档中承诺「可执行/退出码 1」。
 
 ## 四、字段类型 → 组件映射速查
 
@@ -453,7 +461,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 | DataField 特征 | 列表回显 | 表单控件 | 备注 |
 |---|---|---|---|
 | 字段名 `ParentID` | 树形节点 | `t-tree-select` | 自引用树，选项排除自身 |
-| `mapField` 字典源（`[Map]` 串） | 映射名称 | `t-select` | 权威源在 `mapField` 不在 `field.map` |
+| `mapField` 字典源（`[Map]` 串，**仅旧变体**） | 映射名称 | `t-select` | 权威源在 `mapField` 不在 `field.map`；**枚举新版走 `lovCode`**（§4.20 / §4.21） |
 | `mapField`=真实字段名（虚拟映射列） | 映射名称 | `t-select`/`tree-select` | 提交键用 `mapField` |
 | `xxxID`（非主键、无字典） | 映射名称 | `t-select` | `lookups` 兜底 |
 | `Boolean` | ✓/✗ 标签 | `t-switch` | |
@@ -510,7 +518,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - [ ] `MessagePlugin` 用法；`@submit` 无 `.prevent`；路由视图 `:key="route.path"`；`pagination` 稳定 reactive；init 幂等
 - [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（响应已 camelize）；**`InlineEnums` 的键也须复原**（camelize 首字母小写会把 `Enum.X` 变成 `enum.X`，导致 `refLovCode` 列翻译失效——`useLov` 已按请求 code 复原，改后实测翻译列出中文）
 - [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
-- [ ] 新增实体已跑 `verify-entity-form.mjs` 0 违规；改契约/登录代码已做 dist 产物核验闭环
+- [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染，无违规；改契约/登录代码已做 dist 产物核验闭环
 - [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
 - [ ] **C1** 工程由 `td-starter init -type vue3 -bt vite -temp lite` 生成（配置保持 CLI 产物形态；`vue-router`/`pinia`/`axios` 已补）
 - [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
