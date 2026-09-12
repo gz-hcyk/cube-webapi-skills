@@ -485,6 +485,21 @@ public ApiResponse<String> Recall(Int32 id) => ...;
 
 - 权限项名取 Action 的 `[DisplayName]`；角色管理里该菜单下会出现“审批 / 撤回”等自定义项；
 - 也可用 `[Menu]` 把自定义权限做成独立子菜单项（同时带菜单与权限）。
+- ⚠️ **同一控制器内，每个权限位只能被一个 Action 使用（最致命的隐性坑）**：
+  `MenuHelper.ScanActionMenu` 用 `dic.Add(method, (Int32)attAuth.Permission)` 收集权限项，
+  键为**权限位整数值**。同一控制器里两个 Action 写同一个位（如两个 `(PermissionFlags)16`）会抛
+  `ArgumentException`，**导致该控制器整个权限扫描中断、权限项一个都不落库**。
+  症状具有欺骗性：**编译通过、接口代码正常，只在运行时报**
+  `设计错误！验证权限时无法找到[XxxController/Yyy]的菜单` 或
+  `管理员访问资源 [Xxx/Yyy] 需要  权限`（权限名位置为空串，因为 `Permissions` 字典里没这项）。
+  更坑的是**开发期可能正常**（内存里已有旧权限缓存），**重启后才暴露**——
+  所以「重启后某接口突然 403、且提示权限名为空」优先怀疑本坑。
+  ✅ 自查：`grep -n 'PermissionFlags)' XxxController.cs` 列出所有位，确认**无重复**。
+  发现重复时，给后出现的 Action 换一个未占用的高位（16 → 32 → 64 → 128 …）。
+  注意 `PermissionFlags.Update | (PermissionFlags)16` 这类**组合位**同样参与去重——
+  两个 Action 若含相同的高位成分，即使组合值不同也可能撞车，最稳妥是每个 Action 独占一个高位。
+  修复后**必须重启**（或触发扫描）让菜单权限串重建，然后到 `Membership.db` 的 `Menu.Permission` 字段核对，
+  应能看到形如 `1#查看,2#添加,16#批量导入,32#导入Excel/CSV` 的完整串。
 - ⚠️ `EntityAuthorizeAttribute` 的带参构造在 `permission ≤ None` 时抛 `ArgumentNullException`，
   **必须显式传入权限位**。魔方区域内的“仅要求登录”由全局过滤器兜底（见 6.5），
   不要在 Action 上空写 `[EntityAuthorize()]` 来只校验登录——写上具体权限位才是本意。
@@ -945,6 +960,7 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 - [ ] 字段定制写在 `static XxxController(){}` 而非实例构造器
 - [ ] 自定义 Action 已标注 `[EntityAuthorize]` 或 `[AllowAnonymous]`
 - [ ] 需要非 CRUD 的业务权限时，已用更高权限位 `(PermissionFlags)16/32` + `[DisplayName]` 标注，且角色管理能正确显示该权限项
+- [ ] **同一控制器内权限位无重复**（重复会使整个控制器的权限项注册失败，运行时报「找不到菜单」/权限名为空；用 grep 逐位核对，重启后在 `Menu.Permission` 验证）
 - [ ] 控制器已通过 `[Menu]` 声明可见性 `Mode`（`Admin`/`Tenant`/组合），避免租户/后台越权可见
 - [ ] 前端调用 `GetFields`/`GetPage` 驱动动态界面，未硬编码字段
 - [ ] 生产环境 `CubeSetting.JwtSecret` 为强密钥；`CorsOrigins` 已限制
