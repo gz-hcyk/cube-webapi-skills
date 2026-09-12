@@ -35,7 +35,8 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 - **M1** 业务菜单唯一权威 = 后端 `GET /Admin/Index/GetMenuTree`（只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。
 - **M2** 要加页面入口 → 改后端产出菜单节点（实体/API 控制器自动扫出，或显式挂菜单）；前端**只做「后端 url → 前端路由」归一化**（`BasicLayout.onNavigate()`，不产生新菜单项）。
 - **M3** 新项目默认 `dashboard` 首页（登录后 `redirect:'/dashboard'`）；点击左上角品牌（系统名/Logo）必须跳 `/dashboard`。
-- 例外：dashboard 及其品牌入口可内置。违反 M1=前端手工 push 菜单、违反 M2=前端硬补页面入口、违反 M3=无 dashboard 或品牌不跳转。
+- **M4** 一级菜单（顶层节点，`parentID` 为空/null）若后端 `GetMenuTree` 返回节点**无 `icon`**，**前端必须自动分配图标**：按 `name`/`displayName`/`url` 关键词映射（如 `User/Role/Member`→`UserIcon`、`Department/Dept/Group`→`UsergroupIcon`、`Log`→`FileIcon`、`Setting/Config/Parameter`→`SettingIcon`、`Dashboard/Home`→`DashboardIcon`、`Report`→`ChartIcon`），无法推断则回退统一默认图标（如 `AppIcon`/`ViewListIcon`）。一级菜单是视觉锚点，图标缺失最影响观感，故**强制补图标**；二级及以下子菜单沿用同一推断但非强制。
+- 例外：dashboard 及其品牌入口可内置。违反 M1=前端手工 push 菜单、违反 M2=前端硬补页面入口、违反 M3=无 dashboard 或品牌不跳转、违反 M4=一级菜单无图标且前端未补。
 
 ## 铁律：唯一 HTTP 层（不可违反）
 
@@ -281,7 +282,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 `GetMenuTree`（`GET /Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
 
-- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + `accordion` + 图标透传（后端未给 icon 时按名称/url 推断）；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
+- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + `accordion` + **图标透传（**一级菜单缺 `icon` 按 **M4** 自动补**：后端未给 icon 时按 `name`/`displayName`/`url` 关键词映射，无法推断回退默认图标；映射表见 §4.12.3）**；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
 - **url → 路由归一化 = `assets/core/layouts/BasicLayout.vue` 的 `onNavigate()`**：剥 `~` / 前导斜杠 / `api` 前缀后取前两段 → `/entity/{Area}/{Ctrl}`。后端 url 双格式（业务区相对 `~/Sync`、系统区绝对 `/Admin/User`）在此一并抹平。
 - ★ **节点 `permissions` 是权限位字典**（`{"1":"查看","2":"添加","4":"修改","8":"删除"}`，业务动作叠加 16/32/64/128…），除驱动按钮级权限外，可作**控制器类别的启发式**：含 2/4/8 大概率为实体控制器（有 `Index`/`GetPage`），否则大概率为动作控制器（`Mobile`/`Import`/`Report`/`Widget` 等，取数必然 404）。⚠️ **该启发式有反例**（`Log` 权限位仅 `[1]` 但实为含 `Index`+`GetPage` 的只读实体控制器），**权威判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为准**（见 §4.12.2）。仪表盘/统计页据此跳过非实体节点，避免刷屏 404（实测 3 条 → 0 条）。判别式与实测数据见 §4.8 附近「实体 vs 动作控制器判别」。
 - ⚠️ **真实端点是 `/api/Admin/Index/GetMenuTree`**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
@@ -310,6 +311,32 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - **与 GetMenuTree 互补**：菜单树仅含当前用户可见业务节点（实测 distinct ctrl ≈ 45），Apis 多出的约 22 个均为系统/特殊控制器（`Auth`/`Mfa`/`Sso`/`Core`/`Sys`/`XCode`/`Cube`/`Db`/`File`/`Index`/`Star`/`Ai`/`Import`/`Mobile`/`Report`/`Widget`…）。前端若只扫菜单树会漏掉这些——需独立处理：登录/鉴权/MFA 走 `/Auth/*`/`/Mfa/*`、数据库管理走 `DbView`（§4.18）、`Cube` 区是魔方自带后台（Area/App/Attachment/指令/定时作业等）。
 - **用途**：① 接后端新版本时一键核对「实体控制器全集」与「动作控制器全集」，避免凭记忆漏接/误接；② 仪表盘/统计页确定哪些节点值得并发取 `totalCount`；③ 排查「某模块取数 404」时先查它是否有 `Index`+`GetPage`。
 - **落地**：`useEntityResource` 或 `specialControllers.ts` 初始化时可选拉一次 `/Cube/Apis` 缓存 `entityControllers:Set<string>`，`kindOf(ctrl)` 直接查集合；菜单节点未命中 Apis 时回退权限位启发式（§4.8，且对 `Log` 等反例白名单放行）。
+
+### 4.12.3 一级菜单图标自动分配（M4 落地）
+
+后端 `GetMenuTree` 节点含 `icon` 字段，但部分一级菜单不返回图标（实测常见：自定义业务区根节点、部分系统模块）。**一级菜单（`parentID` 为空）缺失 `icon` 时前端必须自动补**，保证侧栏视觉锚点不缺图标（二级及以下沿用同一映射但非强制）。
+
+**推断顺序**（命中即停）：
+1. 节点自带 `icon` 且非空 → 直接用（透传；`<component :is="resolveIcon(icon)">`，名称以 `Icon` 后缀兜底）。
+2. 关键词匹配（对 `name`/`displayName`/`url` 大小写不敏感，含即可）：
+
+| 关键词（命中任一） | 图标 |
+|---|---|
+| `user` / `role` / `member` / `account` / `员工` / `用户` / `角色` | `UserIcon` |
+| `dept` / `department` / `group` / `org` / `部门` / `组织` / `分组` | `UsergroupIcon` |
+| `log` / `audit` / `日志` / `审计` | `FileIcon` |
+| `setting` / `config` / `parameter` / `system` / `设置` / `配置` / `参数` / `系统` | `SettingIcon` |
+| `dashboard` / `home` / `index` / `概览` / `仪表盘` / `首页` | `DashboardIcon` |
+| `report` / `stat` / `chart` / `统计` / `报表` | `ChartIcon` |
+| `menu` / `导航` / `菜单` | `MenuIcon` |
+| `tenant` / `租户` | `EnterprisesIcon` |
+| `file` / `attachment` / `文档` / `附件` | `FileIcon` |
+| `db` / `database` / `数据库` | `RootListIcon` |
+| `auth` / `oauth` / `sso` / `安全` / `认证` | `SecurityIcon` |
+
+3. 均不命中 → 回退默认图标 `AppIcon`（统一兜底，避免空白）。
+
+**实现要点**：`MenuSidebar.vue` 在渲染前对菜单树做一次归一化 `normalizeMenuIcons(tree)`——遍历节点，`node.parentID` 为空且 `!node.icon` 时按上表赋值；图标解析用 `tdesign-icons-vue-next` 的动态组件，不存在的图标名回退 `AppIcon`（包 `dist/index.js` 字符串为准，如 `SyncIcon` 不存在则用 `SwapIcon`）。验证：`GetMenuTree` 某一级节点无 `icon` → 侧栏该菜单项可见图标（非空白/非破图）。
 
 ### 4.13 搜索栏与统计行
 
