@@ -218,6 +218,20 @@ app.UseManagerProvider();
 > 认证类服务控制器（`Auth`/`Cube`/`Sso`）自带 `[Route]` **不带 `/api` 前缀**（如 `/Auth/Login`）。
 > 自定义 Action 不要手动再加 `/api`，基类已统一处理。
 
+### 2.1 前后端同域部署：根命名空间撞名（实测，2026-09）
+
+Cube 在**根命名空间**额外注册泛型区域路由 `{area}/{controller=Index}/{action=Index}/{id?}`（Order=1，内部自带，勿手写）。它与前端 SPA 菜单页路径**同名**（菜单 Url = `/Iam/NasClient`、`/Admin/User` 这种 `/{Area}/{Controller}` 形态）。
+
+**一起部署**（Kestrel 自托管 `wwwroot` / nginx 整站反代）时，浏览器硬刷新菜单页被后端路由截获 → 无令牌 401 JSON、有令牌实体 JSON，**永不回退 `index.html`**。dev 正常是因为 `vite.config.ts` 的 `spaAwareBypass` 已按 `Accept: text/html` 放过导航，**必须把同一语义搬到 Kestrel**。
+
+- **前缀级拆分无解**：`/Auth` 同时承载框架认证端点（`/Auth/Login` 真接口）与业务菜单页（`/Auth/NasClient` 前端路由）。
+- **`Cube:ApiPrefixes` 也修不了**：它是**剥前缀转发**（`/api/Xxx` 去掉 `/api` 转发到真实路由，非重定向、不改注册路由）；只收口「API 唯一入口 = `/api`」，而 `/api` 的转发目标恰是那条根路由，删掉它 `/api` 全挂。
+- **正解 = 请求语义分流中间件**（注册在 `UseCube` **之前**）：导航（`Sec-Fetch-Mode: navigate` 或 `Accept` 含 `text/html`）→ 回退 `wwwroot/index.html`；程序调用 → 走 API。豁免前缀 `/api`、`/Auth`、`/Mfa`、`/Swagger`、`/Content`、`/Uploads`；**不可**豁免 `/Admin`、`/Cube`、`/Iam`、`/Device`、`/Security`、`/Ops`、`/Sys`、`/FreeRadius`（既后端路由又前端菜单前缀）。`MapFallback` 统一 404，**勿按前缀维护白名单**。
+- **根治**：业务区域避开框架前缀（`Auth`/`Cube`/`Sso`/`Mfa`）。改名升级脚本**只改 `Menu.Name/Url/FullName/DisplayName`，绝不改 `Menu.ID`**（`Role.Permission` 以 `"<菜单ID>#<权限位>"` 存储，改 ID 会让管理员丢失全部菜单权限）。
+- **单区扛太多控制器 → 按业务继续拆分（一区拆多区）**：保住一个原区（沿用其 `Menu.ID`）+ 新增 N 区；扫描器**从不改写已有菜单的 `ParentID`**、且预插根节点会导致**不触发自动授权重建**；**先跑 SQL 改完 `Menu` 表再部署重启**（顺序反了会新增孤儿菜单、权限串失效）。完整工作流见 `references/spa-hosting.md` **§3.4**。
+
+> 完整根因分析、中间件参考实现、区域改名 SQL 模式与验收探针脚本 → **`references/spa-hosting.md`**。
+
 ---
 
 ## 三、公共控制器选型与用法（避免用错基类）
@@ -953,6 +967,7 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 | `DELETE` 报 `The id field is required` / `GET /Delete?id=` 404 | 删除走 `DELETE /api/{area}/{ctrl}?id={id}`（query，非 body、非路由段） | 按此调用；`DeleteSelect` 同理 |
 | 编译 MSB3021/3026/3027（dll 被锁） | 上次 `dotnet run` 的进程未退出 | 编译前先 `Stop-Process -Name <项目名>`（PowerShell），再 build |
 | Swagger 里看不到实体控制器 | ApiExplorer 未收录（不影响调用） | 用 `/Cube/Apis` 拿全量 API 清单，或按 §14.7 直接 curl |
+| 菜单页硬刷新得到 404 JSON 或实体 JSON（不是页面） | 根命名空间区域路由与前端菜单页路径**同名**，Kestrel 缺 SPA 回退（dev 有 `spaAwareBypass`，prod 没有） | 加 **SPA 导航分流中间件**（§2.1 / `references/spa-hosting.md`） |
 
 ## 十五、生成生产部署包（可复用 Playbook）
 
@@ -970,6 +985,7 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 - [ ] **自建业务库的实体程序集已被触碰**（`_ = typeof(实体).Assembly;`），否则该库不建表（§14.8）
 - [ ] SQLite 连接串写 `Data Source=`（带空格）+ `Journal Mode=Wal;Busy Timeout=30000`（§14.8）
 - [ ] 纯自定义匿名控制器（回调/门户/开放 API）的 `[AllowAnonymous]` 标在**每个 Action 方法**上（类上标注对第 0 层鉴权无效）
+- [ ] 前后端同域部署：已有 **SPA 导航分流中间件**（注册在 `UseCube` 之前，判 `Sec-Fetch-Mode: navigate` / `Accept: text/html`），且 `MapFallback` **未**维护前缀白名单；业务区域名避开框架前缀 `Auth`/`Cube`/`Sso`/`Mfa`（§2.1，细节 `references/spa-hosting.md`）
 - [ ] 实体控制器标注了区域特性（如 `[SchoolArea]`）、`[DisplayName]`、`[Menu]`
 - [ ] 已按业务选对基类：标准 CRUD 用 `EntityController`；只读/字典/报表用 `ReadOnlyEntityController`；树形实体（WebApi）用 `EntityTreeApiController`（非 `EntityTreeController`）；纯自定义接口用 `ControllerBaseX`。需要字段级校验的已 `override EnableFieldValidation => true`
 - [ ] 字段定制写在 `static XxxController(){}` 而非实例构造器
