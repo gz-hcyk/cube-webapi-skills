@@ -585,6 +585,21 @@ Content-Type: application/json
 
 > 首个进入系统的用户自动成为管理员，原 `admin` 被禁用。
 
+### 7.1 第三方登录：扩展 `NewLife.Web.OAuthClient`（实测，2026-09）
+
+Cube 自带 OAuth 客户端工厂，接入新第三方登录源（企微/钉钉/飞书等）**不要自写 HTTP 轮子**，继承 `OAuthClient` 即自动注册：
+
+- **工厂发现机制**：`OAuthClient.Create(tenantId, name)` → `Reflect.GetAllSubclasses(typeof(OAuthClient))` → 每个子类取 `Name.TrimSuffix("Client")` 作字典键（`StringComparer.OrdinalIgnoreCase`）→ 查 `OAuthConfig` 表按 `Name` 匹配 → `Apply` 配置。
+  - ⚠️ **类名即契约**：`WecomClient` → 键 `Wecom`（匹配 provider `"wecom"`）。写成 `WeComClient` 键变 `WeCom`——OrdinalIgnoreCase 下仍能匹配，但命名与既有 `QyWeiXinClient` 等框架风格不一致，统一用 `WecomClient`。
+- **重写点**（全部 virtual）：`Support(string userAgent)`、`Authorize(redirect, state, Uri baseUri)`、`GetAccessToken(code)`、`GetOpenID()`、`GetUserInfo()`、`protected OnGetInfo(IDictionary<string,string>)`。
+- **类型坑（CS0266 三连）**：
+  1. `OAuthClient.Items` 是 `IDictionary<string,object>`（不是 `<string,string>`）；`OnGetInfo` 参数才是 `IDictionary<string,string>` —— `GetUserInfo()` 里两路分开构造，object 字典给 Items，`ToDictionary(k, v => Convert.ToString(v.Value) ?? "")` 给 OnGetInfo。
+  2. `OAuthConfig` **没有** `Items`/`ResponseType` 属性；扩展字段（如企微 agentid）走索引器 `cfg["agentid"]?.ToString()`（返回 object，勿直接赋 string）。
+  3. 父类默认 `AuthUrl` 含 `{response_type}` 模板占位——自定义 `Authorize()` 须兜底：`AuthUrl.IsNullOrEmpty() || AuthUrl.Contains('{') ? 内置常量 : AuthUrl`，否则未替换的模板原样渲染进前端二维码链接。
+- **一源多形态**：同一登录源有多个授权入口（企微：A PC 扫码 `qrConnect`+agentid / B 客户端内静默 `oauth2/authorize`+`snsapi_base`），在子类加 `AuthForm` 枚举属性，`Authorize()` 按 `Form` 分流——不要在业务服务层拼 URL。
+- **企微特例**：`GetAccessToken(code)` 语义不同——先 `gettoken(corpid,secret)` 拿 access_token，再 `user/auth/getuserinfo(code)` 换 **UserId 直接当 OpenID**（无需 openid 字段）。
+- **验证配方**：临时 console 工程（`dotnet new console` + `AssemblyResolve` 指向发布目录）反射 `GetAllSubclasses` 确认新子类已进工厂索引；端到端测 `/portal/{Ctrl}/Config` 比对两种形态 URL 是否正确区分；用无效 code 打 Login 端点验证异常链路（应返回业务错误码而非 500）。
+
 ---
 
 ## 八、自定义 API Action

@@ -43,6 +43,8 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 - **H1** 一个前端工程只允许**一套** axios 实例：`assets/core/api/http.ts` → `src/api/http.ts`，令牌读写统一走 `assets/core/api/token.ts` → `src/api/token.ts`（localStorage 键 `assets_token`）。组件一律 `import { getApi, getRaw, postApi, ... } from '@/api/http'`，**禁止**并存第二套实例、第二套令牌键名（历史遗留 `api.ts` 用 `cube_token`，已删除）。
 - **H2** 后端只认 `Authorization: Bearer <jwt>`（实测）：发 `Authentication: Bearer <jwt>` → 401；不带 Authorization 只带 Cookie（`.Cube.Session`）→ 401。排障第一步永远是「请求头里有没有 `Authorization: Bearer`」。
 - 违反判定：仓库出现两个 HTTP 实例文件、出现 `@/api/api` 引用、或令牌键名不统一 → 必然「登录成功但列表/菜单全空」（典型症状：**左侧菜单栏没有任何显示**，因为 `/api/Admin/Index/GetMenuTree` 恒 401）。
+- **H2 验证配方（本机实测，可作回归基线）**：`POST /Auth/Login` 体 `{"userName":"admin","password":"admin"}`（NewLife.Cube 默认种子管理员，口令 sha512 存 `Membership.db`，令牌信封 snake_case：`access_token`/`refresh_token`/`expire_in`）→ 取 `access_token` → `GET /api/Admin/Index/GetMenuTree` 带 `Authorization: Bearer <token>` 返回 **200**；同一 token 仅发 `Authentication: <token>` 返回 **401**；不带头 **401**；`Bearer` + `X-Tenant-Id` 头返回 **200**。⇒ 结论：**删除旧 `Authentication` 双头零风险**，后端根本不认旧头。
+- **登录锁定（实测，测试期必看）**：连续多次错误密码会触发「登录错误过多，请在300秒后再试！」的**内存锁**（无持久表，锁定态随后端进程存活）。测试期若连错密码（如批量试口令）会锁死 `admin` 账号。最快解锁 = **重启后端进程**（清除内存态），勿傻等 300s；生产环境同样表现，运维需知。
 
 ## 铁律：三条工程约定（新工程必须满足，不可违反）
 
@@ -229,6 +231,13 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 实测锚点（`/Cube/Apis` 解析，可作回归基线）：**883 签名 / 67 控制器**；实体控制器 51（含 `Log`/`Department`/`Menu`/`User` 等），动作/特殊控制器 16（`Import`/`Mobile`/`Report`/`Widget`/`Core`/`Cube`/`Db`/`File`/`Index`/`Star`/`Sys`/`XCode`/`Ai`/`Auth`/`Mfa`/`Sso`）。`kindOf` 落地：`apisHasIndexAndGetPage(ctrl) ? 'entity' : 'action'`。
 
 **Action-only 控制器**：菜单里既有实体控制器也有只带自定义 Action 的控制器（如 `Mobile`/`Import`/`Report`/`Widget`），它们的 `/Index` 必 404。`GetPage` 404 时要给出「该模块需要专用页面」的友好提示，而不是把原始 404 抛给用户；仪表盘计数卡片遇到 404 也应退化为纯入口。
+
+> **Dashboard/统计卡计数端点差异（实测，最易踩）**：实体控制器与动作控制器的「取总数」端点**完全不同**，混用必 404：
+> | 类别 | 计数端点 | 取值路径 |
+> |---|---|---|
+> | 实体控制器（如 `User`/`Department`/`RadiusUser`） | 裸 `GET /api/{area}/{ctrl}?pageSize=1&pageIndex=1` | 信封顶层 `page.totalCount`（`data` 是行数组，分页信息在信封 `page`，**不在** `data.page`） |
+> | 动作控制器（`Session`/`AuthLog`/`Import`/…） | 专用 List 动作（如 `GET /api/Auth/Session/List?limit=N`、`GET /api/Auth/AuthLog/List?page=1&size=1`） | 前者 `data` 是数组 → 数 `length`；后者 `data` 是 `{total,page,size,list}` → 取 `data.total`；裸 GET 均 404 |
+> ⇒ 仪表盘卡须**按 §4.8 的 entity/action 判别**分支取数，不能一律发裸 GET。
 
 ### 4.8.1 `mapField` 双语义判别法（核心契约）
 
