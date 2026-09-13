@@ -777,3 +777,32 @@ function onUserMenu(d: DropdownClickValue) {
 （`DropdownOption`、`XxxProps['yyy']` 之类）；改用包内表达式的**结构**（并集/`Record<string, unknown>` 收敛）。
 改依赖、换包管理器、或新建工程后，**必须重跑 `vue-tsc --noEmit`**。
 
+---
+
+## G19 ★★★ 真机验收脚本**自己**报的假 FAIL：6 类判据陷阱（TF-1~7，2026-09-14 从零建 CubeAdmin 实测）
+
+**症状（最危险的一类）**：真机 CDP 验收一次报出 4 个 FAIL，**逐条取证后确认全是脚本判据写错、产品完全正常**。
+危害在于：这类误报会让人去「修」本来正确的实现，或在修不动时**训练人忽略红灯**（与恒真断言同类）。
+
+| 编号 | 误报 | 根因 | 正确做法 |
+|---|---|---|---|
+| **TF-1** | 「登录页未预填账号密码」 | **断言顺序错**：脚本先 `set(usr,'admin')` 填表，再断言「未预填」 | 「登录**前**状态」类断言（未预填 / 无实现细节文案 / 左栏文案）**必须在填表之前取证** |
+| **TF-2** | 同上，残留 `["on"]` | 「记住我」checkbox 默认勾选，其 `.value` **恒为 `"on"`**，被计入「预填值」 | 采集时排除 `checkbox/radio/hidden/submit/button/image/file` |
+| **TF-3** | 菜单分组名显示 `?`、`openedCount` 恒等于分组数 | 判据用了 `.t-submenu__title` —— 该 class **只存在于 tdesign 的 CSS**；DOM 里组标题挂的是 `.t-menu__item`（1.20.2/1.20.7 一致）⇒ 取 `innerText` 恒为空串 | 组名取 `li.t-submenu > div.t-menu__item > span.t-menu__content`；展开态判 `li.t-submenu > ul.t-menu__sub` 的 `getBoundingClientRect().height > 0`（详见 SKILL.md §七 M5 验收条） |
+| **TF-4** | 「品牌色不对」「齿轮不存在」（**实际都对**） | 触发器选择器命中了 `.t-icon-setting` —— 它是 **SVGElement，没有 `click()`**，调用即抛 `TypeError` | 用组件真实的触发器：`t-button.setting-fab`（见 `assets/core/components/cube/SettingPanel.vue`） |
+| **TF-5** | 同上（异常被**静默变成 `undefined`**） | CDP `Runtime.evaluate` 的异常有**两条**上报路径：① 无 objectId 时在**外层** `r.exceptionDetails`；② 有 objectId 时在 **`r.result.exceptionDetails`** 且 `r.result.result.subtype === 'error'`、`.value` 为 `undefined`。只查外层 ⇒ 页面里抛的异常变成 `undefined`，断言随即报出**误导性结论** | 两条路径都查，并把错误串塞进断言的 detail 里（否则永远看不到真因） |
+| **TF-6** | 「抽屉没打开」（实际已打开） | 用 `el.offsetParent !== null` 判可见性 —— **`position:fixed` 元素（抽屉、固定列）的 `offsetParent` 恒为 `null`** | 改判组件自己的开关类 + `visibility`：`.t-drawer--open` + `getComputedStyle(d).visibility === 'visible'`；或量 `getBoundingClientRect()` |
+| **TF-7** | 「实体页没渲染」（表格只有 1 列） | 表格列/数据是**异步**到位的（先空表头、后元数据与行）；脚本用固定 `sleep` 取一次 ⇒ 同一份代码两次运行分别量到 **19 列 / 1 列** | **轮询等待**到目标条件再断言（如「表头 ≥5 列」最多重试 20 次 × 600ms） |
+
+**★★★ 方法论（本条最值钱的部分）**：断言写完后要验证**两件事**，缺一不可：
+
+1. **它「能」变红** —— 注入一个人造违规，确认真的 FAIL + 非零退出码（否则与 `|| true` 同类）；
+2. **它「不会」无故变红** —— 对已知正确的实现跑一遍，确认全绿。
+   **误报与漏报同样有害**：漏报放过缺陷，误报让人不再相信红灯。
+
+**取证工具本身要经得起怀疑**：本次 4 个 FAIL 里 3 个的直接原因是「脚本对 DOM 的假设与组件库实际结构不符」，
+而非业务逻辑问题。**改判据前先 dump 真实 DOM/计算样式**（写个一次性探针脚本，把
+`querySelectorAll` 命中的元素的 `className` + `getBoundingClientRect` + `getComputedStyle` 打出来），
+比反复猜选择器快得多。另：**「命令失败了」也要先确认命令到底有没有真的执行**
+（`EXIT`、日志**时间戳**、落盘变化）——见 SKILL.md §4.1.1「宿主环境三条硬约束」。
+
