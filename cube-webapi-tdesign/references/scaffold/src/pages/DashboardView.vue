@@ -1,14 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 // 统一 HTTP 层：全部走 @/api/http（Bearer + assets_token），禁止再引入 api.ts
 import { getApi, getRaw } from '@/api/http'
+// 个性化 store：仅用于「主题模式 / 品牌主色」变化时重绘图表的配色。
+// ⚠️ 图表颜色不硬编码，一律读 <html> 上实时的 --td-* 令牌（见 cssVar），
+//    因此本页不改动任何令牌，切换品牌色 / 暗黑模式时图表自动跟随。
+import { useSettingStore } from '@/stores/setting'
+import * as echarts from 'echarts'
 
 /**
- * 仪表盘：模块清单**全部来自后端菜单树**（铁律 M1，禁止前端硬编码业务模块）。
- * 记录数按区按需拉取：业务区（Asset）显示条数，系统区只作入口（避免首屏几十个请求）。
+ * 仪表盘：对齐 TDesign Starter `dashboard/base` 版式
+ * ------------------------------------------------------------
+ * 版式四段（与 Starter 官方组件一一对应）：
+ *   TopPanel      → 顶部 4 张 KPI 卡（首张为品牌主色反色卡）
+ *   MiddleChart   → 左「各模块记录数 TOP10」柱状图 + 右「记录数区域占比」环形图
+ *   RankList      → 左「实体模块记录数排名」+ 右「动作入口」
+ *   OutputOverview→ 左「近期审计日志」+ 右「模块构成」汇总卡
+ *
+ * 数据仍**全部来自后端菜单树**（铁律 M1，禁止前端硬编码业务模块）。
+ * 记录数按区按需拉取：业务区显示条数，系统区只作入口（避免首屏几十个请求）。
  */
 const router = useRouter()
+const setting = useSettingStore()
 
 interface Card {
   area: string
@@ -29,6 +43,8 @@ interface Group {
 const groups = ref<Group[]>([])
 const recentLogs = ref<any[]>([])
 const logsLoading = ref(false)
+/** 审计日志总条数（KPI 用；与列表的「最近 10 条」分开取，仅取分页总数开销极小） */
+const logsTotal = ref(0)
 
 function parseUrl(url?: string): { area: string; controller: string } | null {
   const u = String(url || '').trim()
@@ -137,8 +153,10 @@ async function loadLogs() {
   try {
     const env: any = await getApi('/Admin/Log', { pageIndex: 1, pageSize: 10 })
     recentLogs.value = Array.isArray(env?.data) ? env.data : []
+    logsTotal.value = Number(env?.page?.totalCount ?? recentLogs.value.length)
   } catch {
     recentLogs.value = []
+    logsTotal.value = 0
   } finally {
     logsLoading.value = false
   }
@@ -151,62 +169,300 @@ function go(area: string, controller: string) {
   router.push(`/entity/${area}/${controller}`)
 }
 
-const logColumns = [
-  { colKey: 'category', title: '类别' },
-  { colKey: 'action', title: '操作' },
-  { colKey: 'userName', title: '用户' },
-  { colKey: 'createTime', title: '时间' },
+/* ---------------- 派生统计（全部由后端菜单树 + 记录数推导） ---------------- */
+const allCards = computed(() => groups.value.flatMap((g) => g.cards))
+
+/** 有记录数的实体模块（count>=0；-1 表示取数失败，不计入统计） */
+const ranked = computed(() =>
+  allCards.value
+    .filter((c) => c.kind === 'entity' && typeof c.count === 'number' && c.count >= 0)
+    .map((c) => ({ title: c.title, area: c.area, controller: c.controller, count: Number(c.count) }))
+    .sort((a, b) => b.count - a.count),
+)
+const topModules = computed(() => ranked.value.slice(0, 10))
+const actionCards = computed(() => allCards.value.filter((c) => c.kind === 'action'))
+const entityTotal = computed(() => allCards.value.filter((c) => c.kind === 'entity').length)
+const totalRecords = computed(() => ranked.value.reduce((s, c) => s + c.count, 0))
+const businessAreas = computed(() => groups.value.filter((g) => g.withCount).length)
+
+/** 各业务区记录数（供环形图） */
+const areaStats = computed(() => {
+  const out: { name: string; value: number }[] = []
+  for (const g of groups.value) {
+    if (!g.withCount) continue
+    let sum = 0
+    for (const c of g.cards) {
+      if (c.kind === 'entity' && typeof c.count === 'number' && c.count >= 0) sum += c.count
+    }
+    if (sum > 0) out.push({ name: g.title, value: sum })
+  }
+  return out
+})
+
+/** TopPanel 四张 KPI 卡：全部由后端数据推导，无硬编码业务 */
+const panelList = computed(() => [
+  { title: '模块总数', number: String(allCards.value.length), unit: '个', icon: 'dashboard', main: true },
+  { title: '实体记录总数', number: String(totalRecords.value), unit: '条', icon: 'root-list', main: false },
+  { title: '业务区', number: String(businessAreas.value), unit: '个', icon: 'apartment', main: false },
+  { title: '审计日志', number: String(logsTotal.value), unit: '条', icon: 'file', main: false },
+])
+
+/* ---------------- 图表（echarts，配色读实时令牌） ---------------- */
+const barRef = ref<HTMLDivElement | null>(null)
+const pieRef = ref<HTMLDivElement | null>(null)
+let barChart: echarts.ECharts | null = null
+let pieChart: echarts.ECharts | null = null
+
+/**
+ * 读取 <html> 上实时的 CSS 变量。
+ * ⚠️ 品牌主色由 utils/color.ts 的 getBrandPalette 以 inline style 注入，
+ *    因此这里永远拿到用户当选择的品牌色（默认政务蓝 #0f4c9e）——「不改令牌」且图表随主题联动。
+ */
+function cssVar(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return v || fallback
+}
+
+/** 环形图配色：沿用品牌色阶 + IoT 青辅助色阶，全部取自令牌 */
+function chartPalette(): string[] {
+  return [
+    cssVar('--td-brand-color', '#0f4c9e'),
+    cssVar('--cube-accent-cyan', '#0090d4'),
+    cssVar('--td-brand-color-3', '#7b9dca'),
+    cssVar('--cube-accent-cyan-4', '#7ecfec'),
+    cssVar('--td-brand-color-6', '#0d4186'),
+    cssVar('--cube-accent-cyan-6', '#1f9fd6'),
+    cssVar('--td-warning-color', '#e37318'),
+    cssVar('--td-success-color', '#2ba471'),
+  ]
+}
+
+function renderCharts() {
+  const brand = cssVar('--td-brand-color', '#0f4c9e')
+  const textColor = cssVar('--td-text-color-primary', 'rgba(0, 0, 0, 0.9)')
+  const axisLine = cssVar('--td-component-border', '#dcdcdc')
+  const splitLine = cssVar('--td-component-stroke', '#e7e7e7')
+
+  // 柱状图：各模块记录数 TOP10
+  if (barRef.value) {
+    if (!barChart) barChart = echarts.init(barRef.value)
+    const names = topModules.value.map((c) => c.title)
+    const vals = topModules.value.map((c) => c.count)
+    barChart.setOption(
+      {
+        color: [brand],
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: names,
+          axisTick: { show: false },
+          axisLine: { lineStyle: { color: axisLine } },
+          axisLabel: { color: textColor, interval: 0, rotate: names.length > 6 ? 30 : 0, fontSize: 12 },
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: textColor, fontSize: 12 },
+          splitLine: { lineStyle: { color: splitLine, type: 'dashed' } },
+        },
+        series: [{ type: 'bar', data: vals, barMaxWidth: 28, itemStyle: { color: brand, borderRadius: [4, 4, 0, 0] } }],
+      },
+      true,
+    )
+    barChart.resize()
+  }
+
+  // 环形图：记录数区域占比
+  if (pieRef.value) {
+    if (!pieChart) pieChart = echarts.init(pieRef.value)
+    pieChart.setOption(
+      {
+        color: chartPalette(),
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: {
+          bottom: 0,
+          itemWidth: 10,
+          itemHeight: 10,
+          textStyle: { color: textColor, fontSize: 12 },
+        },
+        series: [
+          {
+            type: 'pie',
+            radius: ['45%', '68%'],
+            center: ['50%', '44%'],
+            data: areaStats.value,
+            label: { show: false },
+            itemStyle: { borderColor: cssVar('--td-bg-color-container', '#ffffff'), borderWidth: 2 },
+          },
+        ],
+      },
+      true,
+    )
+    pieChart.resize()
+  }
+}
+
+function onResize() {
+  barChart?.resize()
+  pieChart?.resize()
+}
+
+// 记录数是异步拉取的：数据到位后重绘（含首次为空时的占位）
+watch([topModules, areaStats], () => nextTick(renderCharts), { deep: true })
+// 主题模式 / 品牌主色变化 → 用新令牌色重绘（不 dispose，setOption 覆盖即可）
+watch([() => setting.mode, () => setting.brandColor], () => nextTick(renderCharts))
+
+const rankColumns = [
+  { colKey: 'index', title: '排名', width: 64, align: 'center' as const },
+  { colKey: 'title', title: '模块', minWidth: 120 },
+  { colKey: 'area', title: '区域', width: 110 },
+  { colKey: 'count', title: '记录数', width: 90, align: 'right' as const },
+  { colKey: 'operation', title: '操作', width: 80, align: 'center' as const },
 ]
+const actionColumns = [
+  { colKey: 'title', title: '入口', minWidth: 140 },
+  { colKey: 'area', title: '区域', width: 110 },
+  { colKey: 'operation', title: '操作', width: 80, align: 'center' as const },
+]
+const logColumns = [
+  { colKey: 'category', title: '类别', width: 110 },
+  { colKey: 'action', title: '操作', minWidth: 120 },
+  { colKey: 'userName', title: '用户', width: 110 },
+  { colKey: 'createTime', title: '时间', width: 180 },
+]
+
+function rankClass(idx: number) {
+  return ['dash-rank__cell', { 'dash-rank__cell--top': idx < 3 }]
+}
+
 function cellOf(row: any, key: string): string {
   const v = row?.[key] ?? row?.[key.toLowerCase()]
   return v == null ? '-' : String(v)
 }
 
 onMounted(async () => {
+  window.addEventListener('resize', onResize, false)
   await loadMenu()
-  loadCounts()
-  loadLogs()
+  await Promise.all([loadCounts(), loadLogs()])
+  await nextTick()
+  renderCharts()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize, false)
+  barChart?.dispose()
+  pieChart?.dispose()
+  barChart = null
+  pieChart = null
 })
 </script>
 
 <template>
   <div class="dash">
-    <div class="dash-head">
-      <div>
-        <h2 class="dash-title">系统仪表盘</h2>
-        <p class="dash-sub">模块清单与名称均来自后端菜单树，前端不硬编码</p>
-      </div>
-    </div>
-
-    <template v-for="g in groups" :key="g.key">
-      <h3 class="dash-group">{{ g.title }}</h3>
-      <div class="stat-grid">
-        <div v-for="s in g.cards" :key="`${s.area}/${s.controller}`" class="stat-card" @click="go(s.area, s.controller)">
-          <div class="stat-label">{{ s.title }}</div>
-          <div class="stat-value">
-            <template v-if="g.withCount && s.kind === 'entity'">
-              <t-loading v-if="s.loading" size="small" />
-              <span v-else-if="s.count == null || s.count < 0" class="stat-err">N/A</span>
-              <span v-else>{{ s.count }}</span>
-            </template>
-            <span v-else class="stat-lite">进入 →</span>
+    <!-- ===== TopPanel：顶部 KPI 卡（首张品牌反色） ===== -->
+    <t-row :gutter="[16, 16]">
+      <t-col v-for="(item, index) in panelList" :key="item.title" :xs="6" :xl="3">
+        <t-card
+          :bordered="false"
+          :title="item.title"
+          :class="{ 'dash-item': true, 'dash-item--main': index === 0 }"
+          :style="{ height: '168px' }"
+        >
+          <div class="dash-item-top">
+            <span>{{ item.number }}</span>
+            <small>{{ item.unit }}</small>
           </div>
-          <div class="stat-path">{{ s.area }}/{{ s.controller }}</div>
-        </div>
-      </div>
-    </template>
+          <div class="dash-item-left">
+            <span><t-icon :name="item.icon" /></span>
+          </div>
+          <template #footer>
+            <div class="dash-item-bottom">
+              <div class="dash-item-block">数据来源 · 后端菜单树</div>
+              <t-icon name="chevron-right" />
+            </div>
+          </template>
+        </t-card>
+      </t-col>
+    </t-row>
 
-    <h3 class="dash-group">近期审计日志</h3>
-    <t-loading v-if="logsLoading" />
-    <t-table v-else :data="recentLogs" :columns="logColumns" row-key="id" size="small">
-      <template #category="{ row }"><span>{{ cellOf(row, 'category') }}</span></template>
-      <template #action="{ row }"><span>{{ cellOf(row, 'action') }}</span></template>
-      <template #userName="{ row }"><span>{{ cellOf(row, 'userName') }}</span></template>
-      <template #createTime="{ row }"><span>{{ cellOf(row, 'createTime') }}</span></template>
-      <template #empty>
-        <span>暂无审计日志</span>
-      </template>
-    </t-table>
+    <!-- ===== MiddleChart：柱状图 + 环形图 ===== -->
+    <t-row :gutter="[16, 16]" class="row-container">
+      <t-col :xs="12" :xl="9">
+        <t-card title="各模块记录数 TOP10" :bordered="false" class="dash-chart-card">
+          <div ref="barRef" class="dash-chart"></div>
+        </t-card>
+      </t-col>
+      <t-col :xs="12" :xl="3">
+        <t-card title="记录数区域占比" :bordered="false" class="dash-chart-card">
+          <div ref="pieRef" class="dash-chart"></div>
+        </t-card>
+      </t-col>
+    </t-row>
+
+    <!-- ===== RankList：实体模块排名 + 动作入口 ===== -->
+    <t-row :gutter="[16, 16]" class="row-container">
+      <t-col :xs="12" :xl="6">
+        <t-card title="实体模块记录数排名" :bordered="false" class="dash-rank-card">
+          <t-table :data="topModules" :columns="rankColumns" row-key="title" size="small">
+            <template #index="{ rowIndex }">
+              <span :class="rankClass(rowIndex)">{{ rowIndex + 1 }}</span>
+            </template>
+            <template #count="{ row }"><b>{{ row.count }}</b></template>
+            <template #operation="{ row }">
+              <t-link theme="primary" hover="color" @click="go(row.area, row.controller)">进入</t-link>
+            </template>
+            <template #empty><span>暂无记录（菜单树未返回实体模块）</span></template>
+          </t-table>
+        </t-card>
+      </t-col>
+      <t-col :xs="12" :xl="6">
+        <t-card title="动作入口" :bordered="false" class="dash-rank-card">
+          <t-table :data="actionCards" :columns="actionColumns" row-key="title" size="small">
+            <template #operation="{ row }">
+              <t-link theme="primary" hover="color" @click="go(row.area, row.controller)">进入</t-link>
+            </template>
+            <template #empty><span>暂无动作入口</span></template>
+          </t-table>
+        </t-card>
+      </t-col>
+    </t-row>
+
+    <!-- ===== OutputOverview：近期审计日志 + 模块构成 ===== -->
+    <t-row :gutter="[16, 16]" class="row-container">
+      <t-col :xs="12" :xl="9">
+        <t-card title="近期审计日志" subtitle="(最近 10 条)" :bordered="false" class="dash-overview-card">
+          <t-table :data="recentLogs" :columns="logColumns" row-key="id" size="small" :loading="logsLoading">
+            <template #category="{ row }"><span>{{ cellOf(row, 'category') }}</span></template>
+            <template #action="{ row }"><span>{{ cellOf(row, 'action') }}</span></template>
+            <template #userName="{ row }"><span>{{ cellOf(row, 'userName') }}</span></template>
+            <template #createTime="{ row }"><span>{{ cellOf(row, 'createTime') }}</span></template>
+            <template #empty><span>暂无审计日志</span></template>
+          </t-table>
+        </t-card>
+      </t-col>
+      <t-col :xs="12" :xl="3">
+        <t-card :bordered="false" class="dash-overview-card">
+          <t-row>
+            <t-col :xs="6" :xl="12">
+              <t-card :bordered="false" subtitle="实体模块数（个）" class="inner-card">
+                <div class="inner-card__content">
+                  <div class="inner-card__content-title">{{ entityTotal }}</div>
+                  <div class="inner-card__content-footer">后端菜单树实时统计</div>
+                </div>
+              </t-card>
+            </t-col>
+            <t-col :xs="6" :xl="12">
+              <t-card :bordered="false" subtitle="动作入口数（个）" class="inner-card">
+                <div class="inner-card__content">
+                  <div class="inner-card__content-title">{{ actionCards.length }}</div>
+                  <div class="inner-card__content-footer">后端菜单树实时统计</div>
+                </div>
+              </t-card>
+            </t-col>
+          </t-row>
+        </t-card>
+      </t-col>
+    </t-row>
   </div>
 </template>
 
@@ -214,73 +470,155 @@ onMounted(async () => {
 .dash {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
-.dash-head {
+.row-container {
+  margin-top: 16px;
+}
+
+/* ===== TopPanel KPI 卡 ===== */
+.dash-item {
+  padding: 8px;
+}
+.dash-item :deep(.t-card__body) {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
-  margin-bottom: 4px;
+  flex: 1;
+  position: relative;
 }
-.dash-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-}
-.dash-sub {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
-}
-.dash-group {
-  margin: 18px 0 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #374151;
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-.stat-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 14px 16px;
-  cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
-}
-.stat-card:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
-  border-color: var(--td-brand-color, #2b6cff);
-}
-.stat-label {
-  font-size: 13px;
-  color: #6b7280;
-}
-.stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  margin: 6px 0 4px;
-  color: #111827;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-}
-.stat-lite {
+.dash-item :deep(.t-card__title) {
   font-size: 14px;
   font-weight: 500;
-  color: var(--td-brand-color, #2b6cff);
 }
-.stat-err {
-  font-size: 16px;
-  color: #9ca3af;
+.dash-item :deep(.t-card__footer) {
+  padding-top: 0;
 }
-.stat-path {
-  font-size: 11px;
-  color: #9ca3af;
-  font-family: monospace;
+.dash-item-top {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.dash-item-top > span {
+  display: inline-block;
+  color: var(--td-text-color-primary);
+  font-size: 36px;
+  line-height: 44px;
+}
+.dash-item-top > small {
+  color: var(--td-text-color-placeholder);
+  font-size: 13px;
+}
+.dash-item-left {
+  position: absolute;
+  top: 0;
+  right: 24px;
+}
+.dash-item-left > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--td-brand-color-1);
+  border-radius: 50%;
+}
+.dash-item-left :deep(.t-icon) {
+  font-size: 24px;
+  color: var(--td-brand-color);
+}
+.dash-item-bottom {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.dash-item-block {
+  display: flex;
+  align-items: center;
+  line-height: 22px;
+  color: var(--td-text-color-placeholder);
+  font-size: 12px;
+}
+/* 首张卡：品牌主色反色（沿用品牌渐变令牌，不新增颜色） */
+.dash-item--main {
+  background: var(--cube-brand-gradient);
+}
+.dash-item--main :deep(.t-card__title),
+.dash-item--main .dash-item-top > span,
+.dash-item--main .dash-item-bottom {
+  color: var(--td-text-color-anti);
+}
+.dash-item--main .dash-item-top > small,
+.dash-item--main .dash-item-block {
+  color: var(--td-text-color-anti);
+  opacity: 0.6;
+}
+.dash-item--main .dash-item-left > span {
+  background: rgba(255, 255, 255, 0.22);
+}
+.dash-item--main .dash-item-left :deep(.t-icon) {
+  color: #fff;
+}
+
+/* ===== 图表卡 ===== */
+.dash-chart-card {
+  padding: 8px;
+}
+.dash-chart-card :deep(.t-card__title) {
+  font-size: 20px;
+  font-weight: 500;
+}
+.dash-chart {
+  width: 100%;
+  height: 326px;
+}
+
+/* ===== 排名卡 ===== */
+.dash-rank-card {
+  padding: 8px;
+}
+.dash-rank-card :deep(.t-card__title) {
+  font-size: 20px;
+  font-weight: 500;
+}
+.dash-rank__cell {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 14px;
+  background-color: var(--td-text-color-placeholder);
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+.dash-rank__cell--top {
+  background: var(--td-brand-color);
+}
+
+/* ===== 概览卡 ===== */
+.dash-overview-card :deep(.t-card__title) {
+  font-size: 20px;
+  font-weight: 500;
+}
+.inner-card {
+  padding: 24px 0;
+}
+.inner-card :deep(.t-card__header) {
+  padding-bottom: 0;
+}
+.inner-card__content-title {
+  font-size: 36px;
+  line-height: 44px;
+  color: var(--td-text-color-primary);
+}
+.inner-card__content-footer {
+  display: flex;
+  align-items: center;
+  line-height: 22px;
+  font-size: 12px;
+  color: var(--td-text-color-placeholder);
 }
 </style>

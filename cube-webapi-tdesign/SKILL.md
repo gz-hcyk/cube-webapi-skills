@@ -935,6 +935,32 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
 
 `t-layout + t-aside + t-menu` 组件化导航，禁手写 `<nav>+router-link`。折叠 `collapsed` 默认 true（`t-menu :collapsed` + Header 触发按钮，`t-aside :width` 64/232 + transition）；二级分组用 `t-submenu`（勿 `t-menu-group`，折叠后无法弹出）；单开互斥用 TDesign 内置 `expand-mutex`；图标 `tdesign-icons-vue-next`（`<component :is>` 渲染，存在性以包 `dist/index.js` 字符串为准，如 `SyncIcon` 不存在用 `SwapIcon`）；防挤压三件套（aside `flex-shrink:0` + 内层 `min-width:0` + 菜单独立滚动容器）。
 
+**另外两条外观约定**（实测对齐 `tdesign-starter` 默认观感，2026-09-13 定）：
+
+| 约定 | 说明 |
+|---|---|
+| 侧栏底部**不放**用户条 | 用户信息收敛到顶栏。侧栏只留「品牌 logo 置顶（可点回 `/dashboard`）+ 菜单滚动区」；`t-aside` 内不要再加 `user-bar`/头像行 |
+| 顶栏用户区 = 「头像 + 用户名 + 下拉箭头」 | 用 `t-dropdown` 包一个按钮形态（`avatar + span.uname + t-icon name="chevron-down"`），而非裸 `t-avatar`。保留租户切换器与通知铃铛；**悬浮齿轮不重复加**（`SettingPanel` 自带右下角悬浮入口） |
+
+### 11.4 仪表盘布局（Starter 版式）
+
+`DashboardView.vue` 按 `tdesign-starter` 官方 `dashboard/base` 的**四段式**编排，而非简单的入口卡网格。这是**版式契约**，视觉观感由它保证：
+
+| 段 | 内容 | 数据来源（**必须**） |
+|---|---|---|
+| **TopPanel** | 4 张 KPI 卡（`t-row/t-col`，`xs=6 / xl=3`；首张用品牌反色 `dash-item--main`，`style="height:168px"`） | 后端菜单树聚合（区数 / 实体模块数 / 记录总数 / 动作入口数等），**不写死业务指标** |
+| **MiddleChart** | 左 `xl=9` 柱状图（「各模块记录数 TOP10」）+ 右 `xl=3` 环形图（「记录数区域占比」） | 菜单树内各实体模块的 `totalCount` |
+| **RankList** | 左 `xl=6`「实体模块记录数排名」表（名次/模块/区域/记录数/操作）+ 右 `xl=6`「动作入口」表 | 同上；「进入」列用 `t-link` → `go(area, controller)` |
+| **OutputOverview** | 左 `xl=9`「近期审计日志」表（`GET /Admin/Log?pageSize=10`）+ 右 `xl=3` 汇总小卡 | 审计日志接口 + 菜单树 |
+
+**硬约束**：
+
+- **数据全部来自后端菜单树**（铁律 M1），四段式只是版式，**不得**为凑版式硬编码业务模块或指标。`withCount` 由 `!FRAMEWORK_AREAS.has(area.toLowerCase())` 判定（框架区 `admin/cube/sys/core/xcode/log` 只作入口不取数），**禁止**写死某个业务区名（D-10 教训）。
+- 图表用 `echarts`（工程依赖已含 `echarts@^6`），**颜色读实时令牌** `getComputedStyle(document.documentElement).getPropertyValue('--td-brand-color')`，这样改品牌色时图表跟随，**无需在组件里硬编码色值**。
+- 每段外层 `t-row` 加 `class="row-container"` 保持段间距（配 `:gutter="[16,16]"`）。
+- 「进入」链接**必须** `router.push('/entity/${area}/${controller}')` —— **带 `/entity/` 前缀**（路由表注册的是 `entity/:area/:controller`；漏前缀会被 catch-all 弹回 `/dashboard`，观感＝「点了没反应」，见 D-15/D-16 与 G13）。
+- 长页验收要按**内容区实际 `scrollHeight`** 撑高视口再截图，否则 `Page.captureScreenshot` 只截到首屏（内容区是内部滚动容器，`contentSize` 不反映它）。
+
 ## 收尾自检（三条主线各一个「不过就不交付」的硬门）
 
 §七 是**完整**验收清单（按三步分组、每步首条即退出条件），此处**只留硬门与入口，不重复逐条**。
@@ -947,3 +973,8 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
 
 - 全量陷阱排障走 `references/troubleshooting.md`（正文只留结论，不内联过程）。
 - **技能自身维护**（改 `assets/` 或 `references/scaffold/` 之后）：跑 `scan-assets-dead.mjs` + `scan-assets-refs.mjs`，并确认正文新增引用路径（`assets/`、`references/`）均存在。
+  - ⚠️ **这三个闸门判据正交，不能互相替代**（D-17 实测踩坑）：
+    - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部副本之间的漂移；
+    - `scan-assets-refs.mjs` = 「`assets/core/` ↔ `references/scaffold/src/` 内部三副本」→ **看不见**目标工程；
+    - 反面案例：D-15 回补时 `MenuSidebar.vue` 只写了 `assets/core/` 一份，`references/scaffold/src/` 那份漏了 `const route = useRoute();`（但仍在用 `route.path`）→ 脚手架生成出来**编译即失败**；当时只因跑了 `check-assets-copied`（全绿）就以为收工，漂移潜伏了整轮。
+  - **改一个文件就三处一起改**（工程实测态 → 主真相源 `references/scaffold/src/` → 派生 `assets/core/`），不要只补一份。

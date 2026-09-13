@@ -105,6 +105,7 @@ import type { MenuValue } from 'tdesign-vue-next';
 import { getRaw } from '@/api/http';
 import { registerMenuTitles } from '@/api/menuTitles';
 
+const route = useRoute();
 const emit = defineEmits<{ (e: 'navigate', url: string): void }>();
 
 // 个性化配置：orientation / theme / collapsed 由 BasicLayout 按「菜单布局」传入

@@ -567,3 +567,77 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
     目前已知两处——`BasicLayout.onNavigate` 与 `DashboardView.go`。新增任何「点 URL 跳路由」代码都要对齐。
   - 验收：`cdp-dash-test.mjs`（CDP 点 dashboard 卡片）5/5 全绿：进入卡片→/entity/Lab/LabLog、业务实体卡片→/entity/Lab/LabCategory、品牌→/dashboard。
 
+---
+
+## G14 与 Starter 脚手架「长得不像」：分清「骨架」与「演示页」（2026-09-13 CubeSkillLab 用户反馈）
+
+- ★★ **症状**：项目跑起来后，用户对照 <https://tdesign.tencent.com/starter/vue-next/dashboard/base>
+  说「前端样式还不是 Starter 的样式，是不是没按技能要求落地」。
+  但实际 `check-starter-align.mjs` 已经 **44 通过 / 0 不一致 / 0 FAIL**。
+
+- ★★ **根因：把「骨架」错当成「演示业务代码」来比对**。TDesign Starter 是**两层结构**：
+  | 层 | 内容 | 技能策略 |
+  |---|---|---|
+  | **骨架** | `index.html` / `package.json` / `tsconfig` / `vite.config` / `main.ts` 接线 / 主题令牌 / `SettingPanel` / 布局外壳 | **必须原样继承**（判据 = `check-starter-align.mjs`） |
+  | **演示业务代码** | `dashboard/base` 那套演示页（假数据 KPI、假排名表、假审计日志） | **属必删清单**，技能设计就是「继承骨架、替换演示」 |
+
+  ⇒ 用户看到的「不像」，不是骨架没落地，而是**演示页被有意替换成了真实后端数据页**。
+  这是设计取向，不是缺陷 —— **回答此类质疑要先跑 `check-starter-align.mjs` 拿数据**，不要盲目改样式。
+
+- ★★ **但用户的真实诉求往往藏在「不像」里：版式（layout）没对齐**。
+  用户明确要求是「**不改令牌**，但仪表盘版式 / 侧栏 / 顶栏对齐 Starter 默认布局」。落地口径（§11.3 / §11.4）：
+  - **仪表盘**：照搬 Starter `dashboard/base` **四段式**（TopPanel KPI 卡 → MiddleChart 柱+环 → RankList 排名表+入口表 → OutputOverview 审计日志+汇总卡）；
+  - **侧栏**：Starter 侧栏**底部不放用户条**（头像+用户名+退出属顶栏职责）；
+  - **顶栏**：用户区 = `t-dropdown` 包裹「头像 + 用户名 + `chevron-down`」。
+
+- ⚠️ **「不改令牌」不等于不能拿品牌色**：echarts 不要硬编码颜色，
+  读**实时令牌** `getComputedStyle(document.documentElement).getPropertyValue('--td-brand-color')`，
+  这样既保留原有设计令牌（政务蓝 `#0f4c9e` + cube chrome 令牌），图表又自动跟随品牌色。
+
+- 验收：`cdp-dash-test.mjs` 14/14 全绿（四段式区块存在性 + `canvas >= 2` + 进入链接真机跳转 `/entity/...`）。
+
+---
+
+## G15 ★★★ 技能资产回补不完整：只改了 `assets/` 漏了 `references/scaffold/src/`（D-17，过程缺陷）
+
+- ★★★ **症状**：从技能脚手架**新生成**的工程，编译直接报 `Cannot find name 'route'`（无法运行）。
+  而**同一份代码在当前实测工程里是好的** —— 典型的「技能资产与实测工程漂移」。
+
+- ★★★ **根因**：技能里的同类文件有**三份副本**，改一处必须同步三处：
+  | 副本 | 角色 | 谁消费 |
+  |---|---|---|
+  | `assets/core/**` | 技能资产（STEP② 复制用） | `check-assets-copied.mjs` 比对工程 `src/` |
+  | `references/scaffold/src/**` | **主真相源**，生产级编排层 | 脚手架生成器 |
+  | `references/demo/src/**` | 精简示例层 | 演示/阅读，**非同步目标** |
+
+  D-15 修复 `MenuSidebar.syncActiveByRoute` 时**只写了 `assets/core/` 一份**，
+  `references/scaffold/src/` 里那份 `MenuSidebar.vue` 就缺了 `const route = useRoute();` 这一行
+  （第 98 行 `import { useRoute }`、第 262/268 行用 `route.path`，但没有实例化）。
+
+- ★★★ **更关键的教训：跑错了闸门 —— 两个闸门判据正交，不能互相替代**：
+  | 闸门 | 判据方向 | 能发现什么 | 发现不了什么 |
+  |---|---|---|---|
+  | `check-assets-copied.mjs` | 工程 `src/` ↔ 技能 `assets/` | 工程与资产漂移 | **技能内部三副本之间**的漂移 |
+  | `scan-assets-refs.mjs` | 技能内部 `assets/` ↔ `scaffold/` ↔ `demo/` | 技能内部副本漂移 | 工程侧改动 |
+  D-15 回补后**只跑了第一个**，它当然全绿（工程和 `assets/` 是一致的），
+  于是漏掉了第二个。改用 `scan-assets-refs.mjs` 实测立刻报 **`core/scaffold 差异数: 1`**，修复后为 **0**。
+
+- ⚠️ **调用口径（本次实际踩到）**：`check-assets-copied.mjs` / `check-starter-align.mjs` 的**目标参数是"含 `src/` 的那一层工程根"**，
+  即前后端分离工程的 **`frontend/`**，**不是仓库根**。传仓库根 → 报「目标工程没有 src/ 目录」/「tsconfig.json 缺失」等一串 FAIL，
+  看起来像全盘崩了，其实只是目录给错了一层。
+  路径要用 **Windows 风格**（`C:/a/b/c`）；传 Git-Bash 风格 `/c/a/b/c` 会被解析成相对路径并拼成 `C:\c\a\b\c` 再次失败。
+
+- **硬规则（写进 SKILL.md 收尾自检）**：
+  1. **改一个文件就三处一起改**（`assets/core/` + `references/scaffold/src/`，`demo/` 按需）；
+  2. 回补后**两个闸门都要跑**，任一非绿不算完；
+  3. 「工程能跑」**不能**作为技能资产正确的证据 —— 工程跑的是它自己的 `src/`。
+
+- **另附本类缺陷的高频续发点：取证工具自身假阳性**（同一轮踩到两处）：
+  - `assert(..., /实验室资产/.test(x) || true, ...)` —— **`|| true` 恒真**，把 Chrome 错误页也判成 PASS。
+    删掉 `|| true` 后暴露真问题：`heading` 选择器命中的是 `.content [class*="title"]`（＝「Lab / LabAsset」区域/控制器名），
+    根本不是中文标签。**改用真实 TDesign 表格表头做硬证据**（`.t-table th` ≥5 列且含中文），实测 19 列表头 + 8 行。
+  - CDP 脚本里**硬编码端口**（`http://127.0.0.1:3003`）—— vite 端口漂移到 3002 后整脚本 ECONNREFUSED，
+    一堆 FAIL 掩盖真问题。统一改 `process.env.APP_BASE || 'http://127.0.0.1:3002'`，
+    并在脚本开头加**可达性哨兵**：检测到 Chrome 错误页（`ERR_CONNECTION_REFUSED` / 「拒绝了我们的连接请求」）直接 `FATAL` 中止，
+    不要让后续断言在错误页上"跑完"。
+

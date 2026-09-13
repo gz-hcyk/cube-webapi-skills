@@ -11,13 +11,9 @@
         <div class="lg">C</div>
         <b>魔方控制台</b>
       </div>
+      <!-- 菜单区：数据来自后端 GetMenuTree（铁律 M1），仅样式对齐 Starter，不写死业务菜单 -->
       <div class="side-menu">
         <MenuSidebar orientation="vertical" theme="dark" :collapsed="setting.collapsed" @navigate="onNavigate" />
-      </div>
-      <div class="user-bar">
-        <t-avatar size="28px">{{ initial }}</t-avatar>
-        <span class="uname">{{ username }}</span>
-        <t-link theme="danger" hover="color" @click="onLogout">退出</t-link>
       </div>
     </t-aside>
 
@@ -48,8 +44,12 @@
                   <t-icon name="notification" />
                 </t-button>
               </t-tooltip>
-              <t-dropdown :options="userMenu" @click="onUserMenu">
-                <t-avatar size="32px" class="avatar-btn">{{ initial }}</t-avatar>
+              <t-dropdown :options="userMenu" @click="onUserMenu" trigger="click">
+                <div class="topbar-user">
+                  <t-avatar size="28px" class="avatar-btn">{{ initial }}</t-avatar>
+                  <span class="topbar-user-name">{{ username }}</span>
+                  <t-icon name="chevron-down" size="16px" />
+                </div>
               </t-dropdown>
             </div>
           </template>
@@ -82,8 +82,12 @@
               <t-icon name="notification" />
             </t-button>
           </t-tooltip>
-          <t-dropdown :options="userMenu" @click="onUserMenu">
-            <t-avatar size="32px" class="avatar-btn">{{ initial }}</t-avatar>
+          <t-dropdown :options="userMenu" @click="onUserMenu" trigger="click">
+            <div class="topbar-user">
+              <t-avatar size="28px" class="avatar-btn">{{ initial }}</t-avatar>
+              <span class="topbar-user-name">{{ username }}</span>
+              <t-icon name="chevron-down" size="16px" />
+            </div>
           </t-dropdown>
         </div>
       </t-header>
@@ -215,11 +219,6 @@ function onUserMenu(d: DropdownOption) {
     router.push('/login');
   }
 }
-
-function onLogout() {
-  auth.logout();
-  router.push('/login');
-}
 </script>
 
 <style scoped>
@@ -229,8 +228,6 @@ function onLogout() {
 .side-brand .lg { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: var(--cube-brand-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
 .side-brand b { font-size: 15px; color: var(--cube-sidebar-text-strong); }
 .side-menu { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px; min-width: 0; }
-.user-bar { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--cube-sidebar-border); display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-.user-bar .uname { flex: 1; font-size: 13px; color: var(--cube-sidebar-text-weak); overflow: hidden; text-overflow: ellipsis; }
 .topbar { height: 56px; background: #fff; border-bottom: 2px solid var(--cube-topbar-border); display: flex; align-items: center; padding: 0 20px; gap: 16px; }
 .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--td-text-color-secondary); }
 .crumb-nav b { color: var(--td-text-color-primary); font-weight: 500; }
@@ -238,6 +235,27 @@ function onLogout() {
 .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .tenant { width: 180px; }
 .avatar-btn { cursor: pointer; background: var(--cube-brand-gradient); color: #fff; }
+/* 顶栏用户区：对齐 Starter 的 header-user-btn 形态（头像 + 用户名 + 下拉箭头） */
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--td-radius-default);
+  transition: background-color var(--td-anim-duration-base);
+}
+.topbar-user:hover { background-color: var(--td-bg-color-container-hover); }
+.topbar-user-name {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  color: var(--td-text-color-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* 内容区：min-width:0 是关键——作为 t-layout 的 flex 子项，默认 min-width:auto 会被超宽表格撑大，
    导致页面出现浏览器横向滚动条，且 t-table 自身横向滚动失效。 */
 .content { padding: 20px; overflow: auto; background: var(--cube-content-bg); min-width: 0; }
@@ -249,6 +267,4 @@ function onLogout() {
 /* 侧边栏折叠态：仅显示 logo 与头像，隐藏文字 */
 .side.collapsed .side-brand { justify-content: center; padding: 0; }
 .side.collapsed .side-brand b { display: none; }
-.side.collapsed .user-bar { justify-content: center; }
-.side.collapsed .user-bar .uname { display: none; }
 </style>
