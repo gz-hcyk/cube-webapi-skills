@@ -114,16 +114,26 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 | `authority` | string? | 字段级权限 | 预留（实测为 `null`） |
 | `extended1~3` | any? | 扩展属性 | 预留（实测为 `null`） |
 | `map` | `Record<string,string>`? | 枚举/字典映射（值→显示） | 下拉选项 + 列表回显 label |
-| `dataSource` | `{text,value}[]`? | 外键/数据字典选项源 | 下拉选项（优先级低于 `map`） |
+| `dataSource` | `{text,value}[]` \| `Record<string,string>`（**双形态**）? | 外键/数据字典选项源 | 下拉选项（优先级低于 `map`），经 `fieldRender.dictEntries()` 归一 |
 
 > **必填判定（易错，务必按此实现）**：`required` 是 UI 语义、`nullable` 是数据库约束，二者**不可互相推导**。
-> - `required === true` → 必填；
-> - 其余情况（`false`/未下发/`null`）→ 用 `nullable === false` **兜底推断**，但排除主键/自增/`readOnly`/
->   审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`…）。
-> - ⚠️ 本后端实测对所有字段下发 `required:false`（0 个 `true`），若把 `required===false` 当「明确不必填」，
->   连 `Name` 这类业务必填项都不会校验。**故 `required` 仅在为 `true` 时生效**。
+> - `required === true` → 必填（**唯一权威信号**）；
+> - 其余情况 → 由 `fieldRender.inferRequired()` 兜底推断：**`nullable === true` ⇒ 不必填**；
+>   再排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`…）。
+> - ⚠️ 本后端实测对所有字段下发 `required:false`（**1452 个描述符中 `required:true` 出现 0 次**），若把
+>   `required===false` 当「明确不必填」，连 `Name` 这类业务必填项都不会校验。**故 `required` 仅在为 `true` 时生效**。
 > - ⚠️ 反例：直接用 `nullable===false` 当必填，会把 `ID`/`CreateTime`/`CreateUserID` 也标红星要求用户填。
+> - ⚠️ **布尔键「恒下发」——不得据「键缺失」做判断**（旧版本文档曾断言「Cube 省略取值为 false 的布尔键」，
+>   **已证伪**）：频次统计 `nullable` 387 / `required` 0 曾被误读成「键出现次数」，实为「**取值为 `true` 的次数**」
+>   （若是键出现次数则应为 1452 = 100%）。真实 `GetPage` 抓包 `userpage.json`：129/129 字段全部显式带
+>   `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`。
+>   **源码依据**：`NewLife.CubeNC/ViewModels/DataField.cs` 中这些属性均为非空 `Boolean` 值类型，
+>   `System.Text.Json` 默认不忽略 false（全仓仅 `AiController.cs` 设 `WhenWritingNull`，只忽略 null）。
+>   故统一写 `f.xxx === true`，**不要写 `f.xxx === false`，也不要依赖键缺失**。
 > 统一实现见 `fieldRender.resolveFieldBehavior()`。
+>
+> ℹ️ `textAlign`/`maxWidth`/`dataAction`/`header`/`headerTitle` 来自 `NewLife.CubeNC/ViewModels/ListField.cs`
+> （**不在** `DataField.cs`），抓包是**多源合并视图**。
 
 > 不同后端版本个别属性名可能微调（如 `type` vs `typeName`）。以 `cube-webapi-backend` 与运行时实际 JSON 为准；渲染器对缺失字段做容错。
 

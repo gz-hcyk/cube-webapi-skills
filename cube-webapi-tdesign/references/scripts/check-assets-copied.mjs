@@ -20,11 +20,19 @@
  *   FAIL —— 资产缺失：`assets/core/**` 在 `<工程>/src/**` 找不到对应文件。
  *           core 之间是**静态 import** 关系（`specialControllers.ts` → `ConfigView.vue`/`DbView.vue`、
  *           `FormDialog.vue` → `LovListField.vue`），缺一个即构建失败，故为必修。
- *   WARN —— 内容漂移：文件在同名位置存在，但 MD5 与技能资产不一致（版本不同步）。
+ *   WARN —— 内容漂移：文件在同名位置存在，但内容 MD5 与技能资产不一致（版本不同步）。
  *           典型场景：工程是**前代产物**（用了本技能早期版本），或本地改过却未回灌技能。
+ *           ⚠️ 判据是**文本等价**，不是字节相等：比对前会把 CRLF/CR 统一为 LF。
+ *              原因：技能仓库 `core.autocrlf=true`，工作区文本资产一律 CRLF；
+ *              而目标工程多由 `tdesign-starter-cli`（LF）产出。二者内容完全相同时
+ *              字节数差 = 行数 - 1，早期按字节比对会把这类**纯换行符差异**误报成漂移
+ *              （实测 27 件资产中 4 件为纯假阳性）。二进制扩展名仍按字节比对。
  *   WARN —— 残留已下线资产：命中 `DEPRECATED` 黑名单（早期拆分件 / 第二套 HTTP 层 /
  *           遮蔽类型的 d.ts）。命中即「拷了旧版资产」，比缺失更危险（静默错版）。
  *   INFO —— `assets/optional/**` 的按需件，只提示不判定（不拷属正常）。
+ *           ⚠️ **2026-09-13 起 `assets/optional/` 已取消**（3 件可选件全部提升进 `core/`），
+ *              本分级当前不会触发；保留该分支仅为兼容旧版技能目录与历史工程盘点。
+ *              `assets/` 现为**单层**：`assets/core/**` = 31 件必拷。
  *
  * 适用范围（勿误读）：本脚本是**第②步的验收闸门**，判据是「与技能 `assets/` 逐文件一致」。
  * 对**非本技能流程产出**的历史工程，FAIL/WARN 表达的是「偏离我们的资产基线」这一事实，
@@ -118,7 +126,21 @@ function walk(dir, out = []) {
   return out;
 }
 
-const md5 = (p) => crypto.createHash('md5').update(fs.readFileSync(p)).digest('hex');
+const BINARY_EXT = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp', '.avif',
+  '.woff', '.woff2', '.ttf', '.otf', '.eot',
+  '.zip', '.gz', '.7z', '.pdf', '.xlsx', '.docx', '.pptx',
+]);
+
+/** 文本资产：统一换行符后取哈希 —— 消除 CRLF/LF 假阳性（技能仓库 autocrlf=true）。 */
+const md5 = (p) => {
+  const buf = fs.readFileSync(p);
+  if (BINARY_EXT.has(path.extname(p).toLowerCase())) {
+    return crypto.createHash('md5').update(buf).digest('hex');
+  }
+  const text = buf.toString('utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return crypto.createHash('md5').update(text, 'utf8').digest('hex');
+};
 const sizeOf = (p) => {
   try {
     return fs.statSync(p).size;
@@ -168,7 +190,7 @@ export function check(root) {
     if (hit) warn(`legacy:${rel}`, `残留已下线资产 src/${rel} —— ${hit.why}`);
   }
 
-  // ③ optional 按需件：只提示，不判定
+  // ③ optional 按需件：只提示，不判定（2026-09-13 起 optional/ 已取消，本分支不会触发；保留以兼容旧版技能目录）
   const optionalFiles = walk(OPTIONAL_DIR)
     .map((p) => toPosix(path.relative(OPTIONAL_DIR, p)))
     .sort();
@@ -178,7 +200,7 @@ export function check(root) {
       'optional',
       `optional 按需件：已拷 ${copied.length}/${optionalFiles.length}` +
         (copied.length ? `（${copied.join(' ')}）` : '') +
-        ` —— 不拷属正常，需要时从 assets/optional/ 取`,
+        ` —— 不拷属正常，需要时从 assets/core/ 取`,
     );
   }
 
@@ -207,8 +229,10 @@ function manifestLines() {
   coreFiles.forEach((f, i) => L.push(`  ${String(i + 1).padStart(2)}. src/${f}`));
 
   const optionalFiles = walk(OPTIONAL_DIR).map((p) => toPosix(path.relative(OPTIONAL_DIR, p))).sort();
-  L.push(`\noptional（按需 ${optionalFiles.length} 项，不判定）:`);
-  optionalFiles.forEach((f) => L.push(`   · src/${f}`));
+  if (optionalFiles.length) {
+    L.push(`\noptional（按需 ${optionalFiles.length} 项，不判定）:`);
+    optionalFiles.forEach((f) => L.push(`   · src/${f}`));
+  }
 
   L.push('\n已下线 / 已删除（命中即 WARN —— 拷了旧版资产）:');
   DEPRECATED.forEach((d) => L.push(`   · ${d.rel || d.base} —— ${d.why}`));
@@ -263,7 +287,9 @@ if (isMain) {
   }
 
   const strict = argv.includes('--strict');
-  const target = argv.find((a, i) => !a.startsWith('-') && i !== outIdx + 1);
+  // ⚠️ 必须带 outIdx >= 0 守卫：未传 --out 时 outIdx === -1，outIdx + 1 === 0，
+  //    会把**第一个位置参数（工程目录）**也排除掉，导致恒报「用法」并 exit(2)。
+  const target = argv.find((a, i) => !a.startsWith('-') && (outIdx < 0 || i !== outIdx + 1));
 
   if (!target) {
     console.error('用法：node check-assets-copied.mjs <工程目录> [--json] [--strict] [--out 报告.txt]');

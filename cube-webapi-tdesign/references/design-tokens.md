@@ -5,7 +5,7 @@
 
 - `assets/core/styles/tokens.css` —— 设计令牌源（`:root` 覆盖 `--td-*` 原生变量 + 新增 `--cube-*` 业务扩展令牌）
 - `assets/core/theme/tokens.ts` —— 同源 TS 导出，供图表 / 逻辑等非 CSS 场景
-- `assets/optional/components/cube/ThemeShowcase.vue` —— 设计令牌板页面（落地为 `src/components/cube/ThemeShowcase.vue`，**DEV 路由 `/theme`**，可视化验证）
+- `assets/core/components/cube/ThemeShowcase.vue` —— 设计令牌板页面（落地为 `src/components/cube/ThemeShowcase.vue`，**DEV 路由 `/theme`**，可视化验证）
 
 ---
 
@@ -53,7 +53,7 @@ import '@/styles/tokens.css'; // 覆盖 TDesign 主题变量
 |------|----------|------|
 | `assets/core/styles/tokens.css` | `src/styles/tokens.css` | 设计=代码，全站主题变量（含 `--td-*` 与 `--cube-*`） |
 | `assets/core/theme/tokens.ts` | `src/theme/tokens.ts` | 同源 TS 导出（brand/semantic/cyan/gray/radius/shadow/spacing/fontSize/gradient/status），供 ECharts 等 |
-| `assets/optional/components/cube/ThemeShowcase.vue` | `src/components/cube/ThemeShowcase.vue` | 设计令牌板，DEV 路由 `/theme` 可视化验证 |
+| `assets/core/components/cube/ThemeShowcase.vue` | `src/components/cube/ThemeShowcase.vue` | 设计令牌板，DEV 路由 `/theme` 可视化验证 |
 
 ---
 

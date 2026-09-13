@@ -125,7 +125,8 @@ async function loadLogs() {
 }
 
 function go(area: string, controller: string) {
-  router.push(`/entity/${area}/${controller}`)
+  // 本工程路由形态为 /:area/:controller（见 router/index.ts 的 authed 子路由），非 /entity/...
+  router.push(`/${area}/${controller}`)
 }
 
 const logColumns = [

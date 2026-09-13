@@ -1,6 +1,6 @@
 # 角色权限设置（RoleMenuEditor）接入指南
 
-> 配套资产：`assets/optional/components/cube/RoleMenuEditor.vue`（技能 §4.12.1）。目标：让后台「系统管理 → Role」编辑弹窗里的
+> 配套资产：`assets/core/components/cube/RoleMenuEditor.vue`（技能 §4.12.1）。目标：让后台「系统管理 → Role」编辑弹窗里的
 > `Permission`（`菜单ID#权限位掩码` 串，如 `16#1`）以**行内勾选权限矩阵**呈现，而非无意义的文本框。
 > 本文档给出从脚手架到验收的完整改动，任何基于本技能的新项目可直接照抄。
 
@@ -17,7 +17,8 @@
 ## 1. 拷贝资产
 
 ```bash
-cp <skill>/cube-webapi-tdesign/assets/optional/components/cube/RoleMenuEditor.vue → src/components/cube/
+cp -r <skill>/cube-webapi-tdesign/assets/core/. <工程>/src/    # 一次拷全 31 件，RoleMenuEditor 已含在内
+# 或单独取：cp <skill>/cube-webapi-tdesign/assets/core/components/cube/RoleMenuEditor.vue <工程>/src/components/cube/
 ```
 
 ## 2. ListPage：Role 页把 permission 表单项改造成「权限设置」独立页签

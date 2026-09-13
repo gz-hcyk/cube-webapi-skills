@@ -236,7 +236,7 @@ export function buildTree(rows: any[], idKey = 'id', parentKey = 'parentID') {
 
 - `primaryKey || isIdentity`：新增表单（`addForm`）中隐藏该字段；编辑表单禁用。
 - `readOnly`：表单 `disabled`。
-- **必填判定（`required` 语义）**：`required`=界面是否必填（UI 语义），`nullable`=数据库是否允许为空（NOT NULL 约束），**二者不可互相推导**。统一走 `resolveFieldBehavior(f)`（返回 `{required, readOnly, nullable, primaryKey}`）：`required===true` → 必填；其余用 `nullable===false` **兜底推断**，但排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`）。⚠️ 实测本后端对所有字段下发 `required:false`（0 个 true），故 `required` 仅在为 `true` 时生效，不能把 `false` 当「明确不必填」（否则连 `Name` 都不校验）；反例：直接 `!nullable` 当必填会把 `ID`/`CreateTime`/`CreateUserID` 也标红星。详见 SKILL.md §七与 `metadata-contract.md` §4。
+- **必填判定（`required` 语义）**：`required`=界面是否必填（UI 语义），`nullable`=数据库是否允许为空（NOT NULL 约束），**二者不可互相推导**。统一走 `resolveFieldBehavior(f)`（返回 `{required, readOnly, nullable, primaryKey}`）：`required===true` → 必填；其余由 `inferRequired()` **兜底推断**（`nullable===true` ⇒ 可空 ⇒ 不必填），但排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`）。⚠️ 实测本后端对所有字段下发 `required:false`（0 个 true），故 `required` 仅在为 `true` 时生效，不能把 `false` 当「明确不必填」（否则连 `Name` 都不校验）；反例：直接 `!nullable` 当必填会把 `ID`/`CreateTime`/`CreateUserID` 也标红星。详见 SKILL.md §七与 `metadata-contract.md` §4。
 - `sortable`：`t-table` 列设 `sortable: true`，排序事件回写 `page.sort` 重新拉取。
 
 ## 6. 搜索栏（kind=5）

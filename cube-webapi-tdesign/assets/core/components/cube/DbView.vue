@@ -80,15 +80,15 @@ async function load() {
   try {
     // GET /api/Admin/Db 返回信封，data 直接是数组（非 rows 包裹）
     // 行数据接口为 GET /api/{area}/{controller}；http 实例 baseURL 已含 /api，故此处只写 /{area}/{controller}
-    const r = await getApi<DbItem[]>(`/${area}/${controller}`);
+    const r: any = await getApi<DbItem[]>(`/${area}/${controller}`);
     // 兼容两种后端形态：
     //  - 标准信封 { code, message, data: [...] }
     //  - 个别 Cube 版本直接返回裸数组（无信封）→ getApi 直接给数组
     const payload = Array.isArray(r)
       ? r
-      : Array.isArray((r as any)?.data)
-        ? (r as any).data
-        : (((r as any)?.data?.rows ?? (r as any)?.data?.list) ?? []);
+      : Array.isArray(r?.data)
+        ? r.data
+        : (r?.data?.rows ?? r?.data?.list ?? []);
     if (import.meta.env.DEV) console.debug('[DbView] raw Db payload keys:', payload?.[0] && Object.keys(payload[0]));
     // 归一化行数据键到 camelCase（后端 PascalCase → 前端 camelCase，与实体页同源）
     rows.value = normalizeRows(Array.isArray(payload) ? payload : []);

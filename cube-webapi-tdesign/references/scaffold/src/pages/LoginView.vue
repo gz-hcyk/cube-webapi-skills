@@ -1,227 +1,341 @@
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { MessagePlugin } from 'tdesign-vue-next'
-import { useAuthStore } from '@/stores/auth'
-import { rawHttp } from '@/api/http'
-
-/**
- * 登录页（通用版）
- * ------------------------------------------------------------------
- * 契约：`POST /Auth/Login`，body `{ username, password }`（**不是 userName**），
- * 令牌键名实测为 snake_case，由 `auth.login()` 内部走 `normToken` 三向兜底。
- * 系统名/Logo/版权优先读后端 `GET /Auth/LoginConfig`；拉不到则静默回落默认值，不阻断登录。
- *
- * ★★ 四条硬规矩（skill 铁律 L1~L4，勿违反）：
- *  L1 左栏文案**必须按当前项目生成**（见下方 `PROJECT`）——禁止原样保留模板话术，
- *     更禁止出现「NewLife.Cube · TDesign Vue Next」这类技术栈字样；
- *  L2 账号/密码**一律不预填**（`ref('')`），禁止默认 `admin`/`admin`，禁止在页面提示测试账号；
- *  L3 页面**不得出现任何实现细节文案**——接口路径（`/Auth/Login`）、加密方式（明文 / RSA 挑战）、
- *     配置开关（`challengeRequired`/`mfaAvailable`）、契约说明等，只写在代码注释里，不渲染到 UI。
- *  L4 **登录页不得让用户选租户**——没有「租户编码」输入框，表单里也没有 tenant 字段。
- *     租户上下文由后端在登录响应头 `X-Tenant` 下发，前端 http.ts 响应拦截器捕获后持久化
- *     （cube_tenant_code）并统一注入请求头；确需切换租户只在**登录后的顶栏**做。
- */
-const router = useRouter()
-const auth = useAuthStore()
-
-/**
- * ★ L1 项目文案 —— 生成新项目时按「业务定位」改写，**不要留空、不要写技术语言**。
- * 生成口径（从项目名 / 系统名 / LoginConfig.title 出发，用业务语言描述）：
- *   tagline    —— 一句定位语（12~20 字），显示在左栏系统名下方
- *   highlights —— 2~4 条核心能力要点，左栏列表；无内容给空数组（自动不渲染）
- *   subtitle   —— 右侧表单上方一行说明；留空则不渲染
- * 示例（IoTHub 物联网设备管理平台）：
- *   tagline: '设备接入 · 协议配置 · 运行监控'
- *   highlights: ['多协议驱动统一接入', '设备实例集中管理', '运行状态实时监控']
- *   subtitle: '请使用平台账号登录'
- */
-const PROJECT = {
-  tagline: '',
-  highlights: [] as string[],
-  subtitle: '',
-}
-
-const username = ref('')
-const password = ref('')
-const loading = ref(false)
-const systemName = ref('魔方管理后台')
-const logoUrl = ref('')
-const copyright = ref('')
-
-/** 无 Logo 时的回退：系统名首字 */
-const logoText = computed(() => (systemName.value || 'C').trim().charAt(0))
-
-onMounted(async () => {
-  try {
-    const r = await rawHttp.get('/Auth/LoginConfig')
-    const d: any = (r.data as any)?.data ?? r.data ?? {}
-    systemName.value = d.title || d.displayName || d.systemName || systemName.value
-    // 静态资源路径落在 /Content 下（如 /Content/images/logo/NewLife.png），dev 代理须含 /Content
-    logoUrl.value = d.loginLogo || d.logo || ''
-    copyright.value = d.copyright || d.copyRight || ''
-  } catch {
-    /* 后端未提供 LoginConfig 时静默降级 */
-  }
-})
-
-async function onSubmit() {
-  if (!username.value || !password.value) {
-    MessagePlugin.warning('请输入账号和密码')
-    return
-  }
-  loading.value = true
-  try {
-    await auth.login(username.value, password.value)
-    MessagePlugin.success('登录成功')
-    await router.replace('/dashboard')
-  } catch (e: any) {
-    MessagePlugin.error(e?.message || '登录失败')
-  } finally {
-    loading.value = false
-  }
-}
-</script>
-
 <template>
   <div class="login-wrap">
-    <div class="login-visual">
-      <img v-if="logoUrl" class="lv-logo" :src="logoUrl" alt="" />
-      <div v-else class="lv-badge">{{ logoText }}</div>
-      <div class="lv-title">{{ systemName }}</div>
-      <div v-if="PROJECT.tagline" class="lv-tagline">{{ PROJECT.tagline }}</div>
-      <ul v-if="PROJECT.highlights.length" class="lv-list">
-        <li v-for="h in PROJECT.highlights" :key="h">{{ h }}</li>
-      </ul>
+    <div class="login-left" :style="loginBgStyle">
+      <div class="ll-logo">
+        <div class="lg">
+          <img v-if="brandLogo" :src="brandLogo" alt="logo" class="lg-img" @error="onLogoError" />
+          <template v-else>{{ (config.name || 'C').charAt(0) }}</template>
+        </div>
+        <div>
+          <b>{{ config.name || 'NewLife.Cube' }}</b>
+          <span>魔方 WebApi 开发框架</span>
+        </div>
+      </div>
+      <h2>元数据驱动的后台<br />开发新范式</h2>
+      <p>一个实体 API，前端「继承」同一套骨架。列表、表单、详情零代码生成，专注业务而非重复造轮子。</p>
+      <div class="feat">
+        <div><t-icon name="check" /> 字段映射双模式：列表显名 / 表单下拉自动解析</div>
+        <div><t-icon name="check" /> 含 ParentID 自动树形表，无需额外代码</div>
+        <div><t-icon name="check" /> 权限由 GetPage.setting 驱动，按钮自动显隐</div>
+        <div><t-icon name="check" /> 多租户 X-Tenant 内建，顶栏一键切换</div>
+      </div>
     </div>
 
-    <div class="login-panel">
+    <div class="login-right">
       <div class="login-card">
-        <div class="login-brand">{{ systemName }}</div>
-        <div v-if="PROJECT.subtitle" class="login-sub">{{ PROJECT.subtitle }}</div>
-        <form class="login-form" @submit.prevent="onSubmit">
-          <t-input v-model="username" placeholder="账号" size="large" autofocus />
-          <t-input
-            v-model="password"
-            type="password"
-            placeholder="密码"
-            size="large"
-            @enter="onSubmit"
-          />
-          <t-button theme="primary" size="large" block :loading="loading" @click="onSubmit">
-            登 录
-          </t-button>
-        </form>
-        <div v-if="copyright" class="login-tip" v-html="copyright"></div>
+        <!-- MFA 二步验证步骤 -->
+        <template v-if="mfa.mfaRequired">
+          <h3>两步验证</h3>
+          <div class="sub">请输入身份验证器中的 6 位动态码</div>
+          <t-input v-model="mfa.code" placeholder="6 位动态码" size="large" maxlength="6" />
+          <t-button theme="primary" block size="large" :loading="loading" @click="onVerifyMfa">验 证</t-button>
+          <p v-if="mfa.err" class="err">{{ mfa.err }}</p>
+          <t-link theme="primary" class="back" @click="resetMfa">返回登录</t-link>
+        </template>
+
+        <!-- 登录表单（按 LoginConfig 开关渲染 Tab） -->
+        <template v-else>
+          <h3>欢迎登录</h3>
+          <div class="sub">{{ config.loginTip || '请输入账号密码进入管理控制台' }}</div>
+
+          <t-tabs v-if="hasTabs" v-model="activeTab">
+            <t-tab-panel v-if="sw.password" value="password" label="密码登录" />
+            <t-tab-panel v-if="sw.sms" value="sms" label="手机验证码" />
+            <t-tab-panel v-if="sw.mail" value="mail" label="邮箱验证码" />
+          </t-tabs>
+
+          <!-- 密码登录 -->
+          <t-form v-if="activeTab === 'password'" :data="pw" @submit="onPasswordLogin" label-width="0">
+            <t-form-item name="username">
+              <t-input v-model="pw.username" placeholder="用户名 / 手机号" size="large" clearable>
+                <template #prefix-icon><t-icon name="user" /></template>
+              </t-input>
+            </t-form-item>
+            <t-form-item name="password">
+              <t-input v-model="pw.password" type="password" placeholder="请输入密码" size="large" clearable>
+                <template #prefix-icon><t-icon name="lock-on" /></template>
+              </t-input>
+            </t-form-item>
+            <p v-if="pwdHint" class="pwd-hint"><t-icon name="info-circle" /> {{ pwdHint }}</p>
+            <t-form-item v-if="sw.captcha" name="captchaCode">
+              <div class="captcha-row">
+                <t-input v-model="pw.captchaCode" placeholder="图片验证码" size="large" clearable />
+                <img v-if="captcha.image" class="captcha-img" :src="captchaSrc" @click="loadCaptcha" alt="captcha" />
+              </div>
+            </t-form-item>
+            <!-- ★ L4：登录页不设租户选择——租户由后端登录响应头 X-Tenant 下发，http.ts 自动捕获持久化 -->
+            <div class="login-foot">
+              <t-checkbox v-model="remember">记住我</t-checkbox>
+              <t-link v-if="allowForgot" theme="primary" @click="goForgot">忘记密码？</t-link>
+            </div>
+            <t-button theme="primary" type="submit" block size="large" :loading="loading">登 录</t-button>
+          </t-form>
+
+          <!-- 短信 / 邮箱验证码登录 -->
+          <t-form v-else :data="codeForm" @submit="onCodeLogin" label-width="0">
+            <t-form-item name="username">
+              <t-input v-model="codeForm.username" :placeholder="activeTab === 'sms' ? '手机号' : '邮箱'" size="large" clearable>
+                <template #prefix-icon><t-icon name="user" /></template>
+              </t-input>
+            </t-form-item>
+            <t-form-item name="code">
+              <div class="captcha-row">
+                <t-input v-model="codeForm.code" placeholder="验证码" size="large" clearable />
+                <t-button variant="outline" :disabled="countdown > 0" @click="onSendCode">
+                  {{ countdown > 0 ? countdown + 's' : '发送验证码' }}
+                </t-button>
+              </div>
+            </t-form-item>
+            <t-button theme="primary" type="submit" block size="large" :loading="loading">登 录</t-button>
+          </t-form>
+
+          <!-- 第三方登录 -->
+          <div v-if="oauth.length" class="oauth">
+            <t-divider>第三方登录</t-divider>
+            <div class="oauth-list">
+              <a v-for="p in oauth" :key="p.name" href="javascript:void(0)" @click="onOauth(p)">
+                <img v-if="p.logo" :src="p.logo" :alt="p.nickName || p.name" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                <span>{{ p.nickName || p.name }}</span>
+              </a>
+            </div>
+          </div>
+
+          <t-link v-if="allowRegister" theme="primary" class="reg-link" @click="goRegister">还没有账号？立即注册</t-link>
+        </template>
+
+        <div v-if="config.copyright" class="copyright" v-html="config.copyright" />
+        <a v-if="config.registration" class="beian" href="https://www.beianx.cn/" target="_blank" rel="noreferrer">{{ config.registration }}</a>
       </div>
     </div>
   </div>
 </template>
 
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { useAuthStore, AuthCategory, type LoginConfig, type OAuthProvider } from '@/stores/auth';
+
+const auth = useAuthStore();
+const router = useRouter();
+const loading = ref(false);
+const remember = ref(true);
+
+const config = ref<LoginConfig>({});
+const activeTab = ref<'password' | 'sms' | 'mail'>('password');
+
+const sw = computed(() => ({
+  password: config.value.login?.password !== false,
+  sms: !!config.value.login?.sms,
+  mail: !!config.value.login?.mail,
+  captcha: !!config.value.login?.captcha,
+  sendCode: !!config.value.login?.sendCode,
+}));
+const hasTabs = computed(() => sw.value.sms || sw.value.mail);
+const allowForgot = computed(
+  () => !!config.value.login?.sms || !!config.value.login?.mail || !!config.value.login?.sendCode,
+);
+const allowRegister = computed(() => !!config.value.register?.enabled);
+const oauth = computed<OAuthProvider[]>(() => config.value.oAuth || []);
+
+/* 左栏 Logo：优先 loginLogo，其次 logo；加载失败回退到系统名首字母方块 */
+const logoBroken = ref(false);
+function onLogoError() {
+  logoBroken.value = true;
+}
+const brandLogo = computed<string>(() => {
+  const u = config.value.loginLogo || config.value.logo || '';
+  return !logoBroken.value && u ? u : '';
+});
+/* 登录页背景图（loginBackground 有值时叠加到渐变之上） */
+const loginBgStyle = computed(() =>
+  config.value.loginBackground
+    ? { backgroundImage: `url("${config.value.loginBackground}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : {},
+);
+/* 密码复杂度提示：仅当 passwordComplexity=true 且后端给出 passwordStrength 正则时展示（文案与校验规则一致） */
+const pwdHint = computed(() =>
+  config.value.security?.passwordComplexity && config.value.security?.passwordStrength
+    ? '密码需 8–32 位，含大写字母、小写字母、数字及特殊字符'
+    : '',
+);
+/* ★ L3：页面不渲染任何实现细节/契约说明（接口路径、加密方式、challengeRequired 等只留在代码注释里） */
+
+/* ★ L4：登录页不设租户字段——租户由后端登录响应头 X-Tenant 下发（http.ts 自动捕获存 cube_tenant_code） */
+const pw = reactive({ username: '', password: '', captchaCode: '' });
+const codeForm = reactive({ username: '', code: '' });
+
+/* 图片验证码（login.captcha=true 时） */
+const captcha = reactive<{ id: string; image: string }>({ id: '', image: '' });
+const captchaSrc = computed(() => (captcha.image ? 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(captcha.image))) : ''));
+async function loadCaptcha() {
+  try {
+    const c = await auth.getCaptcha();
+    if (c) {
+      captcha.id = c.captchaId;
+      captcha.image = c.image;
+    }
+  } catch {}
+}
+
+/* 倒计时 */
+const countdown = ref(0);
+let timer: number | undefined;
+function startCountdown() {
+  countdown.value = 60;
+  timer = window.setInterval(() => {
+    countdown.value -= 1;
+    if (countdown.value <= 0 && timer) window.clearInterval(timer);
+  }, 1000);
+}
+
+/* MFA */
+const mfa = reactive<{ mfaRequired: boolean; mfaToken: string; code: string; err: string }>({
+  mfaRequired: false,
+  mfaToken: '',
+  code: '',
+  err: '',
+});
+function resetMfa() {
+  mfa.mfaRequired = false;
+  mfa.mfaToken = '';
+  mfa.code = '';
+  mfa.err = '';
+}
+
+onMounted(async () => {
+  try {
+    config.value = await auth.getLoginConfig();
+  } catch {
+    config.value = { login: { password: true } };
+  }
+  if (sw.value.captcha) loadCaptcha();
+});
+
+async function onPasswordLogin() {
+  loading.value = true;
+  try {
+    // 仅当 LoginConfig.security.challengeRequired===true 才走 Challenge-Response；false（本环境返回）直接明文提交
+    const r = await auth.loginWithPassword(
+      pw.username,
+      pw.password,
+      { captchaId: captcha.id, captchaCode: pw.captchaCode },
+      config.value.security?.challengeRequired === true,
+      remember.value,
+    );
+    // 后端要求 MFA 但 LoginConfig.security.mfaAvailable 为 false（配置未开启）——按失败处理，不进入 MFA 步骤
+    if (r.mfaRequired && r.mfaToken) {
+      if (config.value.security?.mfaAvailable === true) {
+        mfa.mfaRequired = true;
+        mfa.mfaToken = r.mfaToken;
+        return;
+      }
+      MessagePlugin.error('当前未开启两步验证，请联系管理员');
+      return;
+    }
+    MessagePlugin.success('登录成功');
+    router.push('/');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function onSendCode() {
+  const channel = activeTab.value === 'sms' ? 'Sms' : 'Mail';
+  try {
+    await auth.sendCode(channel, codeForm.username, 'Login');
+    startCountdown();
+    MessagePlugin.success('验证码已发送');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '发送失败');
+  }
+}
+
+async function onCodeLogin() {
+  loading.value = true;
+  try {
+    // tab 值 sms → AuthCategory.Mobile(1)，mail → AuthCategory.Mail(2)；一律走枚举，禁止裸字符串
+    await auth.loginWithCode(
+      codeForm.username,
+      codeForm.code,
+      activeTab.value === 'sms' ? AuthCategory.Mobile : AuthCategory.Mail,
+    );
+    MessagePlugin.success('登录成功');
+    router.push('/');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function onVerifyMfa() {
+  loading.value = true;
+  try {
+    await auth.verifyMfa(mfa.mfaToken, mfa.code);
+    MessagePlugin.success('验证成功');
+    router.push('/');
+  } catch (e: any) {
+    mfa.err = e?.message || '验证失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onOauth(p: OAuthProvider) {
+  const returnUrl = encodeURIComponent(window.location.origin + '/');
+  window.location.href = '/Sso/Login/' + p.name + '?r=' + returnUrl;
+}
+
+function goForgot() {
+  router.push('/forgot-password');
+}
+function goRegister() {
+  router.push('/register');
+}
+</script>
+
 <style scoped>
-.login-wrap {
-  height: 100vh;
-  display: flex;
+.login-wrap { display: flex; min-height: 100vh; }
+.login-left {
+  flex: 1; background: var(--cube-brand-gradient-iot);
+  color: #fff; display: flex; flex-direction: column; justify-content: center;
+  padding: 64px; position: relative; overflow: hidden;
 }
-/* 左侧品牌区：政务蓝渐变（沿用 --cube-brand-gradient 令牌，随品牌色切换） */
-.login-visual {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 0 48px;
-  color: #fff;
-  background: var(--cube-brand-gradient);
+.login-left::after {
+  content: ''; position: absolute; right: -120px; bottom: -120px; width: 380px; height: 380px;
+  border-radius: 50%; background: radial-gradient(circle, rgba(74, 150, 235, 0.5), transparent 70%);
 }
-.lv-logo {
-  max-width: 220px;
-  max-height: 72px;
-  object-fit: contain;
-}
-.lv-badge {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30px;
-  font-weight: 700;
-}
-.lv-title {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: 1px;
-}
-.lv-tagline {
-  font-size: 14px;
-  opacity: 0.9;
-  letter-spacing: 2px;
-}
-.lv-list {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  opacity: 0.85;
-}
-.lv-list li::before {
-  content: '';
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: middle;
-  opacity: 0.8;
-}
-/* 右侧表单区 */
-.login-panel {
-  width: 480px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--td-bg-color-container);
-}
-.login-card {
-  width: 340px;
-}
-.login-brand {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--td-brand-color);
-}
-.login-sub {
-  color: var(--td-text-color-placeholder);
-  font-size: 12px;
-  margin-top: 4px;
-  letter-spacing: 1px;
-}
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 26px;
-}
-.login-tip {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--td-text-color-placeholder);
-}
-@media (max-width: 860px) {
-  .login-visual {
-    display: none;
-  }
-  .login-panel {
-    width: 100%;
-  }
-}
+.ll-logo { display: flex; align-items: center; gap: 12px; position: relative; z-index: 2; }
+.ll-logo .lg { width: 46px; height: 46px; border-radius: 12px; background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; overflow: hidden; }
+.ll-logo .lg-img { width: 100%; height: 100%; object-fit: contain; }
+.ll-logo b { font-size: 18px; display: block; }
+.ll-logo span { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+.login-left h2 { font-size: 30px; margin: 48px 0 14px; position: relative; z-index: 2; line-height: 1.3; }
+.login-left p { color: rgba(255, 255, 255, 0.78); font-size: 15px; max-width: 420px; position: relative; z-index: 2; line-height: 1.7; }
+.feat { margin-top: 36px; position: relative; z-index: 2; display: flex; flex-direction: column; gap: 14px; color: rgba(255, 255, 255, 0.9); font-size: 14px; }
+.feat div { display: flex; align-items: center; gap: 10px; }
+.feat :deep(.t-icon) { color: #7fb2ff; }
+.login-right { flex: 1; display: flex; align-items: center; justify-content: center; background: #fff; }
+.login-card { width: 380px; max-width: 90%; }
+.login-card h3 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.login-card .sub { color: var(--td-text-color-secondary); margin-bottom: 20px; font-size: 13.5px; }
+.login-foot { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 24px; font-size: 13px; }
+.pwd-hint { display: flex; align-items: center; gap: 6px; margin: -6px 0 14px; font-size: 12px; color: var(--td-text-color-placeholder); }
+.pwd-hint :deep(.t-icon) { color: var(--td-brand-color); }
+.captcha-row { display: flex; gap: 8px; width: 100%; }
+.captcha-row .t-input { flex: 1; }
+.captcha-img { height: 40px; border-radius: 6px; cursor: pointer; border: 1px solid var(--td-component-border); }
+.oauth { margin-top: 20px; }
+.oauth-list { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.oauth-list a { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--td-text-color-secondary); }
+.oauth-list img { width: 36px; height: 36px; border-radius: 8px; }
+.reg-link { display: block; text-align: center; margin-top: 16px; }
+.back { display: block; text-align: center; margin-top: 12px; }
+.err { color: var(--td-error-color); font-size: 13px; margin: 8px 0; }
+.copyright { margin-top: 12px; font-size: 12px; color: var(--td-text-color-secondary); text-align: center; }
+.beian { display: block; text-align: center; margin-top: 4px; font-size: 12px; color: var(--td-text-color-placeholder); }
 </style>

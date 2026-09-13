@@ -60,8 +60,8 @@ references/scaffold/
                                useLookups.ts useLov.ts menuTitles.ts
     components/cube/           ListPage / FormDialog / DetailDrawer / MenuSidebar / SettingPanel
                                + ConfigView / DbView（非实体控制器专用页）
-                               + RoleMenuEditor / PriceYuanInput / ThemeShowcase（可选增强件）
-                               + LovListField（LIST 型值集表格弹窗）
+                               + RoleMenuEditor / PriceYuanInput / ThemeShowcase（零引用配方件，随 core 全拷）
+                               + LovListField（LIST 型值集表格弹窗） / IconPicker（图标选择器）
     stores/                    auth.ts（登录态/令牌）  setting.ts（主题模式/品牌色/布局）
     theme/tokens.ts            与 tokens.css 同源的 TS 令牌（图表配色用）
     utils/                     color.ts（品牌色阶推导） camel.ts
@@ -69,18 +69,24 @@ references/scaffold/
     specialControllers.ts      非实体控制器显式注册表（ConfigController<T> / ControllerBaseX）
 ```
 
-> 本目录 = 技能 `assets/core/` + `assets/optional/` 的**全部文件**（另加 `td-starter` 生成的工程外壳
-> `main.ts`/`App.vue`/`router/`/`vite-env.d.ts`，以及 DEV 验证页 `LovDemoView.vue`）。
-> `assets/` 只是"并入既有工程"用的、按目标路径镜像的拷贝源；分类依据与同步铁律见 `assets/README.md`。
+> 本目录（36 件）= 技能 `assets/core/`（**31 件，必拷**）+ 工程外壳 4 件
+> （`main.ts`/`App.vue`/`router/index.ts`/`vite-env.d.ts`，`td-starter` 生成）+ DEV 验证页 1 件
+> （`pages/LovDemoView.vue`）。**后 5 件恒不在 `core` 内**，`tri-diff` 对它们必然报
+> `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）—— **属预期，不是漂移**。
+> `assets/` 只是"并入既有工程"用的、按目标路径镜像的拷贝源；同步铁律见 `assets/README.md`。
 >
 > 早前放在本目录的 `api/menuTree.ts`、`utils/permissions.ts` 已**删除**（主链路零引用的历史残留，
 > 职责与 `MenuSidebar`+`BasicLayout` 的内联归一化、`DashboardView` 的内联权限位判定重叠）。
 
-> **未随脚手架附带的**（按需从 `assets/optional/` 取）：
+> **`IconPicker.vue` 已转为随包附带**（2026-09 由 `assets/optional/` 提升为 `assets/core/`）：
+> `FormDialog.vue` 对本文件是**静态 import**（`control === 'icon'` 分支），
+> 本目录此前不带它 ⇒ 脚手架自身不可编译（`Cannot find module './IconPicker.vue'`）。
+> 旧表述「本目录无副本、取用前先放进 `src/` 验证」**已作废**。归类判据：见 `assets/README.md`
+> 「归类的唯一判据：是否被 core 文件静态 import」。
 >
-> | 组件 | 额外依赖 |
-> |---|---|
-> | `IconPicker.vue`（`itemType=icon`） | 无（用 `tdesign-icons-vue-next`，已在依赖内）；⚠️ 本目录无副本、未过 `vue-tsc`，取用前先放进 `src/` 验证 |
+> **`RoleMenuEditor.vue` / `PriceYuanInput.vue` / `ThemeShowcase.vue` 已随 `core/` 全拷**
+> （2026-09-13 可选项层取消，3 件并入 `core`）。三者**零引用**——不拷不报错、拷了也不报错，
+> 属「配方件」，接不接线由业务页决定。取消分层的理由与代价见 `assets/README.md` §二。
 >
 > **已下线**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter`、`DetailContent.vue`——早期 `fieldRender` 契约产物，拷贝即编译失败，能力已并入自包含的 `ListPage.vue` / `FormDialog.vue`。
 >
@@ -114,7 +120,7 @@ npm run typecheck                                     # 仅类型检查
 - **表单集成（lov-list）已落地**：Mock 的 `Admin/User` 实体带两个 LIST 型字段——`roleLovID`（单选）、
   `roleIds`（多选，名以 `IDs` 结尾）——用于端到端验证「列表 → 新增表单 → 值集弹窗 → 回填」。
   到 `/entity/Admin/User` 点「新增」即可复现；组件行为 / FR / 验证清单见 `references/lov-list-field.md`。
-- **并入既有工程**：用 `cp -r assets/core/. <工程>/src/` 拷贝核心，按需再补 `assets/optional/`；
+- **并入既有工程**：用 `cp -r assets/core/. <工程>/src/` 拷贝核心（31 件，含全部配方件，一次到位）；
   或对照把 `BasicLayout` / `EntityPage` / `LoginView` / `router` / `main.ts` 的编排逻辑迁移过去，不重复造轮子。
 
 ## 契约要点（实测，详见 SKILL.md §4.8 / §六）
@@ -124,8 +130,13 @@ npm run typecheck                                     # 仅类型检查
 - 请求头只认 **`Authorization: Bearer <jwt>`**（发 `Authentication` 或只带 Cookie 均 401）。
 - 实体接口 `/api/{area}/{controller}/{action}`；**菜单 `/Admin/Index/GetMenuTree`（无 `/api` 前缀，带前缀 → 404）**；字典 `/Cube/Lookup`、签名清单 `/Cube/Apis` 同样无前缀。
 - 枚举字典由后端下发在字段描述符 **`dataSource`**（不是 `mapField`）；外键走 `mapField` 映射列。
-- ★ Cube 序列化 `DataField` 时**省略取值为 false 的布尔键** → 推必填只能 `f.nullable !== true`
-  （写 `=== false` 会全体失效）。
+- ★ **布尔键恒下发**：`nullable` / `required` / `readOnly` / `visible` / `primaryKey` 在 GetPage 响应里
+  **一个都不省**（实测 129/129 字段全带 `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`）
+  → 一律写 `f.xxx === true` 判定，**不要依赖「键缺失」**。
+  > 曾据一次抓包误判为「Cube 省略取值为 `false` 的布尔键」并据此写 `!== false`——**该断言已证伪**，
+  > 依据：`NewLife.CubeNC/ViewModels/DataField.cs` 中这些属性都是**非空 `Boolean` 值类型**，
+  > `System.Text.Json` 默认不忽略 `false`。详见 SKILL.md §4.8 ③。
+- 推必填：优先后端 `required === true`；否则 `inferRequired()`（`f.nullable === true` ⇒ 可空 ⇒ 不必填）。
 
 > 资产文件对 `src/api/*` 的引用使用 `../../api/...`（基类组件落在 `src/components/cube/`），复制时注意目录层次。
 

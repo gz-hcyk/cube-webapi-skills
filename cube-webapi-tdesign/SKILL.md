@@ -160,7 +160,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | 可选 | 值集 LOV / LIST 型值集 / 内联枚举 | §4.20 / §4.21 |
 | 可选 | 特殊控制器专属页（`ConfigController<T>` / `ControllerBaseX`） | §4.17 / §4.18 |
 | 可选 | 搜索栏与统计行、一级菜单图标、角色权限编辑、TreeTable | §4.13 / §4.12.3 / §4.12.1 / §4.7 |
-| 可选 | `assets/optional/` 三件（令牌板 / 金额输入 / 图标选择） | §11.1 表 |
+| 可选 | 配方件三件：令牌板 / 金额输入 / 图标选择（**随 `assets/core/` 一并拷入即已在位**，接不接线由业务页决定） | §11.1 表 |
 | 可选 | `category` 分 tab、多租户头、审计字段排除等精细化 | §4.19 / §4.9 |
 
 ## 一、核心哲学：继承式（配置式）页面
@@ -263,7 +263,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 > - 推论：凡遇「列表空白但 `GetPage` 有返回」「把 `data.list` 当行数统计」类症状，先回本表核对端点。
 
 - `useEntityResource.ts`：封装 `GetPage`(schema)/`Index`(数据)/CRUD；`normalizeRows` 行键归一到 camelCase；`getById` 候选链 `/Detail?id=`→`/Get?id=`→`?id=`→`/{id}`（**单条接口 id 在 query**）；`update` 走 `PUT /{base}`（主键在 body）、`remove` 走 `DELETE /{base}?id=xxx`（id 在 query，**不放 URL path** → 405）；`isTree`；`loadAll`（树形取全量）。
-- `fieldRender.ts`：`controlOf`/`selectFormControl`/`selectListComponent`（选型）、`mapFieldKind`/`mapDictOf`/`parseMapSource`（mapField 双语义）、`labelOf`/`resolveOptions`（回显/选项）、`isTreeSchema`/`buildTree`、`buildColumns`（**只由 fields 生成，字典经 `getLookups()` 渲染时读取** → 列引用稳定）、`buildFormItems`/`buildFormRules`/`groupFormItemsByCategory`、`serializeRangeValue`/`deserializeMultiValue` 等。
+- `fieldRender.ts`：`controlOf`/`selectFormControl`/`selectListComponent`（选型）、`isMappedField`/`isMapDictField`/`parseMapSource`（mapField 双语义）、`dictEntries`/`toOptions`/`RESERVED_PARAMS`（字典双形态/保留字）、`labelOf`/`resolveOptions`（回显/选项）、`isTreeSchema`/`buildTree`、`buildColumns`（**只由 fields 生成，字典经 `getLookups()` 渲染时读取** → 列引用稳定）、`buildFormItems`/`buildFormRules`/`groupFormItemsByCategory`、`serializeRangeValue`/`deserializeMultiValue` 等。
 - `useLookups.ts`：约定式外键字典（`xxxID` → 同 area 同名控制器 Index；404 自动回退 `Cube` area；`LOOKUP_ALIASES` 修名实不符，`{category:'Blog/ProductCategory'}`）；排除审计字段 `createUserID/updateUserID`。
 
 ### 4.5 落地基类页面组件
@@ -313,11 +313,13 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 > ① 枚举字典**不用** `mapField`，走独立的 **`dataSource`**（26 实体 17 枚举类型 105 处全覆盖、缺口 0）；读 `field.map` 或只认 `mapField` 字典串都会把枚举渲染成原始 Int32。
 >
 > **版本前提（重要）**：`dataSource` 为 Cube **6.15.x** 观测通道。**6.13.x** 下枚举列由后端 `SetLov` 下发 **`lovCode = "Enum.{命名空间}.{枚举名}"`**，前端 `useLov` 拉 `/api/Admin/Lov/Meta` 消费（列/表单/详情/搜索五组均生效）；`dataSource`/`mapField` 字典串在该版本对枚举均为空。落地前先抓一次 `GetPage` 确认实际通道，勿跨版本套用。
-> ② **`required` 键全量缺失（1452 个描述符里出现 0 次）**，后端不提供独立必填信号 —— 但这**不等于**无法推必填，见 ③。
-> ③ ★ **Cube 省略取值为 `false` 的布尔键**（本契约最易踩的坑）：键只在为 `true` 时出现，**键缺失即 false**。实证 `StockFlow.ID` = `{"name":"ID",…,"typeName":"Int64","primaryKey":true}`，没有 `nullable`/`readOnly`/`visible`/`required` 键。
-> ⇒ **绝不能写 `f.nullable === false`**（该表达式永不成立，必填推断会**全体失效**，表单 0 个必填标记）；推必填只能用 **`f.nullable !== true`**（键缺失 ⇒ 列 NOT NULL ⇒ 必填），并**排除主键与服务端填充的审计字段**（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`），否则新增表单被系统字段卡死。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定；`length`/`maxWidth`/`textAlign` 也可能缺失，TS 须声明可选。
+> ② **`required` 全量不为 true（1452 个描述符里 `required:true` 出现 0 次）**，后端不提供独立必填信号（键本身恒下发，值为 `false`）—— 但这**不等于**无法推必填，见 ③。
+> ③ ★ **布尔键恒下发，一律 `=== true` 判定**（本契约最易踩的坑）。**权威依据**：Cube 源码 `NewLife.CubeNC/ViewModels/DataField.cs` 中 `Nullable`/`PrimaryKey`/`ReadOnly`/`Visible`/`Required` 均为**非空 `Boolean` 值类型**，`System.Text.Json` 默认**不忽略 false**（全仓仅 `AiController.cs` 设 `WhenWritingNull`，只忽略 null）⇒ 这些键**恒下发**。实测抓包 `userpage.json`：129 个字段描述符**全部显式带** `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`。
+> ⇒ 统一写 `f.xxx === true`，**不要写 `f.xxx === false`，也不要依赖「键缺失」做判断**。**已废弃的错误断言**：曾据一次抓包（只看 `primaryKey:true` 单个字段）误判为「Cube 省略取值为 `false` 的布尔键」，据此推出「键缺失即 false」「推必填只能用 `nullable !== true`」——**该断言已被证伪，键并不省略**。
+> 必填判据：优先 **后端 `required === true`**；否则由 `inferRequired` 推断（`nullable === true` ⇒ 不必填），并**排除主键与服务端填充的审计字段**（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`），否则新增表单被系统字段卡死。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定。
+> ℹ️ `length`/`maxWidth`/`textAlign`/`dataAction`/`header`/`headerTitle` 来自**另一个类** `NewLife.CubeNC/ViewModels/ListField.cs`（**不在** `DataField.cs`），抓包是**多源合并视图**，TS 侧仍按可选声明。
 > ④ 未填字段仍须由 `FormDialog.defaultValue` 给「数值 0 / 布尔 false / 空串」，否则 `null` 会被 NOT NULL 列拒绝（实测 400）。
-> ⑤ 全量属性出现频次（1452 个字段描述符）：`dataSource` 105 / `mapField` 236 / `nullable` 387 / `length` 322 / `category` 373 / `itemType` 12 / `required` **0**。
+> ⑤ 全量属性取值统计（1452 个字段描述符）：`dataSource` 105 / `mapField` 236 / `nullable` 387 / `length` 322 / `category` 373 / `itemType` 12 / `required` **0**。⚠️ 布尔项是**取值为 `true` 的次数**（如 387 表示 387 个字段 `nullable:true`），**不是键出现次数**——若是键出现次数应为 1452（=100%）。此处曾误读并推出「Cube 省略 false 布尔键」，见 ③。
 > ⑥ **实测校验值**（可作回归基线）：某业务实体新增表单应得 **17 个必填标记**，其中 `nullable: true` 的字段（如 `BillNo`/`Remark`）正确豁免。拿到 0 个必填标记 ⇒ 必是踩了 ③。
 
 **外键 lookup 回退与别名（实测 2026-09）**：`useLookups` 要找的是「字段名基」对应的控制器，但字段名基常与真实控制器名不一致，且外键可能指向框架内置表（业务库里根本没有）。落地两条表 + 命中率优先的候选顺序：
@@ -366,7 +368,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 | 纯标识符但**不在**当前字段集 | 同样是虚拟映射字段（目标列在其他分组，常态） | addForm 的 `WarehouseName.mapField="WarehouseID"` |
 | 含 `=` / `,` | `[Map]` 枚举字典源（**仅旧变体**；6.15 已改走 `dataSource`） | `PersonType.mapField="1=学生,2=教职工"` |
 
-`mapFieldKind(f, fields)` 落地于 `fieldRender.ts`。**判别顺序**：先看能否在字段集命中同名字段 ⇒ 映射字段；否则**按形状**——纯标识符 ⇒ 映射字段，含 `=`/`,` ⇒ 字典串。⚠️ 旧实现「字段集非空且命中不到 ⇒ dict」是**错的**：`GetPage` 的 `list/addForm` 只给虚拟名称列（`WarehouseName`），目标列 `WarehouseID` 不在同组，误判会让外键退化成文本框（2026-09 实测复现并修复）。
+落地函数是 `isMappedField(f)` / `isMapDictField(f)`（`fieldRender.ts`），**纯按形状判别、不查字段集**：含 `=`/`,` ⇒ 字典串，纯标识符 ⇒ 映射字段。⚠️ 反推法「字段集非空且命中不到 ⇒ dict」是**错的**：`GetPage` 的 `list/addForm` 只给虚拟名称列（`WarehouseName`），目标列 `WarehouseID` 不在同组，误判会让外键退化成文本框（2026-09 实测复现并修复）。
 
 **键名硬约束**：字典源 → 提交键 `f.name`；映射字段 → 提交键 `mapField` 真实列名。控件细分：`xxxIDs/xxxIds`→`multi-select`、`ParentID`→`tree-select`、其余→`select`。
 
@@ -417,9 +419,9 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 
 `Role.Permission` 契约：逗号分隔 `菜单ID#权限位掩码`（`1#3`；`3=查看+新增`；`-1`=全动作；位 `1查看/2新增/4修改/8删除`）。通用表单把 Permission 渲染成 `t-input`——**必须换成勾选 UI**。
 
-**资产（已按 Cube MVC SetPermission 形态定型，开箱即用）**：`assets/optional/components/cube/RoleMenuEditor.vue` = **行内勾选平铺版**（菜单树 DFS 平铺、每行 查看/新增/修改/删除 独立 checkbox；父子位级联动——勾父动作位自动授予/收回全部子孙、不误伤其它位；全展开/全折叠工具栏 + 授权菜单数 Tag + 列头；序列化仅输出 `perm>0`，`-1` 透传）。完整接入三步 + 验收清单 + 坑表见 `references/permission-editor-integration.md`：
+**资产（已按 Cube MVC SetPermission 形态定型，开箱即用）**：`assets/core/components/cube/RoleMenuEditor.vue` = **行内勾选平铺版**（菜单树 DFS 平铺、每行 查看/新增/修改/删除 独立 checkbox；父子位级联动——勾父动作位自动授予/收回全部子孙、不误伤其它位；全展开/全折叠工具栏 + 授权菜单数 Tag + 列头；序列化仅输出 `perm>0`，`-1` 透传）。完整接入三步 + 验收清单 + 坑表见 `references/permission-editor-integration.md`：
 
-1. **拷贝** `assets/optional/components/cube/RoleMenuEditor.vue` → `src/components/cube/`（依赖 `getApi`/TDesign，菜单源 `/api/Admin/Menu`）。
+1. **拷贝** `assets/core/components/cube/RoleMenuEditor.vue` → `src/components/cube/`（依赖 `getApi`/TDesign，菜单源 `/api/Admin/Menu`）。
 2. **ListPage**：`isRolePage = area==='Admin' && controller==='Role'`；formItems（add/edit 共用）把 `String(it.key).toLowerCase()==='permission'` 的项改写为 `{ control:'role-permission', category:'权限设置', rules:[] }` → `groupByCategory` 自动生成「权限设置」页签。
 3. **FormDialog**：懒加载该组件；含该项时 `dialogWidth=1000px`；模板 `template v-for` 分流把 `role-permission` **整块渲染**（全宽 div，勿套带 label 的 `t-form-item`，避免表单标签栏残留）。
 
@@ -467,7 +469,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 
 - 搜索栏由 `GetPage.search` 驱动；**Search 参数契约**：数值/枚举/布尔/日期走字段参数（`?parentID=1`）；**字符串必须并入 `Q` 关键词**（`?name=xx` 不生效）；多值走 `?xxxIds=1,2`；日期范围映射 `dtStart/dtEnd`。`onSearch` 按 typeName 分流。**虚拟映射字段后端不参与查询**（`User.RoleID` 只是 Map 虚拟映射，`?roleID=` 被忽略，须 `?roleIds=`）→ `searchParamMap` prop（如 `{roleID:'roleIds'}`）。
 - 控件覆盖必须完整：`select/multi-select/switch`（typeName=Boolean 用 `t-switch`）/`tree-select`/`datetime`/`number`/`image`/文本兜底——缺 `switch`/`multi-select` 分支会掉进 `t-input`。**`image` 字段（ItemType=image，如封面）必须渲染 上传+URL 双输入**（`t-upload theme="image"` 调 `uploadFile` 回填 + URL 文本框），否则用户只能手填 URL（FormDialog 通用分支已内置，复用即可）。
-- **单位语义字段（分/元）须专用换算控件，勿让用户直接填库值**：后端金额常为 `Int32` 单位分（如 `Product.Price`、`ProductOrder.Amount`），表单直接渲染 number 会让用户按「元」填 `29.9` 触发后端 JSON Int32 绑定报 `-2 请求数据格式不正确 …could not be converted to System.Int32`（按元填整数则静默存成 0.3 元）。落地配方（MyBlog 2026-09 实测）：① `assets/optional/components/cube/PriceYuanInput.vue` 自包含换算组件——对外 `v-model` 绑「分」，内部以「元」编辑，`change` 时 `Math.round(yuan*100)` 回写、外部值变化 `÷100` 回显；② ListPage 对实体页特判 `key.toLowerCase()==='price'` → `{control:'price-yuan', label:'价格(元)'}`；③ 列表列 cell 覆盖：`分→¥元`（`(v/100).toFixed(2)`）；④ 详情行经 `DataField.formatter`（fieldRender 接口已加可选 `formatter`，DetailDrawer 消费：`f.formatter ? f.formatter(raw) : labelOf(...)`）。
+- **单位语义字段（分/元）须专用换算控件，勿让用户直接填库值**：后端金额常为 `Int32` 单位分（如 `Product.Price`、`ProductOrder.Amount`），表单直接渲染 number 会让用户按「元」填 `29.9` 触发后端 JSON Int32 绑定报 `-2 请求数据格式不正确 …could not be converted to System.Int32`（按元填整数则静默存成 0.3 元）。落地配方（MyBlog 2026-09 实测）：① `assets/core/components/cube/PriceYuanInput.vue` 自包含换算组件——对外 `v-model` 绑「分」，内部以「元」编辑，`change` 时 `Math.round(yuan*100)` 回写、外部值变化 `÷100` 回显；② ListPage 对实体页特判 `key.toLowerCase()==='price'` → `{control:'price-yuan', label:'价格(元)'}`；③ 列表列 cell 覆盖：`分→¥元`（`(v/100).toFixed(2)`）；④ 详情行经 `DataField.formatter`（fieldRender 接口已加可选 `formatter`，DetailDrawer 消费：`f.formatter ? f.formatter(raw) : labelOf(...)`）。
 - **FormDialog 打开竞态（通用 bug，必防）**：打开弹窗瞬间 `props.items` 常随后端 schema 异步到达——若此时 `buildModel()` 空跑，`model` 为空壳，全部必填字段误报「请填写xx」且控件无默认值。修法双保险：`watch(visible)` 内轮询等待 `formItems.value.length`（≤8s）再 buildModel；再加 `watch(formItems)` 兜底——`visible && items 就绪 && model 为空` 时补建一次。
 - **script setup 组件 import 必须置于文件顶部**：写在 `const xxx = defineAsyncComponent(...)` 之后会导致 `Failed to resolve component: xxx`（组件解析不到、模板渲染为空元素）。
 - **`@submit` 勿加 `.prevent`**（TDesign form 内部已阻止，回调参数是 `{validateResult,firstError,e}` 对象，`.prevent` 会 `e.preventDefault is not a function`）。
@@ -481,7 +483,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 
 - `assets/core/styles/tokens.css`（单一事实源）：`:root` 覆盖 `--td-brand-color*`/语义色/圆角/阴影/字号 + 业务扩展 `--cube-*` 令牌。
 - `assets/core/theme/tokens.ts`：同源 TS 导出（图表/ECharts 配色用）。**两文件必须同源**，改主色/渐变同步改（当前默认政务蓝 `#0f4c9e`，与 `setting.ts` `DEFAULT_BRAND`、tokens.css 兜底值一致，防首屏闪色）。
-- 接入：`main.ts` 在 TDesign 样式**之后**依次 `import tokens.css` → `import theme-dark.css`。完整规范见 `references/design-tokens.md`；可视化验证 `assets/optional/components/cube/ThemeShowcase.vue`（**DEV 路由 `/theme`**，随 scaffold 提供；生产构建不注册）。
+- 接入：`main.ts` 在 TDesign 样式**之后**依次 `import tokens.css` → `import theme-dark.css`。完整规范见 `references/design-tokens.md`；可视化验证 `assets/core/components/cube/ThemeShowcase.vue`（**DEV 路由 `/theme`**，随 scaffold 提供；生产构建不注册）。
 - **三处同源（铁律 C2）**：`tokens.css` 的 `--td-brand-color`、`setting.ts` 的 `DEFAULT_BRAND`、`tokens.ts` 的主色必须同为政务蓝 `#0f4c9e`；只改一处会在首屏或重置时闪色（`setting.load()` 注入的 inline style 优先级最高）。
 
 ### 4.15 生产级编排层脚手架（references/scaffold/）
@@ -607,7 +609,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 5. **树形三连**：`t-enhanced-table`（t-table 不支持）+ `:tree` 传对象 + `loadAll` 全量构建；判定聚合全部字段组、认 `mapField=ParentID`。
 6. **字段命名 PascalCase → camel 归一**（`ID→id`、`ParentID→parentID` 缩写规则）；★ **两端点别混用（详见 §4.4 首表）：`GetPage`=元数据、`GET /api/{area}/{ctrl}`=数据行**——`GetPage` 的 `data.list` 是**列定义数组**（`data.list.length` = 列数，非行数），行数据只在**无 action 段**的 `GET /api/{area}/{ctrl}` 的 `data:[rows]`；`extractListPayload` 只从 `rows/page.rows/Page.Rows/data` 取行、**不读 `list` 键**。
 7. **TDesign 特有签名/写法**：列是 `columns` 配置式 API（**无 `<t-column>` 组件**）；`cell` 回调 `(h, params)` 非 `({row})`；`@submit` 勿加 `.prevent`；`MessagePlugin` 非 `Message`；`<script setup>` 新用 watch/computed 必须 import。
-8. **多选 value 恒为数组**（`deserializeMultiValue` 兜 null）；daterange 存实体单列逗号串（与搜索 dtStart/dtEnd 两参数契约**不同**）；★ **布尔键省略规则**：Cube 省略取值为 false 的布尔键，`nullable`/`readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定，推必填用 `nullable !== true`（写 `=== false` 会全体失效，见 §4.8 ②③）。
+8. **多选 value 恒为数组**（`deserializeMultiValue` 兜 null）；daterange 存实体单列逗号串（与搜索 dtStart/dtEnd 两参数契约**不同**）；★ **布尔键恒下发**：`nullable`/`readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定，**不要依赖「键缺失」**（曾误判为「Cube 省略取值为 false 的布尔键」，已证伪，见 §4.8 ②③）；推必填优先用后端 `required === true`。
 9. **代理**：dev 代理 `/api` `/Auth` `/Mfa` `/cube` `/Content` → 后端（target 写 `127.0.0.1` 勿 localhost）；**切勿代理 `/Admin` 等 SPA 路由**（硬刷新 404）。
 10. **`dist` 构建沙箱坑**：safe-delete 报错与代码无关；`dist` 被进程锁 → 先 `--outDir dist-check` 验证再 `cp -r` 覆盖，**勿 `mv`/`rm` 替换**；治本停占用进程。
 11. **「支持暗黑模式」= 三处接线，不是一个 css 文件**：`theme-dark.css` 存在 ≠ 用户能切。必须 ① `main.ts` 在 TDesign 样式**之后** `import '@/styles/theme-dark.css'`；② `main.ts` 调 `useSettingStore().load()`；③ `BasicLayout.vue` 挂 `<SettingPanel />`。缺任一处 → 齿轮不存在 / 类名不切换 / 首屏不还原，等同于没做。验收只认两件事：**右下角有齿轮**、**点「暗色」后 `<html>` 出现 `t-theme-dark`**（`--td-bg-color-page` 应变 `#181818`）。
@@ -713,11 +715,10 @@ PY
 > **第②步出口校验（拷完 assets 立刻跑）**：`node references/scripts/check-assets-copied.mjs <工程目录>` —— 逐文件比对 `assets/core/**` 与 `<工程>/src/**`：**缺文件 = FAIL**（core 之间是静态 import 关系，缺一即构建失败）；**内容漂移 / 命中已下线黑名单 = WARN**（版本不同步或拷了旧版资产，须逐条确认）。加 `--manifest` 打印映射表与黑名单，`--strict` 让 WARN 也计入失败。
 > 另两条必跑：`node references/scripts/check-starter-align.mjs <工程目录>`（第①步出口，期望退出码 0）；若走「并入既有工程」路线，**必须**先按 §4.1 用 CLI 生成骨架再并入 —— 不得凭空手搭 `package.json`/`tsconfig`/`index.html`。下表用于「并入既有工程」的对照拷贝。
 
-`assets/` **按「核心 / 可选」二分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
+`assets/` 是**单层**（`core/` 一层，2026-09-13 起取消 `optional/`），且路径镜像目标工程的 `src/`，因此可以整目录拷：
 
 ```bash
-cp -r assets/core/.                     <工程>/src/        # 必拷（27 文件，见 assets/README.md）
-cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components/cube/   # 以下为按需
+cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，见 assets/README.md）
 ```
 
 | 分类 | assets/ 路径 → 目标路径 | 内容 |
@@ -727,15 +728,30 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 | **core** | `assets/core/stores/*.ts` → `src/stores/` | `auth`(登录态与令牌) / `setting`(个性化偏好) |
 | **core** | `assets/core/theme/tokens.ts` → `src/theme/` | 与 `tokens.css` 同源的 TS 令牌（图表配色，铁律 C2 三处同源之一） |
 | **core** | `assets/core/styles/*.css` → `src/styles/` | `tokens.css`(政务蓝兜底) / `theme-dark.css`(暗色令牌，`main.ts` 在 TDesign 样式**之后**引入) |
-| **core** | `assets/core/components/cube/*.vue` → `src/components/cube/` | `ListPage` / `FormDialog` / `DetailDrawer` / `MenuSidebar` / `SettingPanel`(铁律 C3 必须由 `BasicLayout` 挂载) / `ConfigView` / `DbView` / `LovListField`(§4.20.2 值集表格弹窗，被 FormDialog 静态 import) |
+| **core** | `assets/core/components/cube/*.vue` → `src/components/cube/` | `ListPage` / `FormDialog` / `DetailDrawer` / `MenuSidebar` / `SettingPanel`(铁律 C3 必须由 `BasicLayout` 挂载) / `ConfigView` / `DbView` / `LovListField`(§4.20.2 值集表格弹窗，被 FormDialog 静态 import) / `IconPicker`(`itemType=icon` 图标选择器，被 FormDialog 静态 import) |
 | **core** | `assets/core/layouts/BasicLayout.vue` → `src/layouts/` | 侧边导航壳（含 `SettingPanel` 挂载位 + `onNavigate()` url 归一化） |
 | **core** | `assets/core/pages/*.vue` → `src/pages/` | `EntityPage`(泛型实体页，按 `specialControllers` 分发) / `DashboardView` / `LoginView` |
 | **core** | `assets/core/specialControllers.ts` → `src/` | 非实体控制器注册表（§4.17 / §4.18） |
-| **optional** | `assets/optional/components/cube/RoleMenuEditor.vue` | 角色权限设置（§4.12.1）✅ 已随 scaffold 验证 |
-| **optional** | `assets/optional/components/cube/PriceYuanInput.vue` | 金额（分/元）换算输入（§4.13）✅ 已随 scaffold 验证 |
-| **optional** | `assets/optional/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 |
-| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 无副本、仅 demo 有源码实现，**取用前须先过 `vue-tsc`** |
+| **core** | `assets/core/components/cube/RoleMenuEditor.vue` | 角色权限设置（§4.12.1）✅ 已随 scaffold 验证 · **零引用配方件** |
+| **core** | `assets/core/components/cube/PriceYuanInput.vue` | 金额（分/元）换算输入（§4.13）✅ 已随 scaffold 验证 · **零引用配方件** |
+| **core** | `assets/core/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 · **零引用配方件** |
 | — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
+
+> ★ **2026-09-13：取消 `assets/optional/` 层，改为单层 `core/`（31 件）**。原先「按需拷」的三件
+> （`RoleMenuEditor` / `PriceYuanInput` / `ThemeShowcase`）全部并入 `core/`。理由：**分层的唯一判据是
+> 「是否被 core 文件静态 import」，而这判据只对「缺了就构建失败」有意义**；这三件属**零引用配方件**
+> ——不拷不报错、拷了也不构建报错（`vue-tsc` 会编译它们，与主链路无关）——落在两可地带，
+> 导致「拷不拷」全靠使用者记忆，正是历史上 `IconPicker` 被漏拷的事故成因。
+> 收敛为「**一个目录、一次 `cp -r`、31 件全拷**」后，`check-assets-copied.mjs` 的判据也变成单向可验证。
+> 代价（已确认）：`core` 变重；这三件在默认工程里**零引用**（`ThemeShowcase.vue` 仅与同名
+> `pages/ThemeShowcase.vue` DEV 路由巧合重名，**不是**同一个文件）。
+
+> **`IconPicker.vue` 已于 2026-09 从 `optional/` 提升为 `core/`**：`core/components/cube/FormDialog.vue` 里
+> `<IconPicker v-else-if="item.control === 'icon'">` 是**静态 import**（`import IconPicker from './IconPicker.vue'`），
+> 只拷 core 而漏掉它 ⇒ `vue-tsc` 直接报 `Cannot find module './IconPicker.vue'`。
+> 「被 core 文件静态 import 的，一律属 core」——同 `ConfigView` / `DbView` / `LovListField` / `useLov.ts`。
+> 旧文档「scaffold 无副本、取用前自行验证」的表述已作废（那会让 scaffold 自身不可编译）。
+> 该次提升也是本次「取消分层」的先声：既然判据只能单向用（漏拷即失败），层级本身就不该存在。
 
 > **已删除 `CodeEditor.vue`**（原 `assets/optional/components/cube/`；2026-09 资产清理）：零引用 +
 > 从未编译验证（依赖 `@codemirror/*` 未装），且**当前 `fieldRender` 根本不产出
@@ -747,6 +763,12 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 
 > **已下线**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter`、`DetailContent.vue`（早期 `fieldRender` 契约，拷贝即编译失败，能力已并入自包含 `ListPage.vue` / `FormDialog.vue`，见 §4.5）。
 > **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts` / `index.html` / `tsconfig*.json` / `vite.config.ts` / `public/favicon.ico`）不在 `assets/` 里——它们**由 `td-starter` 生成**、随 `references/scaffold/` 提供；`check-starter-align.mjs` 就是用来守住这条边界的。
+>
+> ★ **三根构成（2026-09-13 定稿）**：`references/scaffold/src/`（36 件，唯一真相源）= `assets/core/`（31 件，必拷）
+> **+ 工程外壳 4 件**（`App.vue` / `main.ts` / `router/index.ts` / `vite-env.d.ts`）**+ DEV 演示页 1 件**
+> （`pages/LovDemoView.vue`，`/lov-demo` 路由用，生产不注册）。后 5 件**恒不在 `core` 内**，
+> 故 `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
+> 判据与修复方向见 `references/scripts/README.md`。
 >
 > **已删除 `tdesign-icons.d.ts`**（2026-09-13）：早期为规避 TS7016 手写的「15 图标白名单」环境模块声明。事实上 `tdesign-icons-vue-next` 的发布包**自带完整类型**（`esm/index.d.ts` barrel → `esm/icons.d.ts`，约 2350 个图标导出），`moduleResolution` 取 `Bundler` 或 `Node` 均直接命中，**无需任何声明**；反倒是该 `declare module 'tdesign-icons-vue-next'` 会**捕获模块名并遮蔽真实类型**——实测声明在场时，包内确实导出的 `AddIcon` 会被判为 `has no exported member`（TS2305 假报错），类型可达性从 2350 被压缩到 15。scaffold/src 内图标一律走全局 `<t-icon name="...">` 字符串，无具名导入消费方，删除零影响。若某工程确需具名导入图标：`npm i tdesign-icons-vue-next` 后直接用真实类型，**勿再手写白名单声明**。
 > 分类依据与同步铁律（**唯一真相源 = `references/scaffold/src/`**）见 `assets/README.md`。

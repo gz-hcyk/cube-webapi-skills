@@ -18,14 +18,17 @@ const WL_BASENAME = new Map([
   ['shims-vue.d.ts', '全局类型声明'],
   ['env.d.ts', '全局类型声明'],
   ['permissions.ts', '权限模块（references/demo 内的源码级实现），可零静态引用'],
-  ['IconPicker.vue', '可选组件（assets/optional，按需人工拷贝）'],
-  ['PriceYuanInput.vue', '可选组件（assets/optional，按需人工拷贝）'],
-  ['RoleMenuEditor.vue', '可选组件（assets/optional，按需人工拷贝）'],
+  // 注：IconPicker.vue 已于 2026-09-13 由 assets/optional/ 提升为 assets/core/，
+  //     且被 core/FormDialog.vue 静态 import，不再是「零引用可选件」→ 已从白名单移除。
+  // 以下两件同期随 optional 一并并入 core（**必拷**），但仍是「配方件」：
+  // core 主链路不静态引用，只由文档里的接入配方（SKILL.md §4.12.1 / §4.13）按需 import。
+  ['PriceYuanInput.vue', '配方件（core 必拷；业务表单按 SKILL.md §4.13 接入，非主链路）'],
+  ['RoleMenuEditor.vue', '配方件（core 必拷；业务表单按 SKILL.md §4.12.1 接入，非主链路）'],
 ])
 
-/** 白名单：相对路径前缀（可选资产 / 独立可执行入口） */
+/** 白名单：相对路径前缀（独立可执行入口） */
 const WL_PATH_PREFIX = [
-  'assets/optional/',    // 可选资产：按需人工拷贝，core 不静态引用（结构上零引用）
+  // 'assets/optional/' 已于 2026-09-13 移除——optional 层取消，资产并入 assets/core/（单层）
   'references/scripts/',  // 独立 CLI 脚本，由 `node xxx.mjs` 直跑
   'references/scaffold/backend/', // Mock 后端入口，`node server.mjs` 直跑
   'references/demo/backend/',     // Mock 后端入口（demo 工程），同上

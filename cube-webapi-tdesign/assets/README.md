@@ -1,13 +1,11 @@
-# assets/ —— 可拷贝模板库（核心 / 可选）
+# assets/ —— 可拷贝模板库（**单层：`core/`**）
 
 本目录是「**并入既有工程**」用的模板库：每个文件的路径都**镜像目标工程的 `src/` 目录**，
 所以可以直接整目录拷贝。与之并列的 `references/scaffold/` 是**完整可运行工程**（真相源）。
 
 ```bash
-# 并入既有 Vue3 + Vite 工程（core 为必拷项，路径已镜像 src/）
+# 并入既有 Vue3 + Vite 工程：一次拷全 31 件（路径已镜像 src/，无第二层可选项）
 cp -r assets/core/.  <你的工程>/src/
-# 按需追加可选件（示例：角色授权页 / 金额输入 / 令牌板）
-cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/components/cube/
 ```
 
 ## ★ 两个参考工程的职责边界（2026-09 实测）
@@ -43,13 +41,12 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 
   逐文件 MD5 比对 + 已下线黑名单反扫，判据见 `references/scripts/README.md`。同一命令换目标路径即可查任意业务工程是否真的把 `assets/` 并入且未漂移。
 
-`scaffold/src` 相对 `assets/core` 只多出「工程外壳」4 个文件
-（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，
-由 `tdesign-starter-cli` 生成，随 scaffold 提供）、DEV 验证页 `pages/LovDemoView.vue`
-与三个**零依赖可选件**（`PriceYuanInput` / `RoleMenuEditor` / `ThemeShowcase`，
-scaffold 为演示而附带，业务工程按需拷）。
+`scaffold/src`（36 件）相对 `assets/core`（31 件）**只多 5 件**，且这 5 件**恒不在 `core` 内**：
+「工程外壳」4 件（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，
+由 `tdesign-starter-cli` 生成）+ DEV 验证页 `pages/LovDemoView.vue`（`/lov-demo` 路由用，生产构建不注册）。
+⇒ `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
 
-## 一、core/ —— 核心（必拷，被主链路真实引用）
+## 一、core/ —— 核心（**必拷，31 件一次拷全**）
 
 | 文件（→ 目标路径） | 作用 | 被谁引用 |
 |---|---|---|
@@ -68,6 +65,7 @@ scaffold 为演示而附带，业务工程按需拷）。
 | `styles/theme-dark.css` → `src/styles/` | 暗色令牌（**必须在 TDesign 样式后 import**，铁律 C3） | main |
 | `api/useLov.ts` → `src/api/` | LovController 值集加载器（ENUM 选项 / LIST 表格配置 / `lovFetchRows` 取数） | fieldRender、FormDialog、LovListField |
 | `components/cube/LovListField.vue` | **LIST 型值集表格选择弹窗**（单选/多选 + 搜索 + 分页 + 已选统计 + id→名称回显） | FormDialog（lov-list 分支） |
+| `components/cube/IconPicker.vue` | **图标选择器**（`itemType=icon`；枚举 `tdesign-icons-vue-next` 全部 SVG 组件，值存 kebab 图标名） | FormDialog（`control === 'icon'` 分支） |
 | `components/cube/ListPage.vue` | 自包含列表页组合根（搜索/工具条/统计/表格/弹窗） | EntityPage |
 | `components/cube/FormDialog.vue` | 新增/编辑弹窗（映射下拉 / rules / 按 category 分 tab / **lov-list 表格选择**） | ListPage |
 | `components/cube/DetailDrawer.vue` | 详情抽屉（`xxxID` 经 `labelOf` 回显名称） | ListPage |
@@ -87,12 +85,32 @@ scaffold 为演示而附带，业务工程按需拷）。
 > `useLov.ts` / `LovListField.vue` 同理：被 core 的 `FormDialog.vue` 静态 import
 > （lov-list 表单分支），只拷 core 漏掉即构建失败；后端无 `Admin/Lov` 时
 > `load()` 静默退化、弹窗不渲染，属"随包必备、按数据启用"。
+> `IconPicker.vue` 同理（**2026-09 由 `optional/` 提升为 `core/`**）：被 `FormDialog.vue`
+> 静态 import（`control === 'icon'` 分支），只拷 core 漏掉即 `vue-tsc` 报
+> `Cannot find module './IconPicker.vue'`；后端无 `itemType=icon` 字段时该分支不渲染，
+> 同属"随包必备、按数据启用"。
 
-## 二、optional/ —— 可选增强（按需拷，零额外依赖者优先）
+## 二、配方件（原 `optional/`）—— 已并入 `core`（2026-09-13）
+
+`assets/` 已是**单层**结构。以下 3 件**随 `core/` 一并拷入即已在位**，接不接线由业务页决定：
 
 | 文件（→ 目标路径） | 作用 | 启用条件 | 额外依赖 | 验证状态 |
 |---|---|---|---|---|
 | `components/cube/RoleMenuEditor.vue` | 角色权限设置（菜单树 + 权限位勾选，§4.12.1） | 需要角色授权页 | 无 | ✅ scaffold 内有副本，过 `vue-tsc` |
 | `components/cube/PriceYuanInput.vue` | 金额输入（元/分换算） | 有金额字段 | 无 | ✅ 同上 |
 | `components/cube/ThemeShowcase.vue` | 设计令牌板（可视化验证 `/theme`，已挂 DEV 路由） | 想看令牌全景 | 无 | ✅ 同上 |
-| `components/cube/IconPicker.vue` | 图标选择器（`itemType=icon`） | 表单需选图标 | 无（`tdesign-icons-vue-next` 已在依赖内） | ⚠️ **scaffold 内无副本**，仅 `references/demo/` 有源码级实现（demo 未编译）→ 拷贝前须自行过 `vue-tsc` |
+
+### ★ 2026-09-13：取消可选项分层，`assets/` 收敛为单层 `core/`（31 件）
+
+- **旧分层判据**：「是否被 core 文件静态 import」。它只对「**缺了就构建失败**」的件有解释力
+  —— 如 `IconPicker.vue`（`FormDialog.vue` 对其静态 import，漏拷即 `Cannot find module`）。
+- **为何取消**：`RoleMenuEditor` / `PriceYuanInput` / `ThemeShowcase` 属**零引用配方件**
+  —— 不拷不报错、拷了也不报错 ⇒ 落在两可地带 ⇒「拷不拷」全靠记忆。
+  这正是历史上 `IconPicker` 被漏拷的同一成因。收敛后规则回到一句：
+  **一个目录、一次 `cp -r`、31 件全拷**，无需记哪件在哪个子目录。
+- **已知代价**（接受）：`core/` 变重，含 3 件默认工程零引用的文件
+  （实测：覆盖后再 `Grep PriceYuanInput|RoleMenuEditor|ThemeShowcase` 于工程 `src/`，无任何 import 命中，
+  唯一同名命中是 `router/index.ts` 指向 `pages/ThemeShowcase.vue`——**同名不同文件**）。
+  它们只贡献体积、不参与构建。
+- **旧判据仍有效**，只是不再用于分层：一旦某 core 文件开始**静态 import** 某件，该件就必须在 `core/` 内。
+  已知属此类：`ConfigView` / `DbView` / `LovListField` / `useLov.ts` / `IconPicker`。

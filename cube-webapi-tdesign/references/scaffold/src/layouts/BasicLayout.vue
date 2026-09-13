@@ -1,28 +1,64 @@
 <template>
   <t-layout class="basic-layout">
-    <t-aside :width="collapsed ? '64px' : '232px'" class="side">
+    <!-- 侧边布局：左侧导航栏 -->
+    <t-aside
+      v-if="setting.layout === 'side'"
+      :width="setting.collapsed ? '64px' : '232px'"
+      class="side"
+      :class="{ collapsed: setting.collapsed }"
+    >
       <div class="side-brand" @click="goHome">
         <div class="lg">C</div>
-        <b v-show="!collapsed">魔方管理后台</b>
+        <b>魔方控制台</b>
       </div>
       <div class="side-menu">
-        <MenuSidebar
-          orientation="vertical"
-          theme="light"
-          :collapsed="collapsed"
-          @navigate="onNavigate"
-        />
+        <MenuSidebar orientation="vertical" theme="dark" :collapsed="setting.collapsed" @navigate="onNavigate" />
       </div>
       <div class="user-bar">
         <t-avatar size="28px">{{ initial }}</t-avatar>
-        <span v-show="!collapsed" class="uname">{{ username }}</span>
-        <t-link v-show="!collapsed" theme="danger" hover="color" @click="onLogout">退出</t-link>
+        <span class="uname">{{ username }}</span>
+        <t-link theme="danger" hover="color" @click="onLogout">退出</t-link>
       </div>
     </t-aside>
 
     <t-layout>
-      <t-header class="topbar">
-        <t-button theme="default" variant="text" shape="square" @click="collapsed = !collapsed">
+      <!-- 顶部布局：横向菜单直接作为顶栏（logo + 菜单 + 操作区） -->
+      <t-header v-if="setting.layout === 'top'" class="topbar topbar-head">
+        <MenuSidebar orientation="horizontal" :theme="menuTheme" @navigate="onNavigate">
+          <template #logo>
+            <div class="side-brand side-brand-head" @click="goHome">
+              <div class="lg">C</div>
+              <b>魔方控制台</b>
+            </div>
+          </template>
+          <template #operations>
+            <div class="top-actions">
+              <t-input class="top-search" placeholder="搜索设备名称 / 编号 / IP" clearable>
+                <template #prefix-icon><t-icon name="search" /></template>
+              </t-input>
+              <t-select
+                :value="tenant"
+                class="tenant"
+                :options="tenantOptions"
+                @change="onTenant"
+                :auto-width="true"
+              />
+              <t-tooltip content="通知">
+                <t-button theme="default" shape="square" variant="text">
+                  <t-icon name="notification" />
+                </t-button>
+              </t-tooltip>
+              <t-dropdown :options="userMenu" @click="onUserMenu">
+                <t-avatar size="32px" class="avatar-btn">{{ initial }}</t-avatar>
+              </t-dropdown>
+            </div>
+          </template>
+        </MenuSidebar>
+      </t-header>
+
+      <!-- 侧边布局：常规顶栏（折叠按钮 + 面包屑 + 搜索 + 操作） -->
+      <t-header v-else class="topbar">
+        <t-button theme="default" variant="text" shape="square" @click="toggleCollapsed">
           <t-icon name="menu-fold" />
         </t-button>
         <div class="crumb-nav">
@@ -30,8 +66,22 @@
           <t-icon name="chevron-right" />
           <b>{{ controllerLabel }}</b>
         </div>
+        <t-input class="top-search" placeholder="搜索设备名称 / 编号 / IP" clearable>
+          <template #prefix-icon><t-icon name="search" /></template>
+        </t-input>
         <div class="top-actions">
-          <span class="user">{{ username }}</span>
+          <t-select
+            :value="tenant"
+            class="tenant"
+            :options="tenantOptions"
+            @change="onTenant"
+            :auto-width="true"
+          />
+          <t-tooltip content="通知">
+            <t-button theme="default" shape="square" variant="text">
+              <t-icon name="notification" />
+            </t-button>
+          </t-tooltip>
           <t-dropdown :options="userMenu" @click="onUserMenu">
             <t-avatar size="32px" class="avatar-btn">{{ initial }}</t-avatar>
           </t-dropdown>
@@ -55,176 +105,138 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { getUsernameFromToken } from '@/api/token'
-import { titleOf, areaTitleOf } from '@/api/menuTitles'
-import MenuSidebar from '@/components/cube/MenuSidebar.vue'
-import SettingPanel from '@/components/cube/SettingPanel.vue'
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { useAuthStore } from '@/stores/auth';
+import { useSettingStore } from '@/stores/setting';
+import { getUsernameFromToken } from '@/api/token';
+import { titleOf, areaTitleOf } from '@/api/menuTitles';
+import MenuSidebar from '@/components/cube/MenuSidebar.vue';
+import SettingPanel from '@/components/cube/SettingPanel.vue';
 
-const auth = useAuthStore()
-const route = useRoute()
-const router = useRouter()
-const collapsed = ref(false)
+const auth = useAuthStore();
+const setting = useSettingStore();
+const route = useRoute();
+const router = useRouter();
 
-// 路由形态：/entity/{area}/{controller}
-const seg = computed(() => route.path.split('/').filter(Boolean))
-const isEntity = computed(() => seg.value[0] === 'entity')
+// 面包屑取名的路由基准：SPA 形态为 `/{area}/{controller}`；
+// 早期形态 `/entity/{area}/{controller}` 仍需兼容（历史链接 / 外部跳转）。
+const seg = computed(() => route.path.split('/').filter(Boolean));
+const isEntity = computed(() => seg.value[0] === 'entity');
 
-// 面包屑显示名优先取后端菜单 displayName（铁律 M1），查不到才回落路由参数
-const areaRaw = computed(() => (route.params.area as string) || (isEntity.value ? seg.value[1] : ''))
-const controllerRaw = computed(
-  () => (route.params.controller as string) || (isEntity.value ? seg.value[2] : ''),
-)
+const areaRaw = computed(() => {
+  const p = (route.params.area as string) || '';
+  if (p) return p;
+  return isEntity.value ? seg.value[1] || '' : '';
+});
+const controllerRaw = computed(() => {
+  const p = (route.params.controller as string) || '';
+  if (p) return p;
+  return isEntity.value ? seg.value[2] || '' : '';
+});
 
-const areaLabel = computed(() => areaTitleOf(areaRaw.value) || areaRaw.value || '概览')
+// 铁律 M1：面包屑显示名优先取后端菜单 displayName（由 MenuSidebar 拉菜单时 registerMenuTitles 写入），
+// 查不到才回落到路由参数原文。绕过它会把 `AssetItem` 这类英文控制器名暴露给用户。
+const areaLabel = computed(() => areaTitleOf(areaRaw.value) || areaRaw.value || '概览');
 const controllerLabel = computed(
   () => titleOf(areaRaw.value, controllerRaw.value) || controllerRaw.value || '仪表盘',
-)
+);
 
-const username = computed(() => auth.username || getUsernameFromToken() || '管理员')
-const initial = computed(() => (username.value || '管').slice(0, 1).toUpperCase())
+// auth store 为 setup 式，用户名为 `user.name`；token 解析作兜底（刷新后用 token 恢复显示）。
+const username = computed(() => auth.user?.name || getUsernameFromToken() || '管理员');
+const initial = computed(() => (username.value || '管').slice(0, 1).toUpperCase());
 
-const userMenu = [
-  { content: '返回仪表盘', value: 'home' },
-  { content: '退出登录', value: 'logout' },
-]
+// 顶部布局下菜单主题跟随全局模式（侧边布局固定深色以匹配深蓝侧栏）
+const menuTheme = computed<'light' | 'dark'>(() => (setting.mode === 'dark' ? 'dark' : 'light'));
 
-function goHome() {
-  router.push('/dashboard')
-}
+const tenant = ref(auth.getTenant());
+const tenantOptions = [
+  { value: '', label: '默认租户（总控）' },
+  { value: 'east', label: '华东物联网公司' },
+  { value: 'south', label: '华南智造工厂' },
+];
 
-function onLogout() {
-  auth.logout()
-  router.push('/login')
+function toggleCollapsed() {
+  setting.$patch({ collapsed: !setting.collapsed });
 }
 
 /**
  * 后端菜单 url → 前端路由。
  * 后端形态多样：`/Asset/AssetItem`、`Asset/AssetItem`、`~/Ai`、`/api/Admin/User`。
- * 统一剥离 `~` / 前导斜杠 / `api` 前缀后取前两段，落到 `/entity/{area}/{controller}`。
+ * 统一剥离 `~` / 前导斜杠 / `api` 前缀后取前两段，落到 `/{area}/{controller}`。
  */
 function onNavigate(url: string) {
-  if (!url) return
-  const stripped = url.replace(/^~/, '').replace(/^\/+/, '').replace(/^api\//i, '')
-  const parts = stripped.split('/').filter(Boolean).slice(0, 2)
-  if (!parts.length) return
-  const target = `/entity/${parts.join('/')}`
-  if (target === route.path) return
-  router.push(target)
+  if (!url) return;
+  const stripped = url.replace(/^~/, '').replace(/^\/+/, '').replace(/^api\//i, '');
+  const parts = stripped.split('/').filter(Boolean).slice(0, 2);
+  if (!parts.length) return;
+  const target = '/' + parts.join('/');
+  if (target === route.path) return;
+  router.push(target);
 }
 
+function onTenant(v: string) {
+  tenant.value = v;
+  auth.setTenant(v);
+  MessagePlugin.success(v ? '已切换租户，刷新数据' : '已切回总控');
+  window.location.reload();
+}
+
+// 铁律 M3：默认落地页为 dashboard —— 品牌区（系统名/Logo）与用户菜单均回仪表盘
+function goHome() {
+  if (route.path !== '/dashboard') router.push('/dashboard');
+}
+
+const userMenu = [
+  { content: '返回仪表盘', value: 'home' },
+  { content: '退出登录', value: 'logout' },
+];
+
 function onUserMenu(d: { value: string }) {
-  if (d.value === 'logout') onLogout()
-  else if (d.value === 'home') goHome()
+  if (d.value === 'home') {
+    goHome();
+    return;
+  }
+  if (d.value === 'logout') {
+    auth.logout();
+    router.push('/login');
+  }
+}
+
+function onLogout() {
+  auth.logout();
+  router.push('/login');
 }
 </script>
 
 <style scoped>
-.basic-layout {
-  height: 100vh;
-}
-.side {
-  background: #fff;
-  border-right: 1px solid var(--td-component-stroke);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  transition: width 0.2s;
-  overflow: hidden;
-}
-.side-brand {
-  height: 56px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--td-component-stroke);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.side-brand .lg {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--td-brand-color);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  font-size: 14px;
-}
-.side-brand b {
-  font-size: 15px;
-  font-weight: 500;
-}
-.side-menu {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px;
-  min-width: 0;
-}
-.user-bar {
-  margin-top: auto;
-  padding: 12px 16px;
-  border-top: 1px solid var(--td-component-stroke);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-.user-bar .uname {
-  flex: 1;
-  font-size: 13px;
-  color: var(--td-text-color-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.topbar {
-  height: 56px;
-  background: #fff;
-  border-bottom: 1px solid var(--td-component-stroke);
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  gap: 16px;
-}
-.crumb-nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--td-text-color-secondary);
-}
-.crumb-nav b {
-  color: var(--td-text-color-primary);
-  font-weight: 500;
-}
-.top-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.top-actions .user {
-  font-size: 13px;
-  color: var(--td-text-color-secondary);
-}
-.avatar-btn {
-  cursor: pointer;
-  background: var(--td-brand-color);
-  color: #fff;
-}
-/* min-width:0 是关键：作为 t-layout 的 flex 子项，默认 min-width:auto 会被超宽表格撑大，
+.basic-layout { height: 100vh; }
+.side { background: var(--cube-sidebar-bg, var(--cube-sidebar-bg-solid)); border-right: 1px solid var(--cube-sidebar-border); display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.2s; overflow: hidden; }
+.side-brand { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--cube-sidebar-border); cursor: pointer; white-space: nowrap; }
+.side-brand .lg { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: var(--cube-brand-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+.side-brand b { font-size: 15px; color: var(--cube-sidebar-text-strong); }
+.side-menu { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px; min-width: 0; }
+.user-bar { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--cube-sidebar-border); display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.user-bar .uname { flex: 1; font-size: 13px; color: var(--cube-sidebar-text-weak); overflow: hidden; text-overflow: ellipsis; }
+.topbar { height: 56px; background: #fff; border-bottom: 2px solid var(--cube-topbar-border); display: flex; align-items: center; padding: 0 20px; gap: 16px; }
+.crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--td-text-color-secondary); }
+.crumb-nav b { color: var(--td-text-color-primary); font-weight: 500; }
+.top-search { flex: 1; max-width: 360px; }
+.top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.tenant { width: 180px; }
+.avatar-btn { cursor: pointer; background: var(--cube-brand-gradient); color: #fff; }
+/* 内容区：min-width:0 是关键——作为 t-layout 的 flex 子项，默认 min-width:auto 会被超宽表格撑大，
    导致页面出现浏览器横向滚动条，且 t-table 自身横向滚动失效。 */
-.content {
-  padding: 20px;
-  overflow: auto;
-  background: var(--td-bg-color-page);
-  min-width: 0;
-}
+.content { padding: 20px; overflow: auto; background: var(--cube-content-bg); min-width: 0; }
+
+/* 顶部布局：横向菜单作为顶栏，贴合容器底色、去掉默认描边 */
+.topbar-head { height: auto; padding: 0; background: var(--td-bg-color-container); border-bottom: 1px solid var(--td-component-stroke); }
+.side-brand-head { height: 100%; border-bottom: none; }
+
+/* 侧边栏折叠态：仅显示 logo 与头像，隐藏文字 */
+.side.collapsed .side-brand { justify-content: center; padding: 0; }
+.side.collapsed .side-brand b { display: none; }
+.side.collapsed .user-bar { justify-content: center; }
+.side.collapsed .user-bar .uname { display: none; }
 </style>

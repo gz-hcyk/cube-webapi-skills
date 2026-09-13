@@ -21,7 +21,7 @@
  */
 import { ref } from 'vue';
 import { getApi, postApi } from './http';
-import type { DataField } from './fieldRender';
+import type { DataField } from './useEntityResource';
 
 /** 下拉选项（枚举值集归一化后） */
 export interface LovOption {
