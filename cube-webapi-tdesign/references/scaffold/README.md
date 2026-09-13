@@ -199,7 +199,7 @@ node ../scripts/check-starter-align.mjs .               # CLI 基线体检（退
 - 登录 `POST /Auth/Login`，body `{ username, password }`（**不是 `userName`**），令牌键名 snake_case，
   统一走 `token.ts` 的 `normToken` 三向兜底。
 - 请求头只认 **`Authorization: Bearer <jwt>`**（发 `Authentication` 或只带 Cookie 均 401）。
-- 实体接口 `/api/{area}/{controller}/{action}`；**菜单 `/Admin/Index/GetMenuTree`（无 `/api` 前缀，带前缀 → 404）**；
+- 实体接口 `/api/{area}/{controller}/{action}`；**菜单 `/api/Admin/Index/GetMenuTree`（区域族必带 `/api`；漏前缀 → SPA 兜底、菜单静默为空）**；
   字典 `/Cube/Lookup`、签名清单 `/Cube/Apis` 同样无前缀。
 - 枚举字典由后端下发在字段描述符 **`dataSource`**（不是 `mapField`）；外键走 `mapField` 映射列。
 - ★ **布尔键恒下发**：`nullable` / `required` / `readOnly` / `visible` / `primaryKey` 在 GetPage 响应里

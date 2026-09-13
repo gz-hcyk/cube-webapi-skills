@@ -5,8 +5,8 @@
  * 契约要点（依据 NewLife.Cube 官方 Doc/Api/WebAPI接口规范.md 第 36 章 + 2026-09 实测）：
  *  - 统一响应信封：{ code, message, data, page, stat }
  *  - 实体接口前缀 /api/{area}/{controller}
- *  - Auth/SSO/Cube 等非实体控制器【不带】/api 前缀（如 `/Auth/Login`、`/Admin/Index/GetMenuTree`
- *    —— 2026-09-13 实测：写成 `/api/Admin/Index/GetMenuTree` → 404，菜单会静默为空）
+ *  - 根族控制器【不带】/api 前缀（如 `/Auth/Login`、`/Cube/Lookup`）；
+ *    ⚠️ 菜单 `/api/Admin/Index/GetMenuTree` 属区域族、**必带** /api（2026-09-13 修正：旧注释写反了）
  *  - JWT 令牌头**只认 Authorization: Bearer <jwt>**（实测）；发 Authentication 或只带 Cookie 均 401
  */
 import axios from 'axios';

@@ -10,19 +10,48 @@
  *  - 多租户：X-Tenant（租户 Code，主）+ X-Tenant-Id（legacy 兼容）
  *  - Cookie / Query(?token=) 由后端自动识别
  *
- * ★ **`/api` 前缀契约（勿视为前端硬编码常量）**
- *   `/api` 不来自 appsettings，而由 NewLife.Cube 的 **`CubeSetting.ApiPrefixes`** 决定
- *   （落库配置，默认 `/api`，支持多前缀如 `/api,/api/v1`）。其语义是**「剥前缀别名」**：
- *   请求命中前缀时由 `ApiPrefixRewriteMiddleware` 做 **Path Rewrite**（非 3xx 重定向）
- *   转发到真实路由。因此「后端换前缀」是合法运维动作，须按此契约应对：
- *     1. 前端**唯一**前缀来源 = 下方 `API_BASE`，必要时用 `VITE_API_BASE` 显式覆盖；
- *     2. 后端变更前缀时**推荐多前缀并存**（如 `/api,/api/v2`），新旧前端双活、迁移不断服；
- *     3. 后端现成端点（`/Auth/LoginConfig`、`/api/Cube/Info`）**均不暴露**该前缀，
- *        故**不做运行时发现**——发现本身也要依赖一个无前缀的固定引导端点，属鸡生蛋。
+ * ★★ **`/api` 前缀契约（2026-09-13 用「dump 真实路由表 + A/B 对照」彻底查清，勿再沿用旧结论）**
  *
- * ⚠️ **本层不做全局 camelize**（对齐项目实况）：后端实体行数据为 PascalCase，键名归一
- *     下移到消费端（`utils/camel.ts` 的 `camel`/`camelize` + `useEntityResource.normalizeRows`），
- *     避免「信封整体 camelize 把值集键 `Enum.X` 改写成 `enum.X`」这类副作用。
+ *   ❌ 旧结论（已证伪，勿采信）："/api 由 `CubeSetting.ApiPrefixes` 落库配置决定，
+ *      默认 /api，可剥前缀 Path Rewrite"。**CubeSetting 里根本没有 ApiPrefixes 属性**
+ *      （反射 dump 其属性表 + appsettings 双重确认），也不存在任何前缀开关。
+ *
+ *   ✅ 实证结论：全应用**唯一**的区域路由模板（dump 自 `EndpointDataSource`）为
+ *        api/{area}/{controller=Index}/{action=Index}/{id?}
+ *      它**自带字面量 `api/`**（NewLife.Cube 6.15.2026.901 硬编码，DLL 内仅此一处）。
+ *      ⇒ **判据是「控制器有没有 `[Area]`」，不是「是不是系统端点」**：
+ *        ┌ 区域族（控制器带 `[Area]`）→ **必须带 `/api`**
+ *        │    业务实体：/api/{area}/{controller}/{action}   如 /api/Lab/LabAsset/GetPage
+ *        │    框架 Area 控制器：/api/Admin/Index/GetMenuTree、/api/Admin/User/…
+ *        └ 根族（`NewLife.Cube.Controllers.*`，无 Area）→ **不带 `/api`**
+ *             /Auth/*  /Mfa/*  /Sso/*  /Cube/*（Apis、Lookup、MenuTree…）  静态 /Content/*
+ *
+ *   实测矩阵（Development + Bearer，10 条端点逐条验证）：
+ *     /Admin/Index/GetMenuTree  404 | /api/Admin/Index/GetMenuTree  200
+ *     /Auth/LoginConfig         200 | /api/Auth/LoginConfig         404
+ *     /Cube/Apis                200 | /api/Cube/Apis                404
+ *     /Cube/Lookup              200 | /api/Cube/Lookup              404
+ *     /api/Lab/LabAsset/GetPage 200 | /Lab/LabAsset/GetPage         404
+ *   A/B 对照实验（`Program.cs` 三种写法 none/before/after）→ 上述状态码**逐条完全一致**
+ *   ⇒ 前缀行为与 Program.cs 写法无关，是框架固有契约。
+ *
+ *   ⚠️ 反例症状：把区域族端点的 `/api` 漏掉时，**不会报错** —— 会落到前端 SPA 兜底，
+ *      返回 `200 + text/html + <!DOCTYPE html>`，于是菜单/列表**静默为空**（最难查的一类 bug）。
+ *
+ *   落到本层：`http` 实例 baseURL = `${SERVER_BASE}/api`（区域族用 getApi）；
+ *             `rawHttp` baseURL = `${SERVER_BASE}`（根族用 getRaw，**路径要写全 `/api/...` 或裸路径**）。
+ *             两实例用途按「控制器有没有 [Area]」划分，而非按「是不是框架端点」。
+ *
+ * ⚠️ **本层不做全局 camelize**（对齐项目实况）：
+ *     · 实测（2026-09-13）后端返回的**键名已是 camelCase**——`GetPage` 的行数据是
+ *       `{ categoryName, displayName, parentID }`，`GetFields` 是 `{ name, displayName, typeName }`，
+ *       菜单树是 `{ name, displayName, url, icon }`。故行数据**无需再 camelize**（旧文档写
+ *       "后端实体行数据为 PascalCase" 与实测不符）。
+ *     · **字段名（值）仍是 PascalCase**：`f.name === 'CategoryName'`、`f.mapField === 'CategoryID'`，
+ *       与后端实体属性名一致；判定前缀/后缀时按原样处理。
+ *     · 保留下游 `camel`/`camelize` + `useEntityResource.normalizeRows` 作为**幂等兜底**
+ *       （老版本/异构部署可能返回 PascalCase），但**严禁对信封整体 camelize** ——
+ *       会把值集键 `Enum.Xxx` 改写成 `enum.Xxx`，导致 LovController 值集查不到。
  *
  * ─────────────────────── 部署形态（管理后台前端单独部署） ───────────────────────
  * 支持两种部署形态，靠环境变量 VITE_SERVER_BASE 切换，代码零改动：
@@ -272,12 +301,14 @@ export async function deleteApi<T>(url: string): Promise<ApiEnvelope<T>> {
   return r.data
 }
 
-/* ----------------------------- 便捷方法（非 /api，如登录/菜单） -----------------------------
- * rawHttp baseURL = 后端根地址：
- *  - 框架端点写 `/Auth/Login`、`/Mfa/Verify`；
- *  - 系统端点（菜单树/值集字典）写**不带 `/api` 的全路径**：`/Admin/Index/GetMenuTree`、
- *    `/Cube/Lookup`、`/Cube/Apis`。这些是 Area 内属性路由或根级控制器，**没有 `/api` 前缀**，
- *    写成 `/api/Admin/Index/GetMenuTree` 会 **404**（2026-09-13 实测；详见 SKILL.md 铁律 H2/H3）。
+/* ------------- 便捷方法（rawHttp = 后端根地址；前缀按「控制器有无 Area」判定） -------------
+ * ⚠️ 铁律 H2：写全路径时**看控制器有没有 [Area]，不看它是不是「系统端点」**：
+ *  - 区域族（有 Area）→ **必须带 `/api`**（Cube 区域路由模板 `api/{area}/{controller=...}` 自带该字面量）
+ *      · 实体控制器：`/api/Lab/LabAsset/GetPage`
+ *      · 框架区域控制器：`/api/Admin/Index/GetMenuTree`   ★ 曾长期被误写成无前缀 → 404、菜单静默为空
+ *  - 根族（无 Area，`NewLife.Cube.Controllers.*`）→ **不带 `/api`**
+ *      `/Auth/Login`、`/Mfa/Verify`、`/Sso/*`、`/Cube/Lookup`、`/Cube/Apis`、`/Cube/Image`
+ * 取证方式：2026-09-13 挂 /__routes 诊断端点 dump 真实路由表 + A/B 对照排除 Program.cs 影响。
  */
 export async function getRaw<T>(url: string, params?: Record<string, unknown>): Promise<ApiEnvelope<T>> {
   const r = await rawHttp.get<ApiEnvelope<T>>(url, { params })

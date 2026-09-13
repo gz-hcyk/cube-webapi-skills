@@ -219,7 +219,12 @@ const res = useEntityResource(props.area, props.controller);
 const schema = computed(() => res.schema.value);
 
 // 外键关联源字典：优先用宿主注入的 props.lookups，否则按约定式自动拉取（useLookups）
-const { lookups: autoLookups, load: loadLookups } = useLookups(props.area, props.lookupOverrides);
+// ★ 第 3 参传当前控制器名：供 useLookups 解析**自引用外键**（树形 ParentID → 本实体自身）
+const { lookups: autoLookups, load: loadLookups } = useLookups(
+  props.area,
+  props.lookupOverrides,
+  props.controller,
+);
 // LovController 值集（枚举/列表型）：schema 字段的 lovCode 命中的权威值集，退化为约定式兜底
 const { lovOptions, lovListConfig, load: loadLov } = useLov();
 const effectiveLookups = computed(() => ({ ...autoLookups.value, ...(props.lookups ?? {}) }));

@@ -39,7 +39,10 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 
 > ⚠️ **修改/删除契约（高频坑，实测 405）**：第三代 WebApi 的修改/删除打**主路由**——`PUT /{area}/{controller}`（主键在 body）、`DELETE /{area}/{controller}?id=xxx`（id 在 query）。写成 `PUT|DELETE /{a}/{c}/{id}`（id 在 URL path）后端无此路由 → 405（详见 SKILL.md §七「编辑保存/删除 405」）。
 
-> ⚠️ **非实体系统端点一律不带 `/api` 前缀（2026-09-13 对 localhost:7116 实测）**：登录 `/Auth/Login`、`/Admin/User/Login`，菜单 `/Admin/Index/GetMenuTree`，字典 `/Cube/Lookup`、`/Cube/Apis` —— 全部**根路径**，加 `/api` 一律 **404**。实体接口才走 `/api/{area}/{controller}`。详见 SKILL.md 铁律 H2/H3。
+> ⚠️ **端点前缀按「控制器有没有 `[Area]`」分族（2026-09-13 dump 真实路由表实证，旧结论已推翻）**：
+> - **根族**（`NewLife.Cube.Controllers.*`，无 `[Area]`）→ **不带 `/api`**：登录 `/Auth/Login`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`；加 `/api` 一律 **404**。
+> - **区域族**（带 `[Area]`，含框架 Area 控制器）→ **必须带 `/api`**：菜单 **`/api/Admin/Index/GetMenuTree`**、实体 `/api/{area}/{controller}`。
+> - ⚠️ **旧版本把菜单写成无前缀 `/Admin/Index/GetMenuTree` 是错的**（`IndexController` 挂 `[AdminArea]`）。漏前缀**不报错**，会落 SPA 兜底返回 `200 + text/html`。详见 SKILL.md 铁律 H2/H3。
 
 ## 3. GetPage —— 前端引导页的核心（一次性取齐 schema）
 
@@ -95,7 +98,7 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 
 | 属性 | 类型 | 含义 | 前端用途 |
 |------|------|------|----------|
-| `name` | string | 字段名（真实后端为 PascalCase，如 `Name`、`ParentID`；Mock 为 camelCase） | 后端原始命名经 `camel()` 归一为 camelCase 后作行 key / 表单字段名（`id`/`parentID`）；`xxxID/xxxIDs` 后缀参与控件选型 |
+| `name` | string | 字段名（★ 实测真实后端为 **PascalCase**，如 `Name`、`ParentID`、`CategoryName`；注意这是**字段名的取值**，JSON **键名**是 camelCase） | 后端原始命名经 `camel()` 归一为 camelCase 后作行 key / 表单字段名（`id`/`parentID`）；`xxxID/xxxIDs` 后缀参与控件选型 |
 | `displayName` | string | 显示名（中文标签） | 列标题 / 表单 label |
 | `description` | string? | 字段说明 | placeholder / tooltip |
 | `category` | string? | 分组（camelCase，可为空串或 `null`） | 表单按此分 tab，空 → 「默认」组 |
@@ -154,18 +157,18 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 ```http
 POST /Auth/Login              body: { username, password }   → 200 { code:0, data:{ access_token:"jwt", token_type:null, expire_in, refresh_token, scope:null } }
 POST /Admin/User/Login        body: { username, password }   → 200 同上（两路由均注册，任选其一）
-GET  /Admin/Index/GetMenuTree → 200 { code:0, data:[ 菜单树，仅含当前用户有权限的节点 ] }
+GET  /api/Admin/Index/GetMenuTree → 200 { code:0, data:[ 菜单树，仅含当前用户有权限的节点 ] }
 ```
 
 > **与旧版文档的重要更正**：官方魔方 WebApi **没有** `/Auth/Info` 这种“返回权限位”的接口。
 > 登录路径实测有**两条**：`/Auth/Login`（**推荐**，框架根级属性路由）与 `/Admin/User/Login`。入参键大小写**不敏感**（`username` 与 `userName` 均 200，实测）。
 > 权限位不通过独立接口下发，而是体现在 `GetPage.setting`（enableAdd/isReadOnly…）与菜单树中。
-> ⚠️ **前缀铁律（2026-09-13 实测）**：`/api/Auth/Login` → 404、`/api/Admin/User/Login` → 404、`/api/Admin/Index/GetMenuTree` → 404。
+> ⚠️ **前缀铁律（2026-09-13 实测）**：根族加前缀即 404（`/api/Auth/Login` → 404、`/api/Cube/Apis` → 404）；**区域族漏前缀亦 404**（`/Admin/Index/GetMenuTree` → 404，正确写法 `/api/Admin/Index/GetMenuTree` → 200）。
 > 非实体控制器**一律挂在根路径**，前端 auth.ts / MenuSidebar 必须用 `getRaw`/`postRaw`（`rawHttp`）走全路径，勿加 `/api`。
 
 **令牌传递方式（实测：只发 `Authorization: Bearer <jwt>`，勿加 `Authentication`）**：
 后端可接受的形态有 `Authentication: <jwt>`（官方文档推荐）／ **`Authorization: Bearer <jwt>`（本项目多次实测的**唯一**可用头——单发 `Authentication: Bearer` → 401；只带 Cookie `.Cube.Session` → 401）** ／ `Cookie`（后端 Set-Cookie）／ Query `?token=xxx`。
-因此技能 `http.ts` 请求拦截**只注入 `Authorization: Bearer ${token}` 一个头**（外加 `X-Tenant` / `X-Tenant-Id`），避免多头发送带来的歧义；**所有非实体端点**（`/Auth/*`、`/Mfa/*`、菜单 `/Admin/Index/GetMenuTree`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`）均走 `rawHttp`（`getRaw`/`postRaw`，路径**不带 `/api`**），实体接口走 `http`（`baseURL` 已含 `/api`）。
+因此技能 `http.ts` 请求拦截**只注入 `Authorization: Bearer ${token}` 一个头**（外加 `X-Tenant` / `X-Tenant-Id`），避免多头发送带来的歧义；**根族端点**（`/Auth/*`、`/Mfa/*`、`/Sso/*`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`）走 `rawHttp`（`getRaw`/`postRaw`，路径**不带 `/api`**）；**区域族端点**（实体接口 + 菜单 **`/api/Admin/Index/GetMenuTree`**）走 `http`（`baseURL` 已含 `/api`，调用方只写 `/{area}/{controller}`）。★ 菜单端点用 `getRaw` 时**要写全 `/api` 前缀**；两实例分工判据是「有没有 `[Area]`」。
 
 **前端权限判定（以 GetPage.setting 为准，而非独立权限位接口）**：
 - `setting.enableAdd !== false && !setting.isReadOnly` ⇒ 显示“新增”；

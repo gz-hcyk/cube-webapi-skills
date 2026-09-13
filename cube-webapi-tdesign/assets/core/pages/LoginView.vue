@@ -7,17 +7,16 @@
           <template v-else>{{ (config.name || 'C').charAt(0) }}</template>
         </div>
         <div>
-          <b>{{ config.name || 'NewLife.Cube' }}</b>
-          <span>魔方 WebApi 开发框架</span>
+          <b>{{ config.name || PROJECT.fallbackName }}</b>
+          <!-- L1：品牌副标题 = tagline（业务定位语）。留空不渲染 -->
+          <span v-if="PROJECT.tagline">{{ PROJECT.tagline }}</span>
         </div>
       </div>
-      <h2>元数据驱动的后台<br />开发新范式</h2>
-      <p>一个实体 API，前端「继承」同一套骨架。列表、表单、详情零代码生成，专注业务而非重复造轮子。</p>
-      <div class="feat">
-        <div><t-icon name="check" /> 字段映射双模式：列表显名 / 表单下拉自动解析</div>
-        <div><t-icon name="check" /> 含 ParentID 自动树形表，无需额外代码</div>
-        <div><t-icon name="check" /> 权限由 GetPage.setting 驱动，按钮自动显隐</div>
-        <div><t-icon name="check" /> 多租户 X-Tenant 内建，顶栏一键切换</div>
+      <!-- L1：主标题 / 说明 / 能力要点 —— 全部按项目业务填写，留空则整块不渲染（禁技术栈话术） -->
+      <h2 v-if="PROJECT.title" class="proj-title">{{ PROJECT.title }}</h2>
+      <p v-if="PROJECT.subtitle">{{ PROJECT.subtitle }}</p>
+      <div v-if="PROJECT.highlights.length" class="feat">
+        <div v-for="(h, i) in PROJECT.highlights" :key="i"><t-icon name="check" /> {{ h }}</div>
       </div>
     </div>
 
@@ -115,6 +114,33 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useAuthStore, AuthCategory, type LoginConfig, type OAuthProvider } from '@/stores/auth';
+
+/* ═════════════════════════ L1：登录页左栏文案（按当前项目填写） ═════════════════════════
+ * 铁律 L1（不可违反）：以下四项**必须按项目业务改写**，禁止沿用技术栈话术
+ * （反例：「魔方 WebApi 开发框架」「元数据驱动的后台开发新范式」「字段映射双模式」）。
+ * 生成口径：从项目名 / 后端 `LoginConfig.title` 出发，用**业务语言**写。
+ *   · tagline   品牌名下一句定位语，建议「能力A · 能力B · 能力C」
+ *   · title     主标题，支持 `
+` 换行（CSS `white-space: pre-line`）
+ *   · subtitle  主标题下一段说明
+ *   · highlights 2~4 条核心能力要点，逐条渲染并配 ✓ 图标
+ * 留空则对应区块不渲染；但 tagline 与 highlights **至少要给出内容**（都留空 → 左栏空白）。
+ * 示例（实验室资产平台）：
+ *   tagline: '资产台账 · 采购审批 · 全程留痕'
+ *   title: '实验室资产
+全流程数字化管理'
+ *   subtitle: '分类建档、台账维护、采购审批一体化，从入库到报废全程可追溯。'
+ *   highlights: ['多级分类树形建档，资产归属一目了然', '资产台账含配件明细，使用状态实时可查',
+ *                '采购订单在线审批，权限分级管控', '操作日志全程留痕，责任可追溯']
+ */
+const PROJECT = {
+  /** LoginConfig 未下发系统名时的兜底品牌名。填**项目名**，勿填框架名 */
+  fallbackName: '管理后台',
+  tagline: '',
+  title: '',
+  subtitle: '',
+  highlights: [] as string[],
+};
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -315,6 +341,9 @@ function goRegister() {
 .ll-logo b { font-size: 18px; display: block; }
 .ll-logo span { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
 .login-left h2 { font-size: 30px; margin: 48px 0 14px; position: relative; z-index: 2; line-height: 1.3; }
+/* L1：主标题支持 `
+` 换行 */
+.login-left .proj-title { white-space: pre-line; }
 .login-left p { color: rgba(255, 255, 255, 0.78); font-size: 15px; max-width: 420px; position: relative; z-index: 2; line-height: 1.7; }
 .feat { margin-top: 36px; position: relative; z-index: 2; display: flex; flex-direction: column; gap: 14px; color: rgba(255, 255, 255, 0.9); font-size: 14px; }
 .feat div { display: flex; align-items: center; gap: 10px; }

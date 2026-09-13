@@ -32,7 +32,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 ## 铁律：菜单必须后端动态生成 + 品牌点击回 dashboard（不可违反）
 
-- **M1** 业务菜单唯一权威 = 后端 `GET /Admin/Index/GetMenuTree`（只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。
+- **M1** 业务菜单唯一权威 = 后端 `GET /api/Admin/Index/GetMenuTree`（**区域族必带 `/api`**，只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。
 - **M2** 要加页面入口 → 改后端产出菜单节点（实体/API 控制器自动扫出，或显式挂菜单）；前端**只做「后端 url → 前端路由」归一化**（`BasicLayout.onNavigate()`，不产生新菜单项）。
 - **M3** 新项目默认 `dashboard` 首页（登录后 `redirect:'/dashboard'`）；点击左上角品牌（系统名/Logo）必须跳 `/dashboard`。
 - **M4** 一级菜单（顶层节点，`parentID` 为空/null）若后端 `GetMenuTree` 返回节点**无 `icon`**，**前端必须自动分配图标**：按 `name`/`displayName`/`url` 关键词映射（如 `User/Role/Member`→`UserIcon`、`Department/Dept/Group`→`UsergroupIcon`、`Log`→`FileIcon`、`Setting/Config/Parameter`→`SettingIcon`、`Dashboard/Home`→`DashboardIcon`、`Report`→`ChartIcon`），无法推断则回退统一默认图标（如 `AppIcon`/`ViewListIcon`）。一级菜单是视觉锚点，图标缺失最影响观感，故**强制补图标**；二级及以下子菜单沿用同一推断但非强制。
@@ -45,10 +45,19 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 - **H1** 一个前端工程只允许**一套** axios 实例：`assets/core/api/http.ts` → `src/api/http.ts`，令牌读写统一走 `assets/core/api/token.ts` → `src/api/token.ts`（localStorage 键 `assets_token`）。组件一律 `import { getApi, getRaw, postApi, ... } from '@/api/http'`，**禁止**并存第二套实例、第二套令牌键名（历史遗留 `api.ts` 用 `cube_token`，已删除）。
 - **H2** 后端只认 `Authorization: Bearer <jwt>`（实测）：发 `Authentication: Bearer <jwt>` → 401；不带 Authorization 只带 Cookie（`.Cube.Session`）→ 401。排障第一步永远是「请求头里有没有 `Authorization: Bearer`」。
-- 违反判定：仓库出现两个 HTTP 实例文件、出现 `@/api/api` 引用、或令牌键名不统一 → 必然「登录成功但列表/菜单全空」（典型症状：**左侧菜单栏没有任何显示**——无令牌时 `/Admin/Index/GetMenuTree` 恒 401，路径多写 `/api` 前缀时恒 404，二者表现相同）。
-- **H2 验证配方（本机实测，可作回归基线）**：`POST /Auth/Login` 体 `{"userName":"admin","password":"admin"}`（NewLife.Cube 默认种子管理员，口令 sha512 存 `Membership.db`，令牌信封 snake_case：`access_token`/`refresh_token`/`expire_in`）→ 取 `access_token` → `GET /Admin/Index/GetMenuTree` 带 `Authorization: Bearer <token>` 返回 **200**（实测 9475 字节 / 3 个一级菜单）；同一 token 仅发 `Authentication: <token>` 返回 **401**；不带头 **401**；`Bearer` + `X-Tenant-Id` 头返回 **200**。⇒ 结论：**删除旧 `Authentication` 双头零风险**，后端根本不认旧头。
-- ⚠️ **菜单端点绝不可加 `/api` 前缀（2026-09-13 实测）**：`GET /Admin/Index/GetMenuTree` → **200**，`GET /api/Admin/Index/GetMenuTree` → **404**。实体接口才走 `/api/{area}/{controller}`；`Admin/Index` 是 Area 内属性路由（`[area]/[controller]/[action]`），非实体控制器不挂 `/api`。**前端写错该前缀不会报错，只会让菜单静默为空**，故必须配 vite 代理（见 H3）。
-- **H3** vite dev 代理必须**显式覆盖非 `/api` 系统端点**：`server.proxy` 除 `'/api'`、`'/Auth'`、`'/Mfa'`、`'/cube'`（附件）、`'/Content'` 外，**必须再加 `'^/Admin/Index/'` 与 `'^/Cube/'`**（vite 把以 `^` 开头的 key 当 RegExp）。缺了则 `GET /Admin/Index/GetMenuTree` 落到 SPA 兜底、返回 `Content-Type: text/html` 的 `index.html`，axios 解析失败 → **菜单静默为空（无报错、无 401）**。⚠️ **切勿写成 `'/Admin'` 前缀匹配**：会把前端页面路由 `/Admin/User` 一并转发到后端，浏览器硬刷新变 GET 404。可复制模板见 `references/scaffold/vite.config.ts`。
+- 违反判定：仓库出现两个 HTTP 实例文件、出现 `@/api/api` 引用、或令牌键名不统一 → 必然「登录成功但列表/菜单全空」（典型症状：**左侧菜单栏没有任何显示**——无令牌时 `/api/Admin/Index/GetMenuTree` 恒 401；路径**漏写 `/api`** 时**不报错**、落 SPA 兜底返回 `200 + text/html`，二者表现相同）。
+- **H2 验证配方（本机实测，可作回归基线）**：`POST /Auth/Login` 体 `{"userName":"admin","password":"admin"}`（NewLife.Cube 默认种子管理员，口令 sha512 存 `Membership.db`，令牌信封 snake_case：`access_token`/`refresh_token`/`expire_in`）→ 取 `access_token` → `GET /api/Admin/Index/GetMenuTree` 带 `Authorization: Bearer <token>` 返回 **200**（2026-09-13 复测 6,906 字节 / 3 个一级菜单）；同一 token 仅发 `Authentication: <token>` 返回 **401**；不带头 **401**；`Bearer` + `X-Tenant-Id` 头返回 **200**。⇒ 结论：**删除旧 `Authentication` 双头零风险**，后端根本不认旧头。
+- ⚠️⚠️ **菜单端点必须带 `/api` 前缀（2026-09-13 用「dump 真实路由表 + 反射 + A/B 对照」彻底推翻旧结论）**：`GET /api/Admin/Index/GetMenuTree` → **200**；`GET /Admin/Index/GetMenuTree` → **404**。**旧版本技能在此方向写反了**，务必以本条为准。
+  - **判据是「控制器有没有 `[Area]`」，不是「是不是系统端点」**：`IndexController` 挂 `[AdminArea]` → 属**区域族** → 必带 `/api`。
+  - 区域路由模板（dump 自 `EndpointDataSource`，全应用仅此一条）为 `api/{area}/{controller=Index}/{action=Index}/{id?}` —— **`api/` 是模板自带的字面量**，不是配置项（`CubeSetting` 属性表里**没有任何**前缀相关属性）。
+  - ⇒ **区域族** = 业务实体 + 框架 Area 控制器（`/api/Admin/Index/GetMenuTree`、`/api/Admin/User/…`）；**根族** = `NewLife.Cube.Controllers.*`（`/Auth/*`、`/Mfa/*`、`/Sso/*`、`/Cube/*`、`/Content/*`）→ 不带 `/api`。
+  - **漏写 `/api` 的症状**：**不会报错** —— 落到前端 SPA 兜底，返回 `200 + text/html + <!DOCTYPE html>`，axios 解析失败 → **菜单/列表静默为空**。
+- **H3** vite dev 代理只需按「前缀族」配两条，**不要按单个控制器加规则**（2026-09-13 修正）：
+  - `'/api'` —— 覆盖**全部区域族**（业务实体 + 框架 Area 控制器，如 `/api/Admin/Index/GetMenuTree`）；
+  - `'^/Cube/'`、`'/Auth'`、`'/Mfa'`、`'/Sso'`、`'/Content'` —— 覆盖**根族**。
+  ⚠️ **旧版本技能要求额外加 `'^/Admin/Index/'`，那建立在「菜单端点无 `/api`」这一错误前提上**，现已删除（`'/api'` 一条即覆盖）。
+  ⚠️ **切勿写成 `'/Admin'` 前缀匹配**：会把前端页面路由 `/Admin/User` 一并转发到后端，浏览器硬刷新变 GET 404。
+  缺代理的症状：请求落到 SPA 兜底、返回 `Content-Type: text/html` 的 `index.html`，axios 解析失败 → **静默为空（无报错、无 401）**。可复制模板见 `references/scaffold/vite.config.ts`。
 - **登录锁定（实测，测试期必看）**：连续多次错误密码会触发「登录错误过多，请在300秒后再试！」的**内存锁**（无持久表，锁定态随后端进程存活）。测试期若连错密码（如批量试口令）会锁死 `admin` 账号。最快解锁 = **重启后端进程**（清除内存态），勿傻等 300s；生产环境同样表现，运维需知。
 
 ## 铁律：登录页文案与预填（L1~L4，不可违反）
@@ -289,8 +298,8 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 拷贝 `assets/core/api/http.ts` → `src/api/http.ts`、`assets/core/api/token.ts` → `src/api/token.ts`、`assets/core/utils/camel.ts` → `src/utils/camel.ts`。这是**全项目唯一**的请求层（铁律 H1）。
 
 - **令牌**：`token.ts` 统一读写 `localStorage['assets_token']`（推荐 API：`getToken/getRefreshToken/setTokens/clearTokens/getTenant/getTenantCode/setTenantCode`；兼容 API：`setToken/clearToken/isAuthed/normToken/getUsernameFromToken/clearTenant`）+ `normToken` 三向兜底 + `getUsernameFromToken`；`http.ts` 请求拦截调 `getToken()`，头写 **`Authorization: Bearer ${token}`**（实测后端只认这一个头，见 H2）。**401 时 `tryRefresh()` 用 `REFRESH_KEY` 的 refreshToken 打 `POST /Auth/Refresh` 并重放原请求一次（`inFlight` 守卫防并发风暴）**。登录/登出/401 清令牌一律经 `token.ts`，**任何组件不得自行 `localStorage.getItem/setItem` 令牌**。
-- **两套实例同一份拦截逻辑（方向相反，务必分清）**：`http`（`baseURL = API_BASE`，**已含 `/api`**，实体接口用）与 `rawHttp`（`baseURL = SERVER_BASE`，默认空串=同源根，登录/菜单等非实体端点用）；拦截器由 `attachInterceptors()` 统一挂载。**调用方写作规则**：实体接口**只写 `/{area}/{controller}`（绝不写 `/api`）**；非实体端点**一律不带 `/api`**——`/Auth/Login`、`/Mfa/Verify`、`getRaw('/Admin/Index/GetMenuTree')`（后者带 `/api` 前缀实测 **404**，见 H3）。基址派生：`SERVER_BASE = (VITE_SERVER_BASE||'').replace(/\/+$/,'')`、`API_BASE = VITE_API_BASE || (SERVER_BASE ? \`${SERVER_BASE}/api\` : '/api')`——`/api` 由后端 `CubeSetting.ApiPrefixes` 决定（默认 `/api`，可多前缀），前端只用 `VITE_API_BASE` 对齐，**勿硬编码散落各处**。
-- **便捷方法**：`getApi/postApi/putApi/deleteApi`（走 `http`，返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw/postRaw`（走 `rawHttp`，用于非实体端点，**路径自带全路径且不带 `/api`**，如 `/Auth/Login`、`/Admin/Index/GetMenuTree`）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 先 `tryRefresh()` 重放、失败则清令牌跳 `/login`**）+ 捕获 `x-tenant` 响应头写 `setTenantCode`。**不含全局 `camelize`**：后端 PascalCase 键原样到达，行数据归一由 `useEntityResource.normalizeRows` 承担（详见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
+- **两套实例同一份拦截逻辑（方向相反，务必分清）**：`http`（`baseURL = API_BASE`，**已含 `/api`**，实体接口用）与 `rawHttp`（`baseURL = SERVER_BASE`，默认空串=同源根，登录/菜单等非实体端点用）；拦截器由 `attachInterceptors()` 统一挂载。**调用方写作规则**：实体接口**只写 `/{area}/{controller}`（绝不写 `/api`）**；**根族**端点**一律不带 `/api`**——`/Auth/Login`、`/Mfa/Verify`、`/Cube/Lookup`；而**区域族**端点（如菜单 `getRaw('/api/Admin/Index/GetMenuTree')`）**必须带 `/api`**（见 H2）。基址派生：`SERVER_BASE = (VITE_SERVER_BASE||'').replace(/\/+$/,'')`、`API_BASE = VITE_API_BASE || (SERVER_BASE ? \`${SERVER_BASE}/api\` : '/api')`——★ **`/api` 不是配置项**：旧文档称它由 `CubeSetting.ApiPrefixes` 决定，**该属性根本不存在**（反射 dump + appsettings 双重证伪）；`/api` 是区域路由模板里硬编码的字面量。前端只用 `VITE_API_BASE` 对齐，**勿硬编码散落各处**。
+- **便捷方法**：`getApi/postApi/putApi/deleteApi`（走 `http`，返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw/postRaw`（走 `rawHttp`，用于**根族**端点，**路径自带全路径**，如 `/Auth/Login`、`/Cube/Lookup`；调**区域族**端点时须自带 `/api`，如 `/api/Admin/Index/GetMenuTree`）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 先 `tryRefresh()` 重放、失败则清令牌跳 `/login`**）+ 捕获 `x-tenant` 响应头写 `setTenantCode`。**不含全局 `camelize`**：后端 PascalCase 键原样到达，行数据归一由 `useEntityResource.normalizeRows` 承担（详见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
 - **多租户**：请求头 `X-Tenant`（租户 Code，主）+ `X-Tenant-Id`（兼容旧后端），Code 由登录响应头 `X-Tenant` 捕获后持久化（**登录页不设租户选择，见 L4**）。
 - ⚠️ **反面教材（该文件现已不存在，仅作历史记录）**：技能早期版本附带过一套 `api.ts`（另一套 axios 实例）（键名 `cube_token`，`baseURL:'/api'`，双令牌头）。它与 `token.ts` 键名冲突，任何组件误引即产生「请求不带令牌 → 全接口 401 → 菜单树恒空」。**不要再引入它**；如遇老项目残留，删除并全量 `grep "api/api"` 清零引用。
 
@@ -461,12 +470,12 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 
 ★ 父子表关系：子表控制器**不进菜单**（不在一级/二级导航暴露），只作为父表详情下的内嵌区——详见「铁律：父子表前端只展现父表」。凡 `*Line`/`*Item` 实体一律视为子表，菜单渲染时跳过其独立节点。
 
-`GetMenuTree`（`GET /Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
+`GetMenuTree`（`GET /api/Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
 
-- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/Admin/Index/GetMenuTree`（**无 `/api` 前缀**，try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + **同层互斥展开 `:expand-mutex="true"`（M5；勿写 `accordion`——1.20.7 无此 prop）** + **图标透传（**一级菜单缺 `icon` 按 **M4** 自动补**：后端未给 icon 时按 `name`/`displayName`/`url` 关键词映射，无法推断回退默认图标；映射表见 §4.12.3）**；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
+- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（**区域族必带 `/api`**，try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + **同层互斥展开 `:expand-mutex="true"`（M5；勿写 `accordion`——1.20.7 无此 prop）** + **图标透传（**一级菜单缺 `icon` 按 **M4** 自动补**：后端未给 icon 时按 `name`/`displayName`/`url` 关键词映射，无法推断回退默认图标；映射表见 §4.12.3）**；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
 - **url → 路由归一化 = `assets/core/layouts/BasicLayout.vue` 的 `onNavigate()`**：剥 `~` / 前导斜杠 / `api` 前缀后取前两段 → `/entity/{Area}/{Ctrl}`。后端 url 双格式（业务区相对 `~/Sync`、系统区绝对 `/Admin/User`）在此一并抹平。
 - ★ **节点 `permissions` 是权限位字典**（`{"1":"查看","2":"添加","4":"修改","8":"删除"}`，业务动作叠加 16/32/64/128…），除驱动按钮级权限外，可作**控制器类别的启发式**：含 2/4/8 大概率为实体控制器（有 `Index`/`GetPage`），否则大概率为动作控制器（`Mobile`/`Import`/`Report`/`Widget` 等，取数必然 404）。⚠️ **该启发式有反例**（`Log` 权限位仅 `[1]` 但实为含 `Index`+`GetPage` 的只读实体控制器），**权威判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为准**（见 §4.12.2）。仪表盘/统计页据此跳过非实体节点，避免刷屏 404（实测 3 条 → 0 条）。判别式与实测数据见 §4.8 附近「实体 vs 动作控制器判别」。
-- ⚠️ **真实端点是 `/Admin/Index/GetMenuTree`（无 `/api` 前缀，实测 200；写成 `/api/Admin/Index/GetMenuTree` → 404）**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
+- ⚠️ **真实端点是 `/api/Admin/Index/GetMenuTree`（区域族必带 `/api`，实测 200；写成不带前缀的 `/Admin/Index/GetMenuTree` → 404）**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
 
 ### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
 
@@ -484,7 +493,7 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 
 魔方自带一个**全量 API 签名清单端点**，是「系统到底有哪些控制器/动作」的权威来源（菜单树只给当前用户有权限的节点，且不含系统级控制器）。
 
-- **端点**：`GET /Cube/Apis`（**大小写无关**，`/cube/apis` 同 200；**必须无 `/api` 前缀**——`/api/Cube/Apis` → 404，2026-09-13 复测确认；**匿名可访问**，无需 token，带 token 返回相同）。与登录类 `/Auth/*`、菜单 `/Admin/Index/GetMenuTree` 同属「无 `/api` 前缀系统端点」家族（对照铁律 H2）。
+- **端点**：`GET /Cube/Apis`（**大小写无关**，`/cube/apis` 同 200；**必须无 `/api` 前缀**——`/api/Cube/Apis` → 404，2026-09-13 复测确认；**匿名可访问**，无需 token，带 token 返回相同）。与登录类 `/Auth/*` 同属**根族**（无 `/api`，对照铁律 H2）；而菜单 `/api/Admin/Index/GetMenuTree` 属**区域族**（必带 `/api`），两族判据见 H2。
 - **返回**：信封 `{"code":0,"data":["METHOD Controller/Action(params)", ...]}`，`data` 是**字符串签名数组**（非对象），格式固定 `"METHOD Controller/Action(param, ...)"`（如 `"GET AssetCategory/Delete(String id)"`、`"POST AssetCategory/Insert(AssetCategory model)"`）。**无 area 前缀**——控制器名裸列（业务区靠路由约定 + GetMenuTree 反查）。⚠️ 签名是字符串，需正则解析（正则 `^(\w+)\s+([^/]+)/([^\(]+)\((.*)\)$` 拆出 method/controller/action/params）。
 - **规模（2026-09 实测，可作回归基线）**：**883 签名 / 67 控制器**。
 - **实体 vs 动作判定（权威法，详见 §4.8）**：签名按 `Controller` 聚合，含 `Index` 且含 `GetPage` ⇒ 实体控制器（51 个），否则动作/特殊控制器（16 个：`Import`/`Mobile`/`Report`/`Widget`/`Core`/`Cube`/`Db`/`File`/`Index`/`Star`/`Sys`/`XCode`/`Ai`/`Auth`/`Mfa`/`Sso`）。此法 100% 可靠，不依赖权限位（§4.8 的 `Log` 反例即依赖权限位会误判）。
@@ -723,7 +732,7 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 3. **`mapField` 双语义 + 表单只下发虚拟映射字段**：字典源在 `mapField` 不在 `field.map`；`mapField` 纯标识符一律判映射字段（目标不必在字段集）；提交键用真实列名（§4.8/4.8.1）。
 4. **405 = 主键放 URL path**：改 `PUT /{base}`（body 带主键）、删 `DELETE /{base}?id=xxx`；**双 `/api` 前缀 → 404**（路径不再写 `/api`）。
 5. **树形三连**：`t-enhanced-table`（t-table 不支持）+ `:tree` 传对象 + `loadAll` 全量构建；判定聚合全部字段组、认 `mapField=ParentID`。
-6. **字段命名 PascalCase → camel 归一**（`ID→id`、`ParentID→parentID` 缩写规则）；★ **两端点别混用（详见 §4.4 首表）：`GetPage`=元数据、`GET /api/{area}/{ctrl}`=数据行**——`GetPage` 的 `data.list` 是**列定义数组**（`data.list.length` = 列数，非行数），行数据只在**无 action 段**的 `GET /api/{area}/{ctrl}` 的 `data:[rows]`；`extractListPayload` 只从 `rows/page.rows/Page.Rows/data` 取行、**不读 `list` 键**。
+6. **字段命名归一**：★ 实测（2026-09-13）后端**响应键名已是 camelCase**（`displayName`/`typeName`/`categoryName`/`parentID`），行数据无需再 camelize；但**字段名这个值本身**仍是 PascalCase（`f.name==='CategoryName'`、`f.mapField==='CategoryID'`）。`camel/normalizeRows` 保留为幂等兜底（`ID→id`、`ParentID→parentID`）；★ **两端点别混用（详见 §4.4 首表）：`GetPage`=元数据、`GET /api/{area}/{ctrl}`=数据行**——`GetPage` 的 `data.list` 是**列定义数组**（`data.list.length` = 列数，非行数），行数据只在**无 action 段**的 `GET /api/{area}/{ctrl}` 的 `data:[rows]`；`extractListPayload` 只从 `rows/page.rows/Page.Rows/data` 取行、**不读 `list` 键**。
 7. **TDesign 特有签名/写法**：列是 `columns` 配置式 API（**无 `<t-column>` 组件**）；`cell` 回调 `(h, params)` 非 `({row})`；`@submit` 勿加 `.prevent`；`MessagePlugin` 非 `Message`；`<script setup>` 新用 watch/computed 必须 import。
 8. **多选 value 恒为数组**（`deserializeMultiValue` 兜 null）；daterange 存实体单列逗号串（与搜索 dtStart/dtEnd 两参数契约**不同**）；★ **布尔键恒下发**：`nullable`/`readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定，**不要依赖「键缺失」**（曾误判为「Cube 省略取值为 false 的布尔键」，已证伪，见 §4.8 ②③）；推必填优先用后端 `required === true`。
 9. **代理**：dev 代理 `/api` `/Auth` `/Mfa` `/cube` `/Content` → 后端（target 写 `127.0.0.1` 勿 localhost）；**切勿代理 `/Admin` 等 SPA 路由**（硬刷新 404）。
@@ -758,7 +767,7 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 - [ ] 新增/编辑/删除按钮按 `GetPage.setting` 与菜单树显隐
 - [ ] 令牌只发 `Authorization: Bearer`（附 `X-Tenant`/`X-Tenant-Id`；**无** `Authentication` 头）；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
 - [ ] 登录页按 `LoginConfig` 动态组装（系统名/Logo/背景/login 开关/注册/oAuth/版权/备案），静态资源走 `/Content`
-- [ ] 侧栏菜单 = `MenuSidebar` + **`/Admin/Index/GetMenuTree`（无 `/api` 前缀；带前缀 → 404）**，按设计系统落地（图标/激活态），submenu `:value` 唯一；**M5 同层互斥展开 = 垂直菜单 `:expand-mutex="true"`（勿写 `accordion`：1.20.7 无此 prop，写了不报错但无效）**，同级同时展开数 ≤ 1；**H3 vite 代理必须含 `'^/Admin/Index/'`**，否则请求落 SPA 兜底 → 菜单静默为空
+- [ ] 侧栏菜单 = `MenuSidebar` + **`/api/Admin/Index/GetMenuTree`（区域族必带 `/api`；漏前缀 → 落 SPA 兜底、菜单静默为空）**，按设计系统落地（图标/激活态），submenu `:value` 唯一；**M5 同层互斥展开 = 垂直菜单 `:expand-mutex="true"`（勿写 `accordion`：1.20.7 无此 prop，写了不报错但无效）**，同级同时展开数 ≤ 1；**H3 vite 代理含 `'/api'` 一条即覆盖菜单端点**（勿再单加 `'^/Admin/Index/'`），否则请求落 SPA 兜底 → 菜单静默为空
 - [ ] 搜索栏由 `GetPage.search` 驱动（字符串入 Q、数值/枚举/布尔/日期走字段参数、日期范围 dtStart/dtEnd），`Index.stat` 已展示
 - [ ] 未把 GetPage schema 当行数据（**数据行端点 = `GET /api/{area}/{ctrl}`（无 action 段），`GetPage` 只给字段描述符、`data.list` 是列定义非行**）；`extractListPayload` 不读 `list`
 - [ ] ConfigController/ControllerBaseX 非实体控制器经 `SPECIAL_CONTROLLERS` 单列处理（ConfigView/DbView），未塞 ListPage
@@ -770,7 +779,7 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 - [ ] `MessagePlugin` 用法；`@submit` 无 `.prevent`；路由视图 `:key="route.path"`；`pagination` 稳定 reactive；init 幂等
 - [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（**后端 `data` 下键本就是小写驼峰**，非前端 camelize）；`InlineEnums` 字典键**已随全局 camelize 移除而不再被破坏**，`useLov` 另留大小写不敏感复原兜底——改后实测 `refLovCode` 翻译列已出中文
 - [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
-- [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
+- [ ] 后端响应键名已按需归一（★ 实测响应本身即 camelCase，`camel/normalizeRows` 仅作幂等兜底）；Int64 字符串传输
 
 ### ③ 个性化 —— 退出条件：`vue-tsc --noEmit` 0 错误（编译清零铁律）+ 下列人工项
 

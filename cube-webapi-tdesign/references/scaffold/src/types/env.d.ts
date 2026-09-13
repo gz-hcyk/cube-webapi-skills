@@ -10,7 +10,9 @@ interface ImportMetaEnv {
   // —— cube-webapi-tdesign 新增（api/http.ts 基址派生 + vite proxy target）——
   /** 后端基址，同源部署留空（`/api` 自动落同源根） */
   readonly VITE_SERVER_BASE: string;
-  /** 显式覆盖 `/api` 前缀（后端 `CubeSetting.ApiPrefixes` 非默认时用） */
+  /** 实体接口基址。默认 `${VITE_SERVER_BASE}/api`；同源部署留空即可。
+   *  ⚠️ Cube 6.15 的 `/api` 前缀**不是配置项**（`CubeSetting` 里没有 ApiPrefixes，
+      区域路由模板 `api/{area}/...` 是硬编码字面量），故此项仅用于**反向代理改写前缀**的场景。 */
   readonly VITE_API_BASE: string;
   /** 仅 dev 生效：vite proxy 的 target，指向真实后端（写 `127.0.0.1`，勿 `localhost`） */
   readonly VITE_API_TARGET: string;

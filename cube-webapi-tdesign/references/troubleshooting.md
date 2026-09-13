@@ -383,3 +383,153 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 - **`Lov/Meta` 端点 LIST 型键是 `data.meta`（小写），ENUM 型是 `data.Meta`（大写）——并存是历史约定**：`useLookups.fetchLovMeta`（ENUM 路径）取 `env.data.Meta[].Options`，`lov.ts.fetchLovListMeta`（LIST 路径）取 `env.data.meta[].type==='LIST'`。两者**不要互相抄写**——混用会找不到数据。开发时**实测一次**确认当前端点 JSON 结构（curl + token），不要凭印象。
 
 - ★★ **CDP 同一弹窗内连续点开两个 `<t-select>` 必踩 stale-popup：选项必须从「最后一个可见 popup」里取（2026-09 父子表验收实测，13/17→17/17）**：写验收脚本时用 `[...document.querySelectorAll('.t-select-option,.t-option,.t-popup li')].find(e=>e.getBoundingClientRect().width>0)` 取「全局首个可见选项」，在**只开过一个**下拉时碰巧正确；一旦同一弹窗内**先后点开两个**下拉（如先选「仓库」再选「单据类型」），第二个下拉打开的瞬间 DOM 里会**同时存在两个可见 `.t-popup`**——第一个是上一个 select 刚关闭的残留（探针转储实证：索引0=「总务仓库」宽494 仍可见，索引1=「采购入库」才是刚打开的目标）。「全局 find 首个可见」命中残留 → **值填错且无任何报错**（单据类型被选成了仓库名）。根因：TDesign 的 `.t-select__dropdown` 关闭只做 `display:none`/`visibility:hidden`，**不卸载、不复位挂载顺序**，重开时新 popup 追加在后。**正确策略（三段式）**：① 等就绪——`[...document.querySelectorAll('.t-popup')].filter(p=>p.getBoundingClientRect().width>0)` 非空**且最后一个内有可见选项**；② 选点——在**最后一个**可见 popup 内部 `querySelectorAll('.t-select-option,.t-option,li')` 取首个可见项 `.click()`；③ 定位触发元素用 `t-form-item__<字段名>` class（如 `.t-dialog .t-form-item__warehouseID .t-select input`，FormDialog 渲染时自带），比 label 文本匹配稳（文本有全半角/空格/别名坑）。同理适用于任意「关闭不卸载」的浮层组件（tooltip 除外）。**判据**：若验收出现「A 字段的值出现在 B 字段」类串扰，先转储 `document.querySelectorAll('.t-popup')` 的宽高/可见性再下结论。
+
+---
+
+## G10 配置体系（CubeSetting / SysConfig 的真实入口，2026-09-13 反编译 + 实测取证）
+
+> 本节结论全部来自「反编译 NewLife.Cube 6.15.2026.901 + NewLife.Core 11.19.2026.901 + 真实运行实测」。
+> **旧文档曾称「appsettings.json 的 Cube 段可配 Copyright/CorsOrigins」——该结论错误，已作废。**
+
+- ★★ **`CubeSetting` 的配置来源是【数据库】，不是任何文件**：`CubeSetting` 的静态构造函数里显式替换了配置提供者：
+
+  ```csharp
+  static CubeSetting()
+  {
+      Config<CubeSetting>.Provider = new DbConfigProvider { UserId = 0, Category = "Cube" };
+  }
+  ```
+
+  ⇒ 真实入口 = **`Membership` 库 `Parameter` 表**中 `Category='Cube'` 且 `UserID=0` 的记录
+  （`Name` = 属性名，`Value` = 值；共 100+ 条，含 `Copyright`/`LoginTip`/`CorsOrigins`/`JwtSecret`/`TokenExpire`/主题色…）。
+  运维改配置应走 **Cube 后台「系统设置」页**，或直接改 `Parameter` 表后重启。
+
+- **四种「看起来该生效」的方式实测全部无效**（逐条试过，`copyright` 始终 `null`）：
+
+  | 写法 | 结果 |
+  |---|---|
+  | `appsettings.json` 的 `"Cube"` 段 | ❌ 无效 |
+  | `appsettings.json` 的 `"CubeSetting"` 段 | ❌ 无效 |
+  | 运行目录 `Config/Cube.config`（XML） | ❌ 无效 |
+  | 运行目录 `Config/Cube.json` | ❌ 无效 |
+  | **`Parameter` 表（`Category='Cube'`, `UserID=0`）** | ✅ **有效**（实测 `copyright` 由 `null` 变为 `© 2026 实验室管理平台 2026`） |
+
+  判据：`GET /Auth/LoginConfig` 的 `copyright` / `loginTip` / `registration` 直接映射
+  `LoginConfigModel` 的 `_set.GetCopyright()`、`_set.LoginTip`、`_set.Registration`
+  （其中 `_set = Config<CubeSetting>.Current`，见反编译源码第 132 行）。
+  改完**必须重启进程**（`DbConfigProvider` 有进程内缓存）。
+
+- ⚠️ **`SysConfig` 走的是另一套（XML 文件），别和 `CubeSetting` 混**：
+  `SysConfig` 由 `[Config("Sys")]` 决定文件名 → 只认运行目录 **`Config/Sys.config`**
+  （`AppContext.BaseDirectory/Config/`，即 `bin/<cfg>/<tfm>/Config/Sys.config`）。
+  改 `<DisplayName>` 才能改系统名（`/Auth/LoginConfig` 的 `name`）；文件不存在时按**程序集信息自动生成**。
+  `appsettings.json` 里写 `"Sys": { "DisplayName": ... }` **实测完全无效**
+  （决定性实验：删掉 `Config/Sys.config` 重启，`name` 仍回退为程序集名）。
+  ⇒ 部署时**源码侧要保留一份 `Config/Sys.config` 副本**，否则发布包里的 `Config/` 是空的、系统名会变成程序集名。
+
+- ★★ **`JwtSecret` 必须是 `HS256:xxx` 两段格式，否则被静默换成随机值**（`CubeSetting.OnLoaded` 源码）：
+
+  ```csharp
+  if (StringHelper.IsNullOrEmpty(JwtSecret) || JwtSecret.Split(':').Length != 2)
+      JwtSecret = "HS256:" + Rand.NextString(16, false);
+  ```
+
+  写成裸密钥串（无冒号或冒号多于 1 个）→ 每次进程启动都换一个随机密钥 →
+  **上一进程签发的 Token 全部失效**，症状是「昨天还好好的，今天全 401」，且**日志里没有任何提示**。
+  实测 `Parameter.JwtSecret` 被写成 `HS256:rC9QZc5oCnIgSimC`（16 位随机）即此机制。
+  ⇒ 生产必须显式写入 `HS256:<你的强密钥>` 并妥善保管。
+
+- ★★ **`CorsOrigins` 只支持【单个源】或 `*`，逗号分隔多源会静默失效**：
+  Cube 的 CORS 策略是 `builder.AllowAnyMethod().AllowAnyHeader().AllowCredentials().WithOrigins(set.CorsOrigins)`
+  —— `WithOrigins` **不拆逗号**，整串被当成**一个** origin。实测（OPTIONS 预检）：
+
+  | `CorsOrigins` 值 | 预检响应 |
+  |---|---|
+  | `http://localhost:3002,http://127.0.0.1:3002` | `204`，但**无任何 `Access-Control-*` 头** → 浏览器判定跨域失败 ❌ |
+  | `http://127.0.0.1:3002`（单源） | `204` + `Access-Control-Allow-Origin` + `Allow-Credentials: true` + `Allow-Headers: authorization` ✅ |
+  | `*` | 走 `SetIsOriginAllowed(_ => true)` 分支，回显请求 Origin ✅ |
+
+  ⇒ 需要多源时必须写 `*`（配合 `AllowCredentials` 会回显 Origin），**不要**写逗号串。
+  ⚠️ 只有**前端独立域名**时才需要配；dev 走 vite 代理是同源的，不配也能跑 —— 这也是本坑长期未被发现的原因。
+
+- **`Copyright` 的程序集兜底**：`CubeSetting.OnLoaded` 中若 `Copyright` 为空，会取**入口程序集的
+  `AssemblyCopyrightAttribute`**（即 `.csproj` 的 `<Copyright>`）并追加 `" {runtime}"`。
+  `GetCopyright()` 支持占位符 `{runtime}`（替换为 .NET 版本链接）、`{framework}`、`{now:yyyy}`（动态年份）。
+  故"想在代码里配版权"有两条路：`Parameter` 表，或 csproj 的 `<Copyright>`。
+
+---
+
+## G11 生成器行为（xcodetool / XCode Build.tt 实测，2026-09-13）
+
+- **生成产物的可维护性分三档**（决定"业务代码该写哪"）：
+
+  | 产物 | 覆盖策略 |
+  |---|---|
+  | `Xxx.cs` | **每次运行都覆盖** —— 绝不要在此写业务代码 |
+  | `Xxx.Biz.cs` | **仅首次生成**，之后不覆盖 —— 业务钩子（`SetLov` / 权限位 / 自定义查询）写这里 |
+  | `XxxController.cs`、`Areas/{Area}/*.cs` / `*.htm` | **已存在则跳过** —— 手工改动可幸存（实测给控制器加的 `SetLov` 在重跑生成器后仍在） |
+
+- **`InsertOnly="True"` → 自动选择 `ReadOnlyEntityController`**：生成的控制器**没有任何写路由**
+  （`Insert`/`Update`/`Delete`/`DeleteAll`/`DeleteSelect` 全部 404）。只读实体（日志类）用这条即可，无需手写。
+
+- ⚠️ **裸 `xxxID` 字段会让生成器产出「实体/控制器 Search 签名不一致」**（实体 6 参 vs 控制器 7 参 → `CS1501`）。
+  规避：给该字段补 `Map`（映射到真实实体）或在 `Model.xml` 中明确其角色，不要留裸外键字段。
+
+- ⚠️ **`Map` 指向框架内置表的两个必需条件 + 一个禁止**：
+  1. `Map` 必须写**完整命名空间**（如 `XCode.Membership.User`）；
+  2. 实体 `Option/ExtendNameSpace` 必须填 `XCode.Membership`；
+  3. **禁止**指向 `EntityTree<T>` 派生类（如 `Department`）—— 它没有 `FindById`，生成物编译报 `CS1061`。
+
+- **金额字段必须显式 `Decimal` + `Precision`/`Scale`**：`DataType="Int32"`（图省事按"分"存）会让后端
+  **正确拒收** `1.5`，报 `The JSON value could not be converted to System.Int32. Path: $`。
+  声明为 `DataType="Decimal" Precision="18" Scale="2"` 后实体属性类型为 `Decimal`，前端表单可正常传小数。
+
+- **表是【懒创建】的**：XCode `Migration: On` 不在启动时建全部表，而在**首次查询某表时**才建。
+  故"表不存在"报错时，先对该实体发一次 `GET /api/{area}/{controller}` 触发建表，再查库。
+
+- ★ **连接串里的相对路径基准是 `AppContext.BaseDirectory`（= bin 输出目录），不是工作目录**：
+  `Data Source=Data/Lab.db` 实际落在 `backend/bin/Debug/net8.0/Data/Lab.db`。
+  排查"数据写不进去 / 库是空壳（0 字节）"时，先确认你在看的库文件是不是同一个。
+  （工作目录下若出现同名 0 字节文件，那只是误创建的壳，删掉即可。）
+
+---
+
+## G12 外键字典（lookups）解析：别用字段名猜控制器（2026-09-13 实测修复）
+
+- ★★ **约定式「`xxxID` 去掉 ID 后缀即控制器名」在 `{Area}{Entity}` 命名下必然猜错**：
+  `LabAsset.CategoryID` 的真实控制器是 **`LabCategory`**（XCode 模型普遍带区域前缀：
+  `LabAsset` / `LabCategory` / `LabAssetItem` / `LabOrder` / `LabOrderLine`）。
+  旧实现猜成 `Category` → 请求 `/api/Lab/Category` **404**，再兜底试 `/api/Cube/Category` 又一次 **404**。
+  一个列表页因此产生 **6 条 404**（`Category`/`Parent`/`Asset` × 两个 area）。
+
+- ⚠️ **404 不只是"噪音"，它直接吃掉一个功能**：字典拉不到 → `lookups` 为空 →
+  **搜索栏的「所属分类」下拉没有选项 → 按分类筛选静默失效**。
+  `GET /api/Lab/LabAsset/GetPage` 的 `search` 组里 `CategoryID` 是**裸 `Int32`**（无 `mapField`、无 `lovCode`），
+  只能靠外键字典渲染下拉 ⇒ 字典为空 = 该筛选项不可用。
+  **验收判据**：把「网络日志 404 计数 = 0」和「控制台错误 = 0」列为硬门禁，不要放过 404。
+
+- **正确做法：用菜单树做权威目录**。`GET /api/Admin/Index/GetMenuTree` 返回
+  `[{ name:'Lab', children:[{ name:'LabCategory', url:'/Lab/LabCategory' }, …] }, …]`，
+  即 **`area → 控制器名清单`**。解析链（`assets/core/api/useLookups.ts` 已落地）：
+  1. **自引用外键优先**：`Parent` / `ParentID` / `Parents` / `ParentIds`（或基名 == 当前控制器名）→
+     直接用**当前实体控制器**（树形自关联指向自身），避免先浪费两次 404；
+  2. **同 area 目录后缀匹配**：`controllers.filter(c => c.toLowerCase().endsWith(base.toLowerCase()))`，
+     多命中取最长者（更具体）；
+  3. 约定兜底：精确名 → `{Area}{base}`；
+  4. area 候选仍是「当前 area → `Cube`」（框架系统实体如 `Area`/`Dictionary` 挂在 Cube area）。
+
+  - 目录**模块级缓存**，全应用只拉一次（登录后侧边栏 / Dashboard 本就会拉这棵树）。
+  - 另有**会话级负结果缓存**：同一 `(area, controller)` 确认 404 后不再重复探测。
+  - ⚠️ `GetMenuTree` 是**区域族**端点 ⇒ 用 `getRaw('/api/Admin/Index/GetMenuTree')`
+    （**要写全 `/api`**；用 `getApi` 会变成 `/api/api/...`）。
+  - 修复后实测：`/api/Lab/LabCategory?pageSize=1000` → **200**、`/api/Lab/LabAsset?pageSize=1000` → **200**，
+    全流程 404 = 0，且分类下拉有选项。
+
+- **`useLookups` 需要知道"当前控制器名"**：签名为 `useLookups(area, overrides?, entityController?)` ——
+  `ListPage.vue` 调用时必须把 `props.controller` 作为第 3 参传入，否则自引用外键（`ParentID`）无法解析。
+  当目录也推断不出时，用 `overrides[baseName].controller` 显式覆盖。
+
+- **枚举 / 静态字典别走外键通道**：`CreateUserID` / `UpdateUserID` 等**审计字段**必须排除
+  （否则会去拉 `/api/{area}/CreateUser` 这类不存在的控制器）；纯枚举字段（无 `lovCode` / 无 `map` / 无 `dataSource`）
+  走官方 `/Cube/Lookup`（**根族，无 `/api` 前缀**）。
+  ⚠️ 探测顺序别写反：应先 `getRaw('/Cube/Lookup')`（实测 200），再兼容回退 `getApi`（带 `/api` → 404）。

@@ -135,14 +135,36 @@ const BINARY_EXT = new Set([
 ]);
 
 /** 文本资产：统一换行符后取哈希 —— 消除 CRLF/LF 假阳性（技能仓库 autocrlf=true）。 */
+const hashText = (t) => crypto.createHash('md5').update(t.replace(/\r\n/g, '\n').replace(/\r/g, '\n'), 'utf8').digest('hex');
+const readText = (p) => fs.readFileSync(p, 'utf8');
+
 const md5 = (p) => {
   const buf = fs.readFileSync(p);
   if (BINARY_EXT.has(path.extname(p).toLowerCase())) {
     return crypto.createHash('md5').update(buf).digest('hex');
   }
-  const text = buf.toString('utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  return crypto.createHash('md5').update(text, 'utf8').digest('hex');
+  return hashText(buf.toString('utf8'));
 };
+
+/**
+ * ★ 按项目「必改」文件的比对豁免（2026-09-13 新增，修 D7）
+ *
+ * 背景：技能铁律**要求**某些文件按项目改写（最典型是登录页 `PROJECT` 文案，铁律 L1）。
+ * 这些文件的正确工程态**本就与模板不同**，若照搬「MD5 一致才算通过」，会把
+ * 「已按铁律正确填写」误报成「内容漂移／版本不同步」，并给出
+ * 「以技能版为准覆盖」的建议 —— **该建议与铁律直接冲突，照做即抹掉项目业务文案**。
+ *
+ * 解法：比对前先用 `normalize()` 把「项目自填区段」剥掉再取哈希。
+ *   · 归一化后一致 → INFO（预期差异，通过）
+ *   · 归一化后仍不一致 → WARN（真漂移：模板骨架本身被人改过/是前代版本）
+ */
+const PROJECT_EDITABLE = [
+  {
+    rel: 'pages/LoginView.vue',
+    why: '登录页左栏 PROJECT 文案（铁律 L1 要求按项目业务改写，必然与模板不同）',
+    normalize: (t) => t.replace(/const PROJECT = \{[\s\S]*?\n\};/, 'const PROJECT = {/*PROJECT*/};'),
+  },
+];
 const sizeOf = (p) => {
   try {
     return fs.statSync(p).size;
@@ -174,6 +196,21 @@ export function check(root) {
       continue;
     }
     if (md5(src) !== md5(dst)) {
+      const editable = PROJECT_EDITABLE.find((e) => e.rel === rel);
+      if (editable) {
+        // 按项目必改件：剥掉项目自填区段后仍一致 → 属预期差异，不算漂移
+        const a = hashText(editable.normalize(readText(src)));
+        const b = hashText(editable.normalize(readText(dst)));
+        if (a === b) {
+          info(`core:${rel}`, `${editable.why} —— 已按项目定制，属预期差异（归一化比对一致）`);
+          continue;
+        }
+        warn(
+          `core:${rel}`,
+          `内容漂移（骨架级）：src/${rel} 在剥离「按项目必改区段」后仍与技能资产不一致 —— 骨架被改过或使用了前代版本，请按 §11.1 回灌`,
+        );
+        continue;
+      }
       warn(
         `core:${rel}`,
         `内容漂移：src/${rel} 与技能资产不一致（${sizeOf(dst)}B vs ${sizeOf(src)}B）—— 版本不同步，按 §11.1 回灌或以技能版为准覆盖`,

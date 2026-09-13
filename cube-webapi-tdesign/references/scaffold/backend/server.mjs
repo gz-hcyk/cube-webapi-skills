@@ -7,7 +7,8 @@
  * 契约严格对齐 cube-webapi-tdesign/references/metadata-contract.md：
  *  - 统一信封 { code, message, data, page?, stat? }
  *  - 所有响应 CamelCase 命名
- *  - 实体接口 /api/{area}/{controller}；**非实体端点无 /api 前缀**：/Auth/Login、/Admin/Index/GetMenuTree、/Cube/Apis
+ *  - 实体接口 /api/{area}/{controller}；**根族端点无 /api 前缀**：/Auth/Login、/Cube/Apis；
+ *    ⚠️ 菜单 /api/Admin/Index/GetMenuTree 属**区域族（必带 /api）**（2026-09-13 修正）
  *  - 令牌头只认 Authorization: Bearer <jwt>（发 Authentication 或只带 Cookie 均 401）
  */
 import http from 'node:http';
@@ -559,7 +560,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 菜单树（需登录）
-  // ⚠️ 契约：前端唯一 HTTP 层走 `getRaw('/Admin/Index/GetMenuTree')`（**不带 /api 前缀**——
+  // ⚠️ 契约：前端唯一 HTTP 层走 `getRaw('/api/Admin/Index/GetMenuTree')`（**区域族必带 /api**——
   //    该端点是 Area 内属性路由 [area]/[controller]/[action]，实测带 /api 会 404）。
   //    历史缺陷：Mock 只匹配带前缀路径 → 落到实体正则（area=Admin,ctrl=Index）→ 404 → 侧边栏恒空。
   //    此处两种写法都接受，便于对照排障；真实后端**只认不带前缀的那条**。

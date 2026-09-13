@@ -173,6 +173,45 @@ function nodeKey(n: any, idx: number | string): string {
   return pathOf(n, idx);
 }
 
+/* ---------- 铁律：父子表「子表不进菜单」（SKILL.md「父子表（主从表）前端只展现父表」） ----------
+ * 凡 `*Line` / `*Item`（订单明细、资产配件等从表）一律视为子表：**不在一级/二级导航暴露**，
+ * 只作为父表详情页里的内嵌只读区。后端 Cube 会为每个实体控制器生成菜单项（含子表），
+ * 故**必须在前端渲染前整枝剔除**，否则导航里会多出「资产配件」「订单明细」这类本不该独立的入口。
+ *
+ * ⚠️ 这不违反铁律 M1：菜单来源仍是后端 GetMenuTree，此处只是按命名约定**过滤从表节点**，
+ *    没有硬编码任何业务菜单项。若某项目确有以 Line/Item 结尾的**独立**实体，加进白名单即可。
+ */
+const CHILD_TABLE_RE = /(Line|Item)$/i;
+/** 白名单：`controller` 名（按 url 末段取），命中则当独立实体处理 */
+const KEEP_AS_TOP: string[] = [];
+
+function menuNodeName(n: any): string {
+  const last = urlOf(n).split('/').filter(Boolean).pop() || labelOf(n) || '';
+  return String(last).replace(/[?#].*$/, '');
+}
+function isChildTableNode(n: any): boolean {
+  const name = menuNodeName(n);
+  if (KEEP_AS_TOP.includes(name)) return false;
+  return CHILD_TABLE_RE.test(name);
+}
+/** 递归剔除子表节点（整枝剔除，含其后代） */
+function pruneChildTables(nodes: any[]): any[] {
+  const out: any[] = [];
+  for (const n of nodes) {
+    if (isChildTableNode(n)) continue;
+    const kids = childrenOf(n);
+    out.push(kids.length ? withChildren(n, pruneChildTables(kids)) : n);
+  }
+  return out;
+}
+/** 浅拷贝并只保留 `children` 这一个子键（后端可能下发 Childs/items 等同义键，留着会双重渲染） */
+function withChildren(n: any, kids: any[]): any {
+  const copy: any = { ...n };
+  for (const k of CHILD_KEYS) if (k !== 'children') delete copy[k];
+  copy.children = kids;
+  return copy;
+}
+
 /** 图标：后端 icon 字段优先；否则按名称/url 推断默认图标（设计系统要求每个菜单带图标） */
 const ICON_MAP: Record<string, string> = {
   user: 'user', users: 'usergroup', role: 'usergroup', permission: 'lock-on',
@@ -192,21 +231,24 @@ function iconOf(n: any): string {
 }
 
 onMounted(async () => {
-  // 菜单树走 /Admin/Index/GetMenuTree —— 该端点是 Admin 区域 IndexController 的**属性路由**
-  // （[area]/[controller]/[action]），**不带 /api 前缀**；写成 /api/Admin/Index/GetMenuTree 会 404
-  // （2026-09-13 实测：无 /api → 200，带 /api → 404）。实体接口才走 /api/{area}/{controller}。
-  // ⚠️ 同时 vite dev 代理必须显式覆盖 `^/Admin/Index/`，否则请求落到 SPA 兜底、返回 index.html，
-  //    axios 解析失败 → 菜单**静默为空**（无报错、无 401、无 404），排障成本极高。详见 SKILL.md H3。
+  // 菜单树走 **/api/Admin/Index/GetMenuTree** —— Admin 是**区域**（IndexController 挂 [AdminArea]），
+  // 而 Cube 的区域路由模板自带字面量 `/api`：`api/{area}/{controller=Index}/{action=Index}/{id?}`。
+  // ⚠️ 写成不带 /api 的 `/Admin/Index/GetMenuTree` 会 **404**（2026-09-13 dump 真实路由表实测）。
+  //    判据是「控制器有没有 [Area]」：区域族（Admin/* + 全部实体控制器）必带 /api；
+  //    根族（Auth/Mfa/Sso/Cube）不带。二者恰好各占一半，切勿混为一谈 —— 详见 SKILL.md H2。
+  // ⚠️ 该路径由 vite dev 代理的 `'/api'` 规则覆盖；若代理漏了 /api，请求会落到 SPA 兜底、
+  //    返回 index.html，axios 解析失败 → 菜单**静默为空**（无报错、无 401、无 404）。详见 SKILL.md H3。
   // 只返回当前用户有权限的菜单。
   // 必须 try/catch：未登录/令牌失效时该请求 401，Axios 拒绝若无接收方会冒泡成
   // Uncaught AxiosError 红错并打断渲染链；api.ts 拦截器已统一处理 401（清 token + 跳 /login），
   // 此处 401 静默忽略即可，其余异常仅告警，绝不 throw。
   try {
-    const r = await getRaw<any[]>('/Admin/Index/GetMenuTree');
+    const r = await getRaw<any[]>('/api/Admin/Index/GetMenuTree');
     if (r.code === 0 && Array.isArray(r.data)) {
-      menus.value = r.data;
-      // 把后端 displayName 登记为页面标题权威源（页面标题/面包屑据此显示中文）
+      // 把后端 displayName 登记为页面标题权威源（页面标题/面包屑据此显示中文）—— 用**全量**树
       registerMenuTitles(r.data);
+      // 渲染前剔除子表节点（铁律：父子表子表不进导航）
+      menus.value = pruneChildTables(r.data);
       syncActiveByRoute();
     }
   } catch (e) {

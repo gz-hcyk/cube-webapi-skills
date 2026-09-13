@@ -57,14 +57,15 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       port: 3002,
       host: '0.0.0.0',
       allowedHosts: true,
-      // ⚠️ 铁律 H3（2026-09-13 实测）：菜单树等**非实体系统端点不带 `/api` 前缀**，因此光有 `/api`
-      //    规则覆盖不到它。漏配的表现极其隐蔽——请求落到 SPA 兜底、返回 `Content-Type: text/html`
-      //    的 index.html，axios 解析失败 → **菜单静默为空（无报错、无 401、无 404）**。
-      //    vite 把以 `^` 开头的 key 视为 RegExp，故用正则精确锁定 Index 控制器。
-      //    ⚠️ 切勿写成 '/Admin'：会把前端页面路由 /Admin/User 一并转发到后端，硬刷新变 GET 404。
+      // ⚠️ 铁律 H3（2026-09-13 实测）：代理必须同时覆盖「区域族 + 根族」——
+      //    · 区域族走 `/api`：实体控制器 **以及框架的 `/api/Admin/Index/GetMenuTree`**，
+      //      一条 `'/api'` 规则即可全覆盖（菜单树带 /api，见 H2）。
+      //    · 根族**不带 `/api`**：Auth/Mfa/Sso/Cube/Content 需逐条列出。
+      //    漏配某条时表现极其隐蔽：请求落到 SPA 兜底、返回 `Content-Type: text/html` 的 index.html，
+      //    axios 解析失败 → **菜单/字典静默为空（无报错、无 401、无 404）**，排障成本极高。
+      //    ⚠️ 切勿写成 `'/Admin'`：会把前端页面路由 `/Admin/User` 一并转发到后端，硬刷新变 GET 404。
       proxy: {
         '/api': { target: API_TARGET, changeOrigin: true },
-        '^/Admin/Index/': { target: API_TARGET, changeOrigin: true },
         '/Auth': { target: API_TARGET, changeOrigin: true },
         '/Mfa': { target: API_TARGET, changeOrigin: true },
         '/Sso': { target: API_TARGET, changeOrigin: true },

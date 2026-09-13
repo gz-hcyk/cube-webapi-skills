@@ -39,6 +39,25 @@ function parseUrl(url?: string): { area: string; controller: string } | null {
 }
 
 /**
+ * 框架自带区：只作入口卡片，**不取记录数**（避免首屏几十个请求；业务区才关心条数）。
+ * ⚠️ 此处**不得**写具体业务区名（如 `asset`）—— 那是上一项目的残留，换项目即失效。
+ */
+const FRAMEWORK_AREAS = new Set(['admin', 'cube', 'sys', 'core', 'xcode', 'log'])
+
+/**
+ * 铁律：父子表「子表不进菜单」（SKILL.md「父子表（主从表）前端只展现父表」）。
+ * 凡 `*Line` / `*Item` 从表（订单明细、资产配件）只从父表详情内嵌区进入，**不列独立卡片**。
+ * 与 `MenuSidebar.vue` 同一套判据；技能约定 GetMenuTree 落地「只有两处、均组件内联」。
+ */
+const CHILD_TABLE_RE = /(Line|Item)$/i
+function isChildTableNode(n: any): boolean {
+  const u = String(n?.url || '').trim()
+  const parts = u.replace(/^\/+/, '').replace(/^api\//i, '').split('/').filter(Boolean)
+  const name = parts.length ? parts[parts.length - 1] : String(n?.name || '')
+  return CHILD_TABLE_RE.test(name.replace(/[?#].*$/, ''))
+}
+
+/**
  * 区分实体控制器与动作控制器（后端**不直接下发**该标志，由菜单节点权限位推断）。
  * 实体控制器带标准 CRUD 权限位 2=添加 / 4=修改 / 8=删除；
  * 动作控制器（Mobile 快捷发料、Import 确认导入、Report 报表）只有 1=查看 + 各自的业务位。
@@ -51,12 +70,13 @@ function kindOf(node: any): 'entity' | 'action' {
 }
 
 async function loadMenu() {
-  const env: any = await getRaw<any[]>('/Admin/Index/GetMenuTree')
+  const env: any = await getRaw<any[]>('/api/Admin/Index/GetMenuTree')
   const roots = Array.isArray(env?.data) ? env.data : []
   const out: Group[] = []
   for (const r of roots) {
     const cards: Card[] = []
-    for (const c of r.children || []) {
+    // 铁律：子表（*Line/*Item）不进导航，卡片区同样不列
+    for (const c of (r.children || []).filter((x: any) => !isChildTableNode(x))) {
       const p = parseUrl(c.url)
       if (!p) continue
       cards.push({
@@ -71,8 +91,8 @@ async function loadMenu() {
     out.push({
       key: r.name || String(out.length),
       title: r.displayName || r.name || '',
-      // 业务区显示记录数；系统区只作入口
-      withCount: /^asset$/i.test(r.name || '') || /低值易耗/.test(r.displayName || ''),
+      // 业务区显示记录数；框架区（Admin/Cube/…）只作入口
+      withCount: !FRAMEWORK_AREAS.has(String(r.name || '').toLowerCase()),
       cards,
     })
   }
