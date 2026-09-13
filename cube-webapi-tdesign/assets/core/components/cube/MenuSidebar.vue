@@ -188,7 +188,12 @@ function iconOf(n: any): string {
 }
 
 onMounted(async () => {
-  // 真实后端所有接口统一在 /api 下；只返回当前用户有权限的菜单。
+  // 菜单树走 /Admin/Index/GetMenuTree —— 该端点是 Admin 区域 IndexController 的**属性路由**
+  // （[area]/[controller]/[action]），**不带 /api 前缀**；写成 /api/Admin/Index/GetMenuTree 会 404
+  // （2026-09-13 实测：无 /api → 200，带 /api → 404）。实体接口才走 /api/{area}/{controller}。
+  // ⚠️ 同时 vite dev 代理必须显式覆盖 `^/Admin/Index/`，否则请求落到 SPA 兜底、返回 index.html，
+  //    axios 解析失败 → 菜单**静默为空**（无报错、无 401、无 404），排障成本极高。详见 SKILL.md H3。
+  // 只返回当前用户有权限的菜单。
   // 必须 try/catch：未登录/令牌失效时该请求 401，Axios 拒绝若无接收方会冒泡成
   // Uncaught AxiosError 红错并打断渲染链；api.ts 拦截器已统一处理 401（清 token + 跳 /login），
   // 此处 401 静默忽略即可，其余异常仅告警，绝不 throw。

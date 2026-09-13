@@ -1,7 +1,7 @@
 {
   "name": "cube-webapi-tdesign-scaffold",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "Base on tdesign-starter-cli (vue3 + vite + lite) + cube-webapi-tdesign skill assets",
   "scripts": {

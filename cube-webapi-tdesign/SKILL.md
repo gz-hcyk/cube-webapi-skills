@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-tdesign
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
 ---
 
 # cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
@@ -68,13 +68,32 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 ## 铁律：三条工程约定（新工程必须满足，不可违反）
 
-- **C1 由官方脚手架生成**：新工程一律先 `td-starter init <名> -type vue3 -bt vite -temp lite` 生成骨架（v0.5.3 实测），再拷入本技能 `assets/`；**禁止从零手搭**。工程配置保持 CLI 产物形态，仅做必要补丁：`@` 别名、dev 代理、`manualChunks` 分包，以及**补 `vue-router` / `pinia` / `axios`**（lite 模板默认不含这三项，不补则 vue-router/pinia 直接跑不起来）。
+- **C1 必须由官方脚手架初始化（强制 · 可验证）**：**任何**新工程一律先跑 CLI 生成骨架，再拷入本技能 `assets/`；**禁止从零手搭**。工程配置保持 CLI 产物形态，只允许下述白名单补丁。
+
+  ```bash
+  npx tdesign-starter-cli@0.5.3 init <项目名> -type vue3 -bt vite -temp lite   # 唯一受支持组合
+  ```
+
+  **可验证性**：工程根必须保留 CLI 骨架文件 `index.html` / `package.json` / `tsconfig.json` / `tsconfig.node.json` / `vite.config.ts` / `public/favicon.ico` / `src/main.ts` / `src/vite-env.d.ts` —— **删任一即视为未走脚手架**。一条命令判定：
+
+  ```bash
+  node references/scripts/check-starter-align.mjs <工程目录>      # 退出码 0 = 对齐，1 = 有 FAIL
+  ```
+
+  **四条实测硬约束**（都是踩过的坑，必须照做）：
+  1. **`-temp` 只能 `lite`**：`all` 模板是**交互式**箭头多选，非 TTY 下必崩（实测 `ERR_USE_AFTER_CLOSE`），**不可脚本化**；`lite` 无交互、exit=0。CLI 产物共 13 项，清单见 `check-starter-align.mjs --manifest`。
+  2. **必须删掉 CLI 生成的 `scripts.prepare`**：该脚本调 `is-ci` / `husky`，二者**不在 dependencies 中**，实测 `npm run prepare` → **exit=1** ⇒ **`npm install` 必然失败**（CLI 还会自行 `git init`，使脚本走 husky 分支）。生成后**先删它，再 `npm install`**。
+  3. **lite 模板不含 `vue-router` / `pinia` / `axios`**：不补则路由与请求层直接跑不起来，**必须补**。
+  4. **CLI 不生成 `.gitignore`**（脚手架自带的 `.gitignore` 属补丁产物），需自备。
+
+  **补丁白名单**（只允许这五类偏离；白名单外的改动一律按「未走脚手架」论）：① `@` 别名（`vite.config.ts` alias + `tsconfig.paths` **必须成对**）；② dev `server.proxy`（代理规则见 H3）；③ `build.rollupOptions.output.manualChunks` 分包；④ 补 `vue-router`/`pinia`/`axios` + 删 `prepare`；⑤ `index.html` 的 `lang`/`<title>`。
+  **tsconfig 编译策略**（`target`/`moduleResolution`/`strict`/`lib`/额外键）如需按 Vite 最佳实践调整，属**「工程选择」级偏离**：允许，但**必须在工程 README 显式声明**（校验脚本按 WARN 提示；未声明的偏离无法与「漏改」区分）。
 - **C2 默认品牌色 = 政务蓝 `#0f4c9e`**：三处必须同源 —— `src/styles/tokens.css`（`--td-brand-color` 及全色阶）、`src/stores/setting.ts` 的 `DEFAULT_BRAND`、`src/theme/tokens.ts`。设置面板品牌色预设须把政务蓝**置首**。改主色时三处同步，否则首屏会闪色。
 - **C3 暗黑模式必须"能点得到"**：光有 `theme-dark.css` + `setting.ts` 只是能力，还须完成**三处接线**，缺一即为死代码：
   ① `main.ts` 在 TDesign 样式**之后**依次 `import '@/styles/tokens.css'` → `import '@/styles/theme-dark.css'`；
   ② `main.ts` 启动调用 `useSettingStore().load()`（还原偏好 + 把品牌色阶以 inline style 注入 `<html>`）；
   ③ `BasicLayout.vue` **挂载 `<SettingPanel />`**（右下角悬浮齿轮 = 主题模式/品牌色的 UI 唯一入口）。
-- 违反判定：无 CLI 产物形态 / 主色非政务蓝或三处不同源 / `theme-dark.css` 未引入 或 `setting.load()` 未调用 或 `SettingPanel` 未挂载 —— 任一条即不合格。
+- 违反判定：**未走 `td-starter` 脚手架或 CLI 骨架文件缺失（`check-starter-align.mjs` 报 FAIL）** / 保留了致命的 `scripts.prepare` / 缺 `@` 别名 / 主色非政务蓝或三处不同源 / `theme-dark.css` 未引入 或 `setting.load()` 未调用 或 `SettingPanel` 未挂载 —— 任一条即不合格。
 - 参考实现：`references/scaffold/`（已按 C1~C3 落实；`vue-tsc --noEmit` 与 `vite build` 均 0 错误 —— 该结论在**完整依赖环境**下取得，技能目录内**不随包携带依赖**（`node_modules`/`dist` 已清空为声明式），复现须先 `npm install`，口径见 `assets/README.md` §「验证结论的适用范围」；CDP 实测：默认 `--td-brand-color=#0f4c9e`，点齿轮 → 选「暗色」→ `<html>` 得 `t-theme-dark`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好落 `localStorage['cube-personalization']`）。
 
 ## 铁律：父子表（主从表）前端只展现父表（不可违反）
@@ -130,12 +149,37 @@ Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计
 
 **登录契约（当前版本 AuthController，SPA 用，实测）**：端点 `POST /Auth/Login` + `GET /Auth/LoginConfig` + `/Auth/Challenge` + `/Auth/Refresh` + `/Mfa/*`（**均不带 `/api` 前缀**；`/Admin/User/Login` 只留 MVC/SSO）。请求体 `{ username, password, category(枚举整数: Password=0/Mobile=1/Mail=2/OAuth=3，禁字符串), remember, challengeId, captchaId, captchaCode }`。响应令牌键名实测 **snake_case**（`access_token`/`refresh_token`/`expire_in`），`auth.ts` 的 `normToken` 三向兜底（snake/camel/Pascal），统一读 camelCase。`challengeRequired===true` 才走 RSA-OAEP Challenge；其余开关同理 `===true` 才启用。`LoginConfig` 的 `oAuth` 键名实测**大写 A**（文档写小写），`getLoginConfig` 双向归一、页面读 `config.oAuth`。详见 troubleshooting G1/G7。
 
-### 4.1 脚手架
+### 4.1 脚手架（铁律 C1：强制走官方 CLI，可校验）
 
 ```bash
-npm i tdesign-starter-cli@latest -g
-td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -type vue3
+# ① 生成骨架（唯一受支持组合；-temp 只能 lite，all 是交互式的，会崩）
+npx tdesign-starter-cli@0.5.3 init <项目名> -type vue3 -bt vite -temp lite
+cd <项目名>
+
+# ② 删掉致命的 prepare 脚本 —— 不删则 npm install 必然 exit=1（原因见 C1 约束 2）
+node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
+
+# ③ 补 lite 模板缺的三件套
+npm i vue-router pinia axios
+
+# ④ 补 .gitignore（CLI 不生成），再 npm install
+npm install
+
+# ⑤ 校验：工程根仍是 CLI 产物形态
+node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 = 对齐
 ```
+
+**CLI 产物共 13 项**（`--manifest` 可打印）：
+
+| 类别 | 文件 | 去留 |
+|---|---|---|
+| 工程骨架 | `index.html` `package.json` `tsconfig.json` `tsconfig.node.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/vite-env.d.ts` | **必须保留**，删任一 = FAIL |
+| CLI 演示内容 | `.npmignore` `README.md` `public/tdesign-logo.svg` `src/assets/svg/vite-logo.svg` `src/App.vue` | 可删（删了需同步清 `App.vue` 里的悬空 SVG 引用），记 INFO |
+
+**允许的补丁（白名单，仅此五类）**：`@` 别名（vite alias + tsconfig.paths 必须成对）、dev `server.proxy`、`manualChunks` 分包、补 `vue-router`/`pinia`/`axios` + 删 `prepare`、`index.html` 的 `lang`/`<title>`。
+**tsconfig 编译策略**改动属「工程选择」级偏离：允许，但**必须在工程 README 显式声明**。
+
+> 对照基线（已实测校准）：`references/scaffold/` = **0 FAIL**（生产级编排层，唯一真相源）；`references/demo/` = 0 FAIL（含 1 条已声明的 tsconfig 策略 WARN）；两份 `README.md` 均含「已声明偏差」段。
 
 ### 4.2 落地 API 请求层（唯一 HTTP 层）
 
@@ -391,9 +435,13 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 ### 4.15 生产级编排层脚手架（references/scaffold/）
 
-`references/scaffold/` 是**完整可运行工程**（不是片段集合），由官方 `tdesign-starter-cli`（`-type vue3 -bt vite -temp lite`）生成后注入本技能 `assets/`，并补 `vue-router`/`pinia`/`axios`：
+`references/scaffold/` 是**完整可运行工程**（不是片段集合），由官方 `tdesign-starter-cli@0.5.3`（`-type vue3 -bt vite -temp lite`）生成后注入本技能 `assets/`，并补 `vue-router`/`pinia`/`axios`。**它同时是「CLI 产物形态」的对照基线**：`references/scaffold/src/` 为唯一真相源，`assets/` 为镜像拷贝源。
 
-- **工程文件**：`package.json` / `vite.config.ts`（`@` 别名 + 代理 `/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content` + `manualChunks` 分包）/ `tsconfig.json`（含 `paths: {"@/*": ["src/*"]}`）/ `index.html` / `.gitignore`。
+- **工程文件**：`package.json` / `vite.config.ts`（`@` 别名 + 代理 `/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content` + `manualChunks` 分包）/ `tsconfig.json`（含 `paths: {"@/*": ["src/*"]}` + `references: [{path:"./tsconfig.node.json"}]`）/ `tsconfig.node.json` / `index.html`（含 `<link rel="icon" href="/favicon.ico" />`）/ `public/favicon.ico` / `.gitignore`。
+  与 CLI 基线的差异**只有**：`@` 别名、代理、`manualChunks`（均为白名单补丁）；CLI 的 `prepare` 脚本与演示件（`.npmignore` / `tdesign-logo.svg` / `vite-logo.svg`）已移除 —— 属「已声明偏差」，`check-starter-align.mjs` 记 INFO。
+  ```bash
+  node references/scripts/check-starter-align.mjs references/scaffold      # 期望：0 FAIL
+  ```
 - **编排层**：`BasicLayout.vue`（侧栏 `MenuSidebar` + 顶栏面包屑/用户菜单 + 内容区 + **`SettingPanel` 挂载**）、`pages/EntityPage.vue`（`area/controller` 驱动、按 `specialControllers.ts` 分发专用页/ListPage）、`pages/LoginView.vue`（门禁，系统名/Logo/版权读 `/Auth/LoginConfig`；**左栏文案按项目生成、账号密码不预填、页面无实现细节文案、登录页与注册页均无租户选择 —— 铁律 L1~L4**）、`router/index.ts`（登录拦截 + `/dashboard` + `/entity/:area/:controller` 泛型兜底）、`main.ts`（TDesign → tokens.css → theme-dark.css → `setting.load()`）。
 - **分支（非实体控制器）**：`src/specialControllers.ts` + `components/cube/ConfigView.vue` / `DbView.vue`（见 §4.17 / §4.18）。
 - 用法：`npm install` → `VITE_API_TARGET=http://127.0.0.1:<port> npm run dev`。**唯一必改项是代理 target**；`/Admin`、`/Asset` 等 SPA 路由**切勿**代理（硬刷新 404）。
@@ -540,7 +588,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
 - [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染，无违规；改契约/登录代码已做 dist 产物核验闭环
 - [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
-- [ ] **C1** 工程由 `td-starter init -type vue3 -bt vite -temp lite` 生成（配置保持 CLI 产物形态；`vue-router`/`pinia`/`axios` 已补）
+- [ ] **C1** 工程由 `td-starter init <名> -type vue3 -bt vite -temp lite` 生成，且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架 8 件齐全、`prepare` 已删、`vue-router`/`pinia`/`axios` 已补、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点）；tsconfig 编译策略的偏离已在工程 README 显式声明
 - [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
 - [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
 
@@ -592,15 +640,15 @@ PY
 
 ## 十一、新工程初始化与内置模块页面模板复用（tdesign-starter-cli）
 
-**默认规则**：新建「魔方 WebApi + TDesign 前端」工程一律用 tdesign-starter-cli 初始化 + 拷入本技能模板，禁止从零手搭。
+**默认规则（铁律 C1）**：新建「魔方 WebApi + TDesign 前端」工程**必须**用 tdesign-starter-cli 初始化 + 拷入本技能模板，**禁止从零手搭**。初始化流程、四条实测硬约束（`-temp` 只能 `lite` / 必删 `prepare` / 必补三件套 / 无 `.gitignore`）与验证命令见 **§4.1**。
 ```bash
-npm i tdesign-starter-cli@latest -g
-td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -type vue3
+npx tdesign-starter-cli@0.5.3 init <项目名> -type vue3 -bt vite -temp lite
 ```
 
 ### 11.1 拷入技能模板（assets/ → 目标路径映射）
 
-> **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、自带 Mock 后端可端到端跑；「编译 0 错误」是**在完整依赖环境下的历史结论**，随包 `node_modules`/`dist` 已清空为声明式，用前先 `npm install`），只改 `vite.config.ts` 的代理 target。下表用于「并入既有工程」的对照拷贝。
+> **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、自带 Mock 后端可端到端跑；「编译 0 错误」是**在完整依赖环境下的历史结论**，随包 `node_modules`/`dist` 已清空为声明式，用前先 `npm install`），只改 `vite.config.ts` 的代理 target。
+> 两条必跑校验：① `node references/scripts/check-starter-align.mjs <工程目录>`（CLI 产物形态，期望 0 FAIL）；② 若走「并入既有工程」路线，**必须**先按 §4.1 用 CLI 生成骨架，再把 `assets/` 并入 —— 不得凭空手搭 `package.json`/`tsconfig`/`index.html`。下表用于「并入既有工程」的对照拷贝。
 
 `assets/` **按「核心 / 可选」二分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
 
@@ -635,7 +683,7 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 > 并放进**已装依赖的工程**（`references/scaffold/` 须先 `npm install`，或直接用自己的业务工程）跑 `vue-tsc` 验证。**在此之前，json/markdown 字段按普通多行文本渲染即可。**
 
 > **已下线**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter`、`DetailContent.vue`（早期 `fieldRender` 契约，拷贝即编译失败，能力已并入自包含 `ListPage.vue` / `FormDialog.vue`，见 §4.5）。
-> **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`）不在 `assets/` 里——它们随 `td-starter` 生成、随 `references/scaffold/` 提供。
+> **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts` / `index.html` / `tsconfig*.json` / `vite.config.ts` / `public/favicon.ico`）不在 `assets/` 里——它们**由 `td-starter` 生成**、随 `references/scaffold/` 提供；`check-starter-align.mjs` 就是用来守住这条边界的。
 >
 > **已删除 `tdesign-icons.d.ts`**（2026-09-13）：早期为规避 TS7016 手写的「15 图标白名单」环境模块声明。事实上 `tdesign-icons-vue-next` 的发布包**自带完整类型**（`esm/index.d.ts` barrel → `esm/icons.d.ts`，约 2350 个图标导出），`moduleResolution` 取 `Bundler` 或 `Node` 均直接命中，**无需任何声明**；反倒是该 `declare module 'tdesign-icons-vue-next'` 会**捕获模块名并遮蔽真实类型**——实测声明在场时，包内确实导出的 `AddIcon` 会被判为 `has no exported member`（TS2305 假报错），类型可达性从 2350 被压缩到 15。scaffold/src 内图标一律走全局 `<t-icon name="...">` 字符串，无具名导入消费方，删除零影响。若某工程确需具名导入图标：`npm i tdesign-icons-vue-next` 后直接用真实类型，**勿再手写白名单声明**。
 > 分类依据与同步铁律（**唯一真相源 = `references/scaffold/src/`**）见 `assets/README.md`。
@@ -653,6 +701,10 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 
 ## 推荐检查项（收尾自检）
 
+- [ ] **`node references/scripts/check-starter-align.mjs <工程目录>` 退出码 = 0**（C1 可验证：工程仍是 tdesign-starter CLI 产物形态；有 FAIL 未修完不得交付）
+- [ ] 工程根保留 CLI 骨架 8 件（`index.html` `package.json` `tsconfig.json` `tsconfig.node.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/vite-env.d.ts`）
+- [ ] `scripts.prepare` 已删除；`vue-router`/`pinia`/`axios` 已补；`@` 别名 vite + tsconfig 成对
+- [ ] tsconfig 编译策略若有偏离，工程 README 有「已声明偏差」段
 - [ ] 前端 `vue-tsc --noEmit` 0 错误（编译清零铁律）
 - [ ] 登录 → 跳 `/dashboard`；菜单与权限来自 GetMenuTree
 - [ ] 全量陷阱排障走 `references/troubleshooting.md`，不再依赖正文内联

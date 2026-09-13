@@ -1,12 +1,12 @@
 {
   "name": "cube-webapi-tdesign-demo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "mock": "node backend/server.mjs",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --port 5173",
     "typecheck": "vue-tsc --noEmit"
   },

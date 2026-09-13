@@ -2,17 +2,34 @@
 
 对接 **NewLife.Cube 魔方 WebApi** 的 TDesign Vue Next 前端**完整可运行工程骨架**。
 
-- **基线来源**：官方 `tdesign-starter-cli`（`-type vue3 -bt vite -temp lite`，v0.5.3）生成，
-  在其产物（`index.html` / `vite.config.ts` / `tsconfig.json` / `src/main.ts` / `src/App.vue`）之上
-  注入技能 `assets/` 模板，并补齐 `vue-router` / `pinia` / `axios` 三项脚手架默认未含的依赖。
+- **基线来源**：官方 `tdesign-starter-cli@0.5.3`（`-type vue3 -bt vite -temp lite`）生成，
+  在其产物（`index.html` / `vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `package.json` /
+  `public/favicon.ico` / `src/main.ts` / `src/vite-env.d.ts`）之上注入技能 `assets/` 模板，
+  并补齐 `vue-router` / `pinia` / `axios` 三项脚手架默认未含的依赖。
+- **可校验**：`node ../scripts/check-starter-align.mjs .`（退出码 0 = 仍是 CLI 产物形态，无 FAIL）。
+  本目录当前为 **0 FAIL / 0 WARN** —— 已声明的偏差见下节。
 - **能力范围**：登录门禁 → 动态菜单（后端 `GetMenuTree`）→ 泛型实体页（`GetPage` 元数据驱动）
   → 表单/详情 → 配置类单表单页 → 通用动作页；含**默认政务蓝**品牌主色与**暗黑模式**切换。
+
+## 已声明偏差（相对 `td-starter` 原始产物）
+
+CLI 产物 13 项，本目录**主动移除 3 项 + 未携带 `.npmignore`**，均属「已声明偏差」（校验脚本记 INFO，不扣分）：
+
+| 项 | 处理 | 理由 |
+|---|---|---|
+| `scripts.prepare`（`package.json`） | **已删（必须）** | 实测致命：该脚本调 `is-ci` / `husky`，二者不在 dependencies 中 → `npm run prepare` exit=1 ⇒ `npm install` 必然失败。**任何走 CLI 的工程生成后必须立刻删它。** |
+| `public/tdesign-logo.svg` | 已删 | CLI 演示资源，`App.vue` 已替换为业务外壳，无引用 |
+| `src/assets/svg/vite-logo.svg` | 已删 | 同上 |
+| `.npmignore` | 未携带 | CLI 演示残留，对业务工程无意义 |
+| `README.md` / `src/App.vue` | 保留（内容已替换为业务版） | 保持工程外壳形态 |
+
+**白名单补丁**（唯一允许的偏离）：`@` 别名（`vite.config.ts` alias + `tsconfig.paths` 成对）、dev `server.proxy`、`build.rollupOptions.output.manualChunks`、补 `vue-router`/`pinia`/`axios` + 删 `prepare`、`index.html` 的 `lang`/`<title>`。本目录**只做了这些**，tsconfig 编译策略与 CLI 基线逐字一致（故无 WARN）。
 
 ## 三条强制约定（本脚手架的验收基线）
 
 | # | 约定 | 落点 | 验收方式 |
 |---|---|---|---|
-| 1 | **由 td-starter 生成** | 工程配置文件保持 CLI 产物形态（`package.json` / `vite.config.ts` / `tsconfig.json` / `index.html`）；本 README 上方注明 CLI 版本 | `npm install && npm run build` 通过（历史实测；依赖不随包携带、已清空为声明式，复现见「使用方式」上方前置条件） |
+| 1 | **由 td-starter 生成** | 工程配置文件保持 CLI 产物形态（`package.json` / `vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`）；本 README 上方注明 CLI 版本 | `node ../scripts/check-starter-align.mjs .` **退出码 = 0**（CLI 骨架存在性 / 无 `prepare` / 三件套依赖 / `@` 别名 / favicon 全部机检）；另 `npm install && npm run build` 通过（历史实测；依赖不随包携带、已清空为声明式，复现见「使用方式」上方前置条件） |
 | 2 | **默认品牌色 = 政务蓝 `#0f4c9e`** | `src/styles/tokens.css`（`--td-brand-color` 及全色阶）；`src/stores/setting.ts` 的 `DEFAULT_BRAND`；`src/theme/tokens.ts` | 首屏无自定义时即为政务蓝；设置面板「政务蓝」置首 |
 | 3 | **支持切换暗黑模式** | `src/styles/theme-dark.css` + `src/stores/setting.ts`（`mode: light/dark`，切 `<html>.t-theme-dark`）+ `src/main.ts` 首屏 `load()` + **`BasicLayout.vue` 挂载 `SettingPanel.vue`**（悬浮齿轮按钮，UI 唯一入口） | 点右下角齿轮 → 主题模式切「暗色」，页面即时变暗 |
 

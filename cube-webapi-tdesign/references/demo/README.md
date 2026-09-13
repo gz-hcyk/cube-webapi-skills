@@ -10,8 +10,18 @@ npm install
 npm run mock        # 终端1：Mock 后端 :3001（零额外依赖）
 npm run dev         # 终端2：Vite :5173，dev proxy 转发 /api、/Auth、/Mfa、/Cube、/Content、/cube 到 mock
 npm run typecheck   # vue-tsc --noEmit（⚠️ 须先 npm install，见下方说明）
-npm run build       # vite build
+npm run build       # vue-tsc --noEmit && vite build
 ```
+
+## 已声明偏差（相对 `td-starter` 原始产物）
+
+`node ../scripts/check-starter-align.mjs .` 当前为 **0 FAIL / 1 WARN / 5 INFO**：
+
+- **WARN（已声明）· tsconfig 编译策略**：`moduleResolution: "Bundler"`（基线 `Node`）、`strict: false`（基线 `true`）、`lib` 多 `DOM.Iterable`、额外键 `noEmit` / `types`、`include` 未含 `*.tsx`。
+  理由：本目录定位是**浏览器端最小可运行演示**（无 `*.tsx` 消费方），且刻意放开 `strict` 以贴近「拷贝即用」；`Bundler` 解析更贴合 Vite 实际行为。**结构性契约（`paths['@/*']`、`references`）与基线一致，未偏离。**
+- **INFO · 已移除 CLI 演示件**：`.npmignore` / `public/tdesign-logo.svg` / `src/assets/svg/vite-logo.svg`；保留 `README.md` / `src/App.vue`（内容已替换为业务版）。
+- **已补 CLI 缺口**：`public/favicon.ico`、`tsconfig.node.json`、`index.html` 的 `<link rel="icon">`、`build` 加 `vue-tsc` 类型检查、`vue-router`/`pinia`/`axios`；`scripts.prepare`（CLI 致命脚本）未携带。
+- **未携带 `.gitignore`**（CLI 不生成）——演示目录不入 git，无需。
 
 > ⚠️ **本目录未随包携带依赖、从未编译**（无 `node_modules`、无 `dist`）。上方命令须**先 `npm install`** 才能执行；本 README 中出现的「0 错误」均为**预期目标**而非实测结论。实测结论一律以 `references/scaffold/` 为准，且须在其 `npm install` 之后再复现。完整口径见 `assets/README.md` §「验证结论的适用范围」。
 
@@ -24,7 +34,7 @@ npm run build       # vite build
 
 | # | 约定 | demo 落点 | 验证状态（demo 自身未编译；结论引自 scaffold 实测） |
 |---|---|---|---|
-| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `index.html`），配 `@` 别名 + `paths` | ⚠️ **本目录未编译**（无依赖、无 `dist`）——须 `npm install` 后自行跑 `vue-tsc --noEmit` / `vite build` |
+| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`），配 `@` 别名 + `paths` | `node ../scripts/check-starter-align.mjs .` **0 FAIL**（已机检）；⚠️ **本目录未编译**（无依赖、无 `dist`）——须 `npm install` 后自行跑 `vue-tsc --noEmit` / `vite build` |
 | C2 | 默认品牌色 = 政务蓝 `#0f4c9e` | `src/styles/tokens.css` + `src/stores/setting.ts` 的 `DEFAULT_BRAND` + `src/theme/tokens.ts` | 登录页/主界面 `--td-brand-color` 均为 `#0f4c9e`；设置面板品牌色预设政务蓝置首 |
 | C3 | 支持切换暗黑模式 | `theme-dark.css`（main.ts 引入）+ `setting.load()`（main.ts 调用）+ `<SettingPanel />`（MainView 挂载） | 右下角齿轮 → 选「暗色」→ `<html class="t-theme-dark">`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好持久化到 `localStorage['cube-personalization']` |
 
