@@ -168,14 +168,17 @@ function toggleCollapsed() {
 /**
  * 后端菜单 url → 前端路由。
  * 后端形态多样：`/Asset/AssetItem`、`Asset/AssetItem`、`~/Ai`、`/api/Admin/User`。
- * 统一剥离 `~` / 前导斜杠 / `api` 前缀后取前两段，落到 `/{area}/{controller}`。
+ * 统一剥离 `~` / 前导斜杠 / `api` 前缀后取前两段，落到 `/entity/{area}/{controller}`。
+ * ⚠️ 必须补 `/entity/` 前缀：路由表注册的是 `entity/:area/:controller`，
+ * 若只拼 `/{area}/{controller}` 会落到 catch-all 重定向回 /dashboard，点击菜单「没反应」
+ * （2026-09-13 CubeSkillLab 真机验收发现）。
  */
 function onNavigate(url: string) {
   if (!url) return;
   const stripped = url.replace(/^~/, '').replace(/^\/+/, '').replace(/^api\//i, '');
   const parts = stripped.split('/').filter(Boolean).slice(0, 2);
   if (!parts.length) return;
-  const target = '/' + parts.join('/');
+  const target = '/entity/' + parts.join('/');
   if (target === route.path) return;
   router.push(target);
 }

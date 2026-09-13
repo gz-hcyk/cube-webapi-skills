@@ -94,7 +94,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 // TDesign 事件回调类型：**必须从 'tdesign-vue-next' 根导入**，不可自行声明窄类型。
 // t-menu 的 @change/@expand 回调签名是 `(value: MenuValue[])`（MenuValue = string | number），
 // 若写成 `(vals: string[])` 会在严格模式下参数逆变检查失败 → TS2322。
@@ -256,23 +257,34 @@ onMounted(async () => {
   }
 });
 
+// 路由变化时同步高亮 + 展开（菜单组件随布局常驻，不随导航重挂载，
+// 若不 watch，点品牌/用户菜单跳回 dashboard 后高亮会卡在旧项）。
+watch(() => route.path, syncActiveByRoute);
+
 /** 根据当前路由，默认只高亮 + 展开对应的父菜单（同层互斥，一次仅一个） */
 function syncActiveByRoute() {
-  const hash = location.hash.replace(/^#\/?/, '');
-  const segs = hash.split('/').filter(Boolean).slice(0, 2).join('/').toLowerCase();
-  if (!segs) return;
+  // ⚠️ 路由用 createWebHistory（无 hash），不能读 location.hash；改为读 vue-router 当前路径。
+  // 否则 history 模式下 hash 恒为空 → 高亮/展开永远不触发（2026-09-13 CubeSkillLab 复盘发现的伴随缺陷）。
+  const p = (route.path || '').replace(/^\/+/, '');
+  const segs = p.split('/').filter(Boolean);
+  // 路由形态可能是 /entity/{area}/{controller} 或 /{area}/{controller}，统一去掉 entity 前缀
+  const start = segs[0] === 'entity' ? 1 : 0;
+  const cur = segs.slice(start, start + 2).join('/').toLowerCase();
+  if (!cur) return;
   for (let i = 0; i < menus.value.length; i++) {
     const node = menus.value[i];
     if (!hasChildren(node)) continue;
     for (const c of childrenOf(node)) {
       const cu = urlOf(c).replace(/^\/+/, '').replace(/^api\//i, '').toLowerCase();
-      if (cu && cu.startsWith(segs)) {
+      if (cu && cu.startsWith(cur)) {
         active.value = pathOf(c, childrenOf(node).indexOf(c));
         expanded.value = [pathOf(node, i)];
         return;
       }
     }
   }
+  // 当前路由在菜单中无对应项（如落地 /dashboard）→ 清除高亮，避免旧项残留
+  active.value = '';
 }
 
 function onClick(node: any) {

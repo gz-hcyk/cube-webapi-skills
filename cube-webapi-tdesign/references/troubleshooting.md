@@ -533,3 +533,29 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
   （否则会去拉 `/api/{area}/CreateUser` 这类不存在的控制器）；纯枚举字段（无 `lovCode` / 无 `map` / 无 `dataSource`）
   走官方 `/Cube/Lookup`（**根族，无 `/api` 前缀**）。
   ⚠️ 探测顺序别写反：应先 `getRaw('/Cube/Lookup')`（实测 200），再兼容回退 `getApi`（带 `/api` → 404）。
+
+## G13 菜单点击「没反应」：onNavigate 漏 `/entity/` 前缀 + 高亮读错 location.hash（2026-09-13 CubeSkillLab 真机验收发现）
+
+- ★★★ **症状**：登录后左侧菜单点击任意业务项，URL 闪一下又回到 `/dashboard`，页面内容不变；
+  品牌 logo / 用户菜单「返回仪表盘」也看似无效。**控制台无报错、网络无 404**（最隐蔽的一类）。
+
+- ★★ **根因 1（导航失效）**：`BasicLayout.onNavigate()` 把后端菜单 url（如 `/Lab/LabAsset`）
+  归一化成 `/{area}/{controller}`，但**路由表注册的是 `entity/:area/:controller`**（带 `entity` 前缀）。
+  `/Lab/LabAsset` 没有对应路由 ⇒ 被 `router` 的 catch-all `/:pathMatch(.*)*` 重定向回 `/dashboard` ⇒
+  观感「点击没反应」。
+  - 修复：`onNavigate` 必须拼 `/entity/` 前缀 → `target = '/entity/' + parts.join('/')`。
+  - ⚠️ **文档对、代码错**：SKILL.md §「url → 路由归一化」已写明落到 `/entity/{Area}/{Ctrl}`，
+    但生成代码曾写成 `'/' + parts.join('/')` —— 这是与 D1 同类的「文档写了正确契约、生成代码相反」缺陷，
+    **生成代码必须以文档契约为准**。
+
+- ★★ **根因 2（高亮/展开永久失效）**：`MenuSidebar.syncActiveByRoute()` 原读 `location.hash`
+  来判定当前路由。但路由用的是 `createWebHistory`（**无 hash**）⇒ `location.hash` 恒为空 ⇒
+  高亮与父分组展开永远不触发（菜单虽能点，但当前项不高亮、父菜单不展开，观感「菜单是死的」）。
+  - 修复：改用 `useRoute()` 的 `route.path`；并在 `onMounted` 外补 `watch(() => route.path, syncActiveByRoute)`
+    （菜单组件随布局常驻、不随导航重挂载，不 watch 则跳回 dashboard 后高亮卡在旧项）。
+
+- **验收判据（必须真机点一下，不能只断言渲染）**：
+  用 CDP 直驱 headless Chrome：`login → 点击「实验室资产」→ 断言 location.pathname === '/entity/Lab/LabAsset'`
+  `→ 点击品牌 logo → 断言 === '/dashboard'`。
+  纯渲染断言（菜单有数据、列表有行）发现不了这个 bug——**导航必须实测跳转**。
+
