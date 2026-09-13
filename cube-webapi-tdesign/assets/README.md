@@ -6,7 +6,7 @@
 ```bash
 # 并入既有 Vue3 + Vite 工程（core 为必拷项，路径已镜像 src/）
 cp -r assets/core/.  <你的工程>/src/
-# 按需追加可选件（示例：角色授权页 / 金额输入 / 代码编辑器）
+# 按需追加可选件（示例：角色授权页 / 金额输入 / 令牌板）
 cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/components/cube/
 ```
 
@@ -35,12 +35,13 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/com
 
 - **真相源 = `references/scaffold/src/`**（历史在完整依赖环境下 `vue-tsc --noEmit` 与 `vite build` 0 错误、CDP 实测过；**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
 - 改任一资产：**先在 scaffold 的已装依赖工作副本内改并编译验证 0 错误**，再同步回本目录；禁止只改本目录。
-- 一致性可用一行校验（应仅剩工程外壳 + 可选件差异）：
+- **一致性校验用脚本，不要手写 `diff`/`find`**（`find`+进程替换在 Windows Git Bash 下不可靠，且只比文件名、不比内容）：
 
 ```bash
-diff <(cd assets/core && find . -type f | sort) \
-     <(cd references/scaffold/src && find . -type f | sort | grep -vE '^\./(main\.ts|App\.vue|router/|vite-env\.d\.ts|pages/LovDemoView\.vue|components/cube/(PriceYuanInput|RoleMenuEditor|ThemeShowcase)\.vue)')
+node references/scripts/check-assets-copied.mjs references/scaffold   # 期望：缺失 0 · 漂移 0（退出码 0）
 ```
+
+  逐文件 MD5 比对 + 已下线黑名单反扫，判据见 `references/scripts/README.md`。同一命令换目标路径即可查任意业务工程是否真的把 `assets/` 并入且未漂移。
 
 `scaffold/src` 相对 `assets/core` 只多出「工程外壳」4 个文件
 （`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，

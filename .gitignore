@@ -1,3 +1,8 @@
 .DS_Store
 Thumbs.db
 *.tmp
+
+# 验收/探针脚本的临时落盘报告（--out 产物、stdout 被终端吞掉时的旁路）
+**/references/scripts/_*.txt
+**/references/scripts/_*.mjs
+**/*.report.txt

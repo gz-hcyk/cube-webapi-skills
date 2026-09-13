@@ -116,6 +116,53 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 **判定依据**：`GetMenuTree` 下发的父子结构、`mapField` 中的 `ParentID` 关联、或字段命名 `*Line`/`*Item`/`*Detail` 约定。凡 `*Line` 实体一律视为子表，不单独建菜单与列表页。
 **与 §4.7 树形表格的区别**：本铁律针对**两个实体**的一对多关系；单实体 `ParentID` 自引用的树形（如 Department/Menu）仍走 §4.7 的 treeTable，二者不可混淆。
 
+## 三条主线（唯一工作流：先读本节，再看细节）
+
+新建或改造一个「魔方 WebApi + TDesign 前端」工程只有三步，**每步有出口校验，不过不进下一步**。
+
+| 步 | 动作 | 命令 / 入口 | 本步铁律 | 出口校验（机器可判） |
+|---|---|---|---|---|
+| **① 初始化** | 官方 CLI 生成骨架 | `npx tdesign-starter-cli@0.5.3 init <名> -type vue3 -bt vite -temp lite`（细节 §4.1） | **C1** | `node references/scripts/check-starter-align.mjs <工程>` → **退出码 0** |
+| **② 资产复用** | 技能 `assets/` 并入工程 `src/` | `cp -r assets/core/. <工程>/src/`（映射表 §11.1） | C2 / C3 / H1~H3 / 父子表 | `node references/scripts/check-assets-copied.mjs <工程>` → **0 FAIL**（WARN 逐条确认） |
+| **③ 个性化** | 改必改项 + 按需选装 | 边界见本节末表；任务落点 §三 | M1~M5 / L1~L4 / R3 | 编译 0 错误 + §七 checklist + §4.21 人工核查 |
+
+**为什么两个出口脚本是必需的**：① 步的偏离（缺骨架文件 / 留着 `prepare`）会以 `npm install` 退出码 1 暴露，尚可定位；② 步的偏离却是**静默**的——本技能资产曾因版本不同步，在真实工程里留下**被引用着**的早期组件，而文档同时白纸黑字写着「已下线，勿找」。把这两类问题前移到机器可判，③ 步才只需处理业务语义。
+
+### 铁律 ↔ 步骤归属（哪一步会撞上哪条）
+
+| 步 | 铁律 | 一句话 | 正文 |
+|---|---|---|---|
+| ① | **C1** 强制 CLI | 工程必须由 `td-starter init` 生成，禁手搭 `package.json`/`tsconfig`/`index.html` | §4.1 |
+| ② | **C2** 品牌色三处同源 | `tokens.css` / `setting.DEFAULT_BRAND` / `theme/tokens.ts` 三处均为 `#0f4c9e` | 文件头 |
+| ② | **C3** 暗黑三处接线 | `main.ts` 引 `theme-dark.css` + 调 `setting.load()` + `BasicLayout` 挂 `SettingPanel`，缺一即「等于没做」 | 文件头 |
+| ② | **H1** 唯一 HTTP 层 | 全项目只有 `api/http.ts`（`http` + `rawHttp` 双实例），禁第二套 axios | §4.2 |
+| ② | **H2** 令牌头单向 | 只发 `Authorization: Bearer`（附 `X-Tenant`），禁 `Authentication` | 文件头 |
+| ② | **H3** 代理白名单 | vite 代理只放 `/api` `/Auth` `/Mfa` `/cube` `/Content` `^/Admin/Index/`，**勿代理 SPA 路由** | §六-9 |
+| ② | **父子表** | 一对多只在父表页呈现，子表不进菜单、无独立路由与独立权限位 | 文件头 |
+| ③ | **M1~M5** 菜单 | 动态菜单树 + 同层互斥展开 + 一级图标分配 | §4.12 |
+| ③ | **L1~L4** 登录页 | 文案按项目生成、不预填账号、不暴露实现细节、无租户选择 | §4.3 |
+| ③ | **R3** category 分 tab | 表单/详情按字段 `category` 分组为 tab | §4.19 |
+
+> ②③ 的分界：**② 拷全即合规**——铁律由资产自身满足，逐文件与 `assets/` 一致即通过，所以能机器判；**③ 无模板可抄**，必须按项目实况落地，所以只能清单判。
+
+### ③ 的边界：必改 vs 可选
+
+**最短可用路径 = 只做下「必改」4 项**，工程即可登录、出菜单、跑通实体 CRUD；其余全部按需。
+
+| 类别 | 项 | 落点 |
+|---|---|---|
+| **必改** | 后端基址 `VITE_API_BASE` / `VITE_SERVER_BASE`（同源部署留空则自动落 `/api`） | §九-2 |
+| **必改** | dev proxy `target` 指向真实后端（写 `127.0.0.1`，勿 `localhost`） | §九-1 / H3 |
+| **必改** | 路由默认落地页（勿留模板值如 `/Admin/User`） | §4.12 / M3 |
+| **必改** | 登录页左栏 `PROJECT` 文案（按项目生成，禁技术栈话术） | L1 / §4.3 |
+| 必改（有实体时） | 实体页只传本项目实际的 `area`+`controller`（§4.6 是唯一手写点） | §4.6 |
+| 可选 | 品牌色 / 暗色 chrome（默认政务蓝 + 可切暗色，拷入即可用） | §4.14 / §4.16 |
+| 可选 | 值集 LOV / LIST 型值集 / 内联枚举 | §4.20 / §4.21 |
+| 可选 | 特殊控制器专属页（`ConfigController<T>` / `ControllerBaseX`） | §4.17 / §4.18 |
+| 可选 | 搜索栏与统计行、一级菜单图标、角色权限编辑、TreeTable | §4.13 / §4.12.3 / §4.12.1 / §4.7 |
+| 可选 | `assets/optional/` 三件（令牌板 / 金额输入 / 图标选择） | §11.1 表 |
+| 可选 | `category` 分 tab、多租户头、审计字段排除等精细化 | §4.19 / §4.9 |
+
 ## 一、核心哲学：继承式（配置式）页面
 
 魔方 MVC（`List.cshtml` + `_Form_*` 分部视图 + `ListTree.cshtml`）「共享骨架 + 按字段选视图 + 树形局部特化」平移到 Vue：
@@ -134,18 +181,22 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。
 
-## 三、标准工作流（从零搭建）
+## 三、第③步的内部顺序（落点索引）
 
-| 步骤 | 动作 | 拷贝源 → 目标 | 要点 |
-|---|---|---|---|
-| 1 脚手架 | `td-starter init`（Vue3+TS+Vite+Pinia） | — | 结构：`api/ store/ pages/ layouts/ router/`；新工程一律走此 CLI，禁止从零手搭（§九） |
-| 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **全项目唯一 HTTP 层**，导出**双实例**（铁律 H1）：`http`（`baseURL=API_BASE`，**已含 `/api`**，实体接口只写 `/{area}/{ctrl}`）+ `rawHttp`（`baseURL=SERVER_BASE`，非实体端点/菜单树自带 `/api`）——方向相反勿混（H2）。头只发 `Authorization: Bearer`+`X-Tenant`/`X-Tenant-Id`；响应判 `code`+401 跳登录（带 refresh 重放一次）；**无全局 camelize**（键归一在 `useEntityResource.normalizeRows`）。`/api` 由后端 `CubeSetting.ApiPrefixes` 决定，前端经 `VITE_API_BASE`/`VITE_SERVER_BASE` 对齐 |
-| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts` | `references/demo/src/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
-| 4 资源/渲染器 | `useEntityResource.ts`/`fieldRender.ts`/`useLookups.ts`/`useLov.ts` → `src/api/` | 同上 | 见 §4.4/§4.8/§4.20 |
-| 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
-| 6 实体页 | `<ListPage area controller title />` | — | 见 §4.6 |
-| 7 外壳 | `menuTitles.ts`/`BasicLayout`/`tokens.css`/`SettingPanel` 等 | `assets/` + `references/scaffold/src/**` | 见 §4.12/§4.14-16/§4.18（菜单树归一化**无独立模块**：已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`） |
-| 8 验收 | checklist（§六）+ §4.21 枚举/外键渲染核查 | — | 编译 0 错误铁律 |
+「三条主线」给出骨架；本表是第③步内部的执行顺序与正文落点。**命令与拷贝源只在 §4.1 / §11.1 各写一遍**（此处原先重复的整段命令与逐文件点名已收敛，避免两处口径打架）。
+
+| # | 任务 | 正文落点 |
+|---|---|---|
+| 1 | 工程骨架（`api/ store/ pages/ layouts/ router/`；禁从零手搭） | §4.1 |
+| 2 | 请求层 `http`/`token`/`camel`（**唯一 HTTP 层** H1；`http` 已含 `/api`、`rawHttp` 不带 —— 方向相反勿混，H2） | §4.2 |
+| 3 | 鉴权 `stores/auth`（登录契约见下段；按钮显隐真源是 `GetPage.setting`） | §4.3 / §4.10 |
+| 4 | 实体资源与渲染器（`useEntityResource` / `fieldRender` / `useLookups` / `useLov`） | §4.4 / §4.8 / §4.20 |
+| 5 | 基类组件（`ListPage` / `FormDialog` / `DetailDrawer`，**自包含**，搜索栏/工具条/分页已内联） | §4.5 |
+| 6 | 实体页（**唯一手写点**：`<ListPage area controller title />`） | §4.6 |
+| 7 | 外壳（`menuTitles` / `BasicLayout` / `tokens.css` / `SettingPanel`；菜单树归一化**无独立模块** —— 已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`） | §4.12 / §4.14~4.16 / §4.18 |
+| 8 | 验收（编译 0 错误铁律 / §七 checklist / §4.21 枚举与外键渲染核查） | §七 / §4.21 |
+
+> **类别口径**：上表 1~5、7 全是**拷贝即用**（`assets/` 拷入即合规，逐文件与真源一致即通过，故由 `check-assets-copied.mjs` 机器判）；**唯一「必改」在本表内是第 6 项**（实体页只保留本项目实际的 `area`+`controller`）。第③步其余必改项（基址 / proxy `target` / 默认落地页 / 登录页文案）见上文「③ 的边界」表。
 
 **登录契约（当前版本 AuthController，SPA 用，实测）**：端点 `POST /Auth/Login` + `GET /Auth/LoginConfig` + `/Auth/Challenge` + `/Auth/Refresh` + `/Mfa/*`（**均不带 `/api` 前缀**；`/Admin/User/Login` 只留 MVC/SSO）。请求体 `{ username, password, category(枚举整数: Password=0/Mobile=1/Mail=2/OAuth=3，禁字符串), remember, challengeId, captchaId, captchaCode }`。响应令牌键名实测 **snake_case**（`access_token`/`refresh_token`/`expire_in`），`auth.ts` 的 `normToken` 三向兜底（snake/camel/Pascal），统一读 camelCase。`challengeRequired===true` 才走 RSA-OAEP Challenge；其余开关同理 `===true` 才启用。`LoginConfig` 的 `oAuth` 键名实测**大写 A**（文档写小写），`getLoginConfig` 双向归一、页面读 `config.oAuth`。详见 troubleshooting G1/G7。
 
@@ -519,7 +570,7 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 1. 枚举字段：确认 `lovCode === "Enum.{命名空间}.{枚举名}"`（后端 `SetLov` 下发），且 `/api/Admin/Lov/Meta?lovCode=...` 返回中文 `label`；
 2. 外键字段：确认虚拟显示字段 `mapField` 指向真实列，且 `lookups` 能取到 id→名；
 3. 前端：字段渲染为 select/multi-select/tree-select，而非文本/数字框。
-> 待补：上述清单的自动化门禁脚本（未来可置于 `references/scripts/` 下、与 `fieldRender.ts` 同源维护），落地前勿在文档中承诺「可执行/退出码 1」。
+> **门禁现状（勿夸大）**：`references/scripts/check-assets-copied.mjs` 管的是**第②步「资产是否并入」**（逐文件一致 + 已下线残留），它**不**校验本条清单。本清单依赖运行期数据（服务端 `GetPage` / `Lookup` 的实际返回），无法静态判定，**仍是人工核查项**——勿在文档或 CI 中声称它「可执行、退出码 1」。
 
 ## 四、字段类型 → 组件映射速查
 
@@ -565,15 +616,26 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 
 ## 七、推荐检查项（验收 checklist）
 
+按「三条主线」分三组。**每组的首条即该组的退出条件**——能机器判的给脚本与退出码，判不了的明说人工。
+
+### ① 骨架 —— 退出条件：`check-starter-align.mjs` 退出码 0
+
+- [ ] **C1** 工程由 `td-starter init <名> -type vue3 -bt vite -temp lite` 生成，且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架 8 件齐全、`prepare` 已删、`vue-router`/`pinia`/`axios` 已补、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点）
+- [ ] 工程根保留 CLI 骨架 8 件（`index.html` `package.json` `tsconfig.json` `tsconfig.node.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/vite-env.d.ts`）
+- [ ] `scripts.prepare` 已删除；`vue-router`/`pinia`/`axios` 已补；`@` 别名 vite + tsconfig 成对
+- [ ] tsconfig 编译策略若有偏离，工程 README 有「已声明偏差」段
+
+### ② 资产并入 —— 退出条件：`check-assets-copied.mjs` 0 FAIL（WARN 逐条确认）
+
+- [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
+- [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
 - [ ] `src/api/`（`api/http` + `api/token` + `utils/camel` + `fieldRender` + `useEntityResource` + `useLookups` + `useLov` + `menuTitles` + `stores/auth`）与三个基类组件已落地 `src/components/cube/`
-- [ ] 实体页仅传 `area`+`controller` 复用基类，未重复手写表格/表单
 - [ ] 含 `ParentID` 实体自动 treeTable + 表单树形下拉；列表 `xxxID` 显名非原始 ID；详情经 `labelOf` 回显（遍历原始 DataField[]）
 - [ ] 实体/动作控制器判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为权威（非权限位 `{2,4,8}` 启发式；`Log` 权限位仅 `[1]` 却是只读实体控制器，已白名单放行；见 §4.12.2）
 - [ ] 选型由元数据驱动（selectListComponent/selectFormControl），未硬编码控件类型
 - [ ] 新增/编辑/删除按钮按 `GetPage.setting` 与菜单树显隐
 - [ ] 令牌只发 `Authorization: Bearer`（附 `X-Tenant`/`X-Tenant-Id`；**无** `Authentication` 头）；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
 - [ ] 登录页按 `LoginConfig` 动态组装（系统名/Logo/背景/login 开关/注册/oAuth/版权/备案），静态资源走 `/Content`
-- [ ] **登录页铁律 L1~L4**：左栏 `PROJECT` 文案按项目生成（无「NewLife.Cube · TDesign Vue Next」等技术栈话术）；账号/密码未预填（非 `admin`/`admin`）；页面无接口路径/加密方式/配置开关等实现细节文案；**登录页与注册页均无租户选择控件、表单无 `tenant` 字段**（租户走登录响应头 `X-Tenant`）
 - [ ] 侧栏菜单 = `MenuSidebar` + **`/Admin/Index/GetMenuTree`（无 `/api` 前缀；带前缀 → 404）**，按设计系统落地（图标/激活态），submenu `:value` 唯一；**M5 同层互斥展开 = 垂直菜单 `:expand-mutex="true"`（勿写 `accordion`：1.20.7 无此 prop，写了不报错但无效）**，同级同时展开数 ≤ 1；**H3 vite 代理必须含 `'^/Admin/Index/'`**，否则请求落 SPA 兜底 → 菜单静默为空
 - [ ] 搜索栏由 `GetPage.search` 驱动（字符串入 Q、数值/枚举/布尔/日期走字段参数、日期范围 dtStart/dtEnd），`Index.stat` 已展示
 - [ ] 未把 GetPage schema 当行数据（**数据行端点 = `GET /api/{area}/{ctrl}`（无 action 段），`GetPage` 只给字段描述符、`data.list` 是列定义非行**）；`extractListPayload` 不读 `list`
@@ -586,11 +648,14 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 - [ ] `MessagePlugin` 用法；`@submit` 无 `.prevent`；路由视图 `:key="route.path"`；`pagination` 稳定 reactive；init 幂等
 - [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（**后端 `data` 下键本就是小写驼峰**，非前端 camelize）；`InlineEnums` 字典键**已随全局 camelize 移除而不再被破坏**，`useLov` 另留大小写不敏感复原兜底——改后实测 `refLovCode` 翻译列已出中文
 - [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
-- [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染，无违规；改契约/登录代码已做 dist 产物核验闭环
 - [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
-- [ ] **C1** 工程由 `td-starter init <名> -type vue3 -bt vite -temp lite` 生成，且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架 8 件齐全、`prepare` 已删、`vue-router`/`pinia`/`axios` 已补、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点）；tsconfig 编译策略的偏离已在工程 README 显式声明
-- [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
-- [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
+
+### ③ 个性化 —— 退出条件：`vue-tsc --noEmit` 0 错误（编译清零铁律）+ 下列人工项
+
+- [ ] 实体页仅传本项目实际的 `area`+`controller` 复用基类，未重复手写表格/表单
+- [ ] **登录页铁律 L1~L4**：左栏 `PROJECT` 文案按项目生成（无「NewLife.Cube · TDesign Vue Next」等技术栈话术）；账号/密码未预填（非 `admin`/`admin`）；页面无接口路径/加密方式/配置开关等实现细节文案；**登录页与注册页均无租户选择控件、表单无 `tenant` 字段**（租户走登录响应头 `X-Tenant`）
+- [ ] 路由默认落地页已按项目改（M3，勿留模板值）；dev proxy `target` 已指向真实后端
+- [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染（**该步无脚本可代**，见 §4.21 门禁现状）；改契约/登录代码已做 dist 产物核验闭环
 
 ## 八、最小可运行 Demo（端到端验证脚手架）
 
@@ -640,15 +705,13 @@ PY
 
 ## 十一、新工程初始化与内置模块页面模板复用（tdesign-starter-cli）
 
-**默认规则（铁律 C1）**：新建「魔方 WebApi + TDesign 前端」工程**必须**用 tdesign-starter-cli 初始化 + 拷入本技能模板，**禁止从零手搭**。初始化流程、四条实测硬约束（`-temp` 只能 `lite` / 必删 `prepare` / 必补三件套 / 无 `.gitignore`）与验证命令见 **§4.1**。
-```bash
-npx tdesign-starter-cli@0.5.3 init <项目名> -type vue3 -bt vite -temp lite
-```
+**默认规则（铁律 C1）**：新建「魔方 WebApi + TDesign 前端」工程**必须**用 tdesign-starter-cli 初始化 + 拷入本技能模板，**禁止从零手搭**。初始化命令、四条实测硬约束（`-temp` 只能 `lite` / 必删 `prepare` / 必补三件套 / 无 `.gitignore`）与出口校验**只在 §4.1 写一遍**——本节只讲「资产如何并入」，命令见 §4.1。
 
 ### 11.1 拷入技能模板（assets/ → 目标路径映射）
 
 > **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、自带 Mock 后端可端到端跑；「编译 0 错误」是**在完整依赖环境下的历史结论**，随包 `node_modules`/`dist` 已清空为声明式，用前先 `npm install`），只改 `vite.config.ts` 的代理 target。
-> 两条必跑校验：① `node references/scripts/check-starter-align.mjs <工程目录>`（CLI 产物形态，期望 0 FAIL）；② 若走「并入既有工程」路线，**必须**先按 §4.1 用 CLI 生成骨架，再把 `assets/` 并入 —— 不得凭空手搭 `package.json`/`tsconfig`/`index.html`。下表用于「并入既有工程」的对照拷贝。
+> **第②步出口校验（拷完 assets 立刻跑）**：`node references/scripts/check-assets-copied.mjs <工程目录>` —— 逐文件比对 `assets/core/**` 与 `<工程>/src/**`：**缺文件 = FAIL**（core 之间是静态 import 关系，缺一即构建失败）；**内容漂移 / 命中已下线黑名单 = WARN**（版本不同步或拷了旧版资产，须逐条确认）。加 `--manifest` 打印映射表与黑名单，`--strict` 让 WARN 也计入失败。
+> 另两条必跑：`node references/scripts/check-starter-align.mjs <工程目录>`（第①步出口，期望退出码 0）；若走「并入既有工程」路线，**必须**先按 §4.1 用 CLI 生成骨架再并入 —— 不得凭空手搭 `package.json`/`tsconfig`/`index.html`。下表用于「并入既有工程」的对照拷贝。
 
 `assets/` **按「核心 / 可选」二分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
 
@@ -699,13 +762,15 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 
 `t-layout + t-aside + t-menu` 组件化导航，禁手写 `<nav>+router-link`。折叠 `collapsed` 默认 true（`t-menu :collapsed` + Header 触发按钮，`t-aside :width` 64/232 + transition）；二级分组用 `t-submenu`（勿 `t-menu-group`，折叠后无法弹出）；单开互斥用 TDesign 内置 `expand-mutex`；图标 `tdesign-icons-vue-next`（`<component :is>` 渲染，存在性以包 `dist/index.js` 字符串为准，如 `SyncIcon` 不存在用 `SwapIcon`）；防挤压三件套（aside `flex-shrink:0` + 内层 `min-width:0` + 菜单独立滚动容器）。
 
-## 推荐检查项（收尾自检）
+## 收尾自检（三条主线各一个「不过就不交付」的硬门）
 
-- [ ] **`node references/scripts/check-starter-align.mjs <工程目录>` 退出码 = 0**（C1 可验证：工程仍是 tdesign-starter CLI 产物形态；有 FAIL 未修完不得交付）
-- [ ] 工程根保留 CLI 骨架 8 件（`index.html` `package.json` `tsconfig.json` `tsconfig.node.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/vite-env.d.ts`）
-- [ ] `scripts.prepare` 已删除；`vue-router`/`pinia`/`axios` 已补；`@` 别名 vite + tsconfig 成对
-- [ ] tsconfig 编译策略若有偏离，工程 README 有「已声明偏差」段
-- [ ] 前端 `vue-tsc --noEmit` 0 错误（编译清零铁律）
-- [ ] 登录 → 跳 `/dashboard`；菜单与权限来自 GetMenuTree
-- [ ] 全量陷阱排障走 `references/troubleshooting.md`，不再依赖正文内联
-- [ ] 新增引用文件路径有效（assets/、references/ 下的引用路径均存在）
+§七 是**完整**验收清单（按三步分组、每步首条即退出条件），此处**只留硬门与入口，不重复逐条**。
+
+| 步 | 硬门（机器判，不过即不交付） | 判不了的部分（人工 / 运行期） |
+|---|---|---|
+| ① 骨架 | `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 0** | 工程仍是 CLI 产物形态（未手工重排 `package.json`/`tsconfig`/`index.html`） |
+| ② 资产 | `node references/scripts/check-assets-copied.mjs <工程目录>` **0 FAIL**；WARN 须逐条确认，判定为「有意偏离」的写进工程 README「已声明偏差」段 | `assets/` 更新后**重新拷贝**，而不是就地改目标工程（否则下次同步即漂移） |
+| ③ 个性化 | `vue-tsc --noEmit`（或 `npm run build`）**0 错误**（编译清零铁律） | §4.21 枚举/外键渲染核查；登录 → 跳 `/dashboard`；菜单与权限来自 `GetMenuTree` |
+
+- 全量陷阱排障走 `references/troubleshooting.md`（正文只留结论，不内联过程）。
+- **技能自身维护**（改 `assets/` 或 `references/scaffold/` 之后）：跑 `scan-assets-dead.mjs` + `scan-assets-refs.mjs`，并确认正文新增引用路径（`assets/`、`references/`）均存在。

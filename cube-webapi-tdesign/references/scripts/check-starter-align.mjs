@@ -362,9 +362,41 @@ function printManifest() {
   REQUIRED_DEPS.forEach((d) => console.log(`   · ${d}`));
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// 注意：Windows 下 `path.resolve(process.argv[1])` 与 `import.meta.url` 的大小写可能不一致
+// （`admin` vs `Admin`），直接相等比较会**静默不执行任何校验并返回 0**，故先归一化。
+const samePath = (a, b) => {
+  let x = path.resolve(a);
+  let y = path.resolve(b);
+  try {
+    x = fs.realpathSync.native(x);
+  } catch {}
+  try {
+    y = fs.realpathSync.native(y);
+  } catch {}
+  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
+};
+const isMain = process.argv[1] && samePath(process.argv[1], fileURLToPath(import.meta.url));
 if (isMain) {
-  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  // --out <file>：报告落盘（Windows 终端可能吞掉 stdout，此时只能靠文件读结果）
+  const outIdx = process.argv.findIndex((a) => a === '--out' || a.startsWith('--out='));
+  const outFile = outIdx < 0 ? null : process.argv[outIdx].includes('=') ? process.argv[outIdx].split('=')[1] : process.argv[outIdx + 1];
+  if (outFile) {
+    // 必须**同步**写：本脚本全程同步执行并以 process.exit() 收尾，
+    // 异步流（createWriteStream）的 open() 还没完成进程就退出了 —— 文件根本不会生成。
+    try {
+      fs.writeFileSync(outFile, '');
+    } catch (e) {
+      console.error(`无法写入 --out 文件：${outFile}（${e.message}）`);
+    }
+    const orig = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk, ...rest) => {
+      try {
+        fs.appendFileSync(outFile, typeof chunk === 'string' ? chunk : String(chunk));
+      } catch {}
+      return orig(chunk, ...rest);
+    };
+  }
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--') && a !== outFile);
   if (process.argv.includes('--manifest')) {
     printManifest();
     process.exit(0);
