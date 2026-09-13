@@ -29,7 +29,7 @@ CLI 产物 13 项，本目录**主动移除 3 项 + 未携带 `.npmignore`**，�
 
 | # | 约定 | 落点 | 验收方式 |
 |---|---|---|---|
-| 1 | **由 td-starter 生成** | 工程配置文件保持 CLI 产物形态（`package.json` / `vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`）；本 README 上方注明 CLI 版本 | `node ../scripts/check-starter-align.mjs .` **退出码 = 0**（CLI 骨架存在性 / 无 `prepare` / 三件套依赖 / `@` 别名 / favicon 全部机检）；另 `npm install && npm run build` 通过（历史实测；依赖不随包携带、已清空为声明式，复现见「使用方式」上方前置条件） |
+| 1 | **由 td-starter 生成** | 工程配置文件保持 CLI 产物形态（`package.json` / `vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`）；本 README 上方注明 CLI 版本 | `node ../scripts/check-starter-align.mjs .` **退出码 = 0**（CLI 骨架存在性 / 无 `prepare` / 三件套依赖 / `@` 别名 / favicon 全部机检）；另 `npm install && npm run build` 通过（**2026-09-13 复测：exit=0 / 3938 模块 / JS 8,845.54 kB / 29.13s**；依赖不随包携带、已清空为声明式，复现见「使用方式」上方前置条件） |
 | 2 | **默认品牌色 = 政务蓝 `#0f4c9e`** | `src/styles/tokens.css`（`--td-brand-color` 及全色阶）；`src/stores/setting.ts` 的 `DEFAULT_BRAND`；`src/theme/tokens.ts` | 首屏无自定义时即为政务蓝；设置面板「政务蓝」置首 |
 | 3 | **支持切换暗黑模式** | `src/styles/theme-dark.css` + `src/stores/setting.ts`（`mode: light/dark`，切 `<html>.t-theme-dark`）+ `src/main.ts` 首屏 `load()` + **`BasicLayout.vue` 挂载 `SettingPanel.vue`**（悬浮齿轮按钮，UI 唯一入口） | 点右下角齿轮 → 主题模式切「暗色」，页面即时变暗 |
 
@@ -114,7 +114,7 @@ npm run build                                         # vue-tsc --noEmit && vite
 npm run typecheck                                     # 仅类型检查
 ```
 
-> ⚠️ **前置条件（实测口径）**：本目录**不随技能携带依赖与构建产物**（`node_modules`、`dist` 均已清空为声明式，仅留 `package.json`/`package-lock.json` 等源文件），故 `npm run typecheck` / `npm run build` **必须先 `npm install` 补齐依赖**才能执行。本目录声称的「编译 0 错误」是**在完整依赖环境下取得的历史结论**，**不是**当前目录内可直接复现的状态。资产同步铁律的完整口径见 `assets/README.md` §「验证结论的适用范围」。
+> ⚠️ **前置条件（实测口径）**：本目录**不随技能携带依赖与构建产物**（`node_modules`、`dist` 均已清空为声明式，仅留 `package.json`/`package-lock.json` 等源文件），故 `npm run typecheck` / `npm run build` **必须先 `npm install` 补齐依赖**才能执行。本目录声称的「编译 0 错误」**已于 2026-09-13 在本机完整依赖环境下复测确认**（`vue-tsc --noEmit` exit=0；`vite build` exit=0，3938 模块 / JS 8,845.54 kB / 29.13s），但该结论**不是**当前目录内可直接复现的状态——**须先装依赖**。资产同步铁律的完整口径见 `assets/README.md` §「验证结论的适用范围」。
 
 - **唯一必改项**：`vite.config.ts` 的 `VITE_API_TARGET`（默认 `http://127.0.0.1:5052`）。
 - **代理范围**：`/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content`；

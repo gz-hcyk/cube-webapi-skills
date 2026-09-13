@@ -12,7 +12,7 @@ cp -r assets/core/.  <你的工程>/src/
 
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
-| `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install` | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
+| `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install`。★ 2026-09-13 **复测**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（**3938 模块** / CSS 472.45 kB / JS 8,845.54 kB gzip 971.38 kB / 29.13s） | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
 | `references/demo/` | **不随包携带依赖**（`node_modules`/`dist` 已清空，同 scaffold）；★ 2026-09-13 **双侧构建实证**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程 | **精简示例层**（层次独立，非同步目标）：体积约为 scaffold 同构版的 1/5，同名文件为 core 的 1/3~1/8；**登录页是极简版**（83 行纯账密，完整版在 scaffold）。独占资产仅注册/找回密码两页 |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
@@ -23,15 +23,15 @@ cp -r assets/core/.  <你的工程>/src/
 
 | 维度 | 实际情况 |
 |---|---|
-| **何时取得** | 曾在**完整安装依赖**的工程内跑通（`vue-tsc --noEmit` + `vite build` + CDP 实测）。⚠️ 本包已将 `node_modules`/`dist` **清空为声明式**，故不再有现场物证，一切以本记录 + 下方复现命令为准 |
+| **何时取得** | 曾在**完整安装依赖**的工程内跑通（`vue-tsc --noEmit` + `vite build` + CDP 实测）。★ **scaffold 侧已于 2026-09-13 在本机复测确认**（exit=0 / 3938 模块）；demo 侧另有独立实测（见末行）。⚠️ 本包已将 `node_modules`/`dist` **清空为声明式**，故不再有现场物证，一切以本记录 + 下方复现命令为准 |
 | **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
 | **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
 | **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
-| **`references/demo/` 里的「0 错误」** | **成立，但基线独立** —— demo 同样不随包携带依赖（`node_modules`/`dist` 已清空，须先 `npm install`）；2026-09-13 实测 `vue-tsc --noEmit && vite build` **exit=0**，故其「0 错误」是**实测结论**。⚠️ 该基线只对 demo 自身有效，**不可**用来推断 scaffold/core 资产已验证——demo 是精简层，同名文件与 core 的差异属**已知层次差异**（`DEMO-DIVERGENT` 白名单，见 `references/scripts/README.md`） |
+| **`references/demo/` 里的「0 错误」** | **成立，但基线独立** —— demo 同样不随包携带依赖（`node_modules`/`dist` 已清空，须先 `npm install`）；2026-09-13 实测 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），故其「0 错误」是**实测结论**。⚠️ 该基线只对 demo 自身有效，**不可**用来推断 scaffold/core 资产已验证——demo 是精简层，同名文件与 core 的差异属**已知层次差异**（`DEMO-DIVERGENT` 白名单，见 `references/scripts/README.md`）。**scaffold 的验证状态以其自身复测为准（同日 exit=0 / 3938 模块），不依赖 demo 反推** |
 
 ## ★ 唯一真相源与同步铁律
 
-- **真相源 = `references/scaffold/src/`**（历史在完整依赖环境下 `vue-tsc --noEmit` 与 `vite build` 0 错误、CDP 实测过；**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
+- **真相源 = `references/scaffold/src/`**（**2026-09-13 复测** `vue-tsc --noEmit` 与 `vite build` 0 错误、exit=0，3938 模块；历史上亦曾在完整依赖环境下编译并 CDP 实测过。**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
 - 改任一资产：**先在 scaffold 的已装依赖工作副本内改并编译验证 0 错误**，再同步回本目录；禁止只改本目录。
 - **一致性校验用脚本，不要手写 `diff`/`find`**（`find`+进程替换在 Windows Git Bash 下不可靠，且只比文件名、不比内容）：
 

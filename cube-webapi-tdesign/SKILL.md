@@ -232,7 +232,12 @@ node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 =
 **tsconfig 编译策略**改动属「工程选择」级偏离：允许，但**必须在工程 README 显式声明**。
 
 > 对照基线（已实测校准）：`references/scaffold/` = **0 FAIL**（生产级编排层，唯一真相源）；`references/demo/` = 0 FAIL（**静态口径**，含 1 条已声明的 tsconfig 策略 WARN）；两份 `README.md` 均含「已声明偏差」段。
-> ★ **2026-09-13 双侧构建实证**（补齐「demo 从未编译」这一长期空白）：装齐依赖后 `references/demo/` 侧 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s）；scaffold 侧同为 exit=0（3931 模块 / JS 8,844.10 kB）。⇒ **demo 是一个可独立构建通过的精简示例工程**，不是「装不起来的死样板」；但它是**层次独立**的（12 件同名文件为精简变体），**不是** scaffold 的同步目标。
+> ★ **2026-09-13 双侧构建实证**（同时补齐「demo 从未编译」与「scaffold 仅历史结论」两处长期空白）：装齐依赖后两侧**各自独立**跑通 `vue-tsc --noEmit && vite build`，**均 exit=0** ——
+> · `references/scaffold/`（唯一真相源）：**3938 模块** / CSS 472.45 kB / JS 8,845.54 kB（gzip 971.38 kB）/ 29.13s / dist 9.0 MB；
+> · `references/demo/`（基线）：3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s；
+> · `references/demo/`（按「20 动作迁移配方」改为 scaffold 同构后）：3931 模块 / CSS 473.32 kB / JS 8,844.10 kB / 40.70s。
+> ⇒ ① scaffold 的「0 错误」**本轮由历史结论升级为实测结论**；② demo 是**可独立构建通过**的精简示例工程，不是「装不起来的死样板」，但它是**层次独立**的（12 件同名文件为精简变体），**不是** scaffold 的同步目标；③ 迁移后 demo 与 scaffold 的 JS 体积仅差 **1.44 kB**（8,844.10 vs 8,845.54），反证「20 动作迁移配方」的完备性。
+> ⚠️ 上述三条各自独立取得，**均须先 `npm install`**（本包不携带 `node_modules`）；复现口径见 `assets/README.md` §「验证结论的适用范围」。
 
 ### 4.2 落地 API 请求层（唯一 HTTP 层）
 
