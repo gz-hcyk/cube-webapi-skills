@@ -702,6 +702,23 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 **判据**：手写的事件处理器出现 `TS2322 ... is not assignable to type '(value: X, context: {...}) => void'`，
 说明**参数类型写窄了**（TS 对函数参数做**逆变**检查）。必须把参数类型换成 TDesign 的官方类型，**不要在模板里写内联箭头 + 窄类型**。
 
+> ★★★ **但「与组件声明一致」不等于「抄某个小版本的具体类型名」**（2026-09-13 从零建 CubeAdmin 实测）：
+> 本包 `package.json` 声明的是 **caret 范围**（`tdesign-vue-next: ^1.20.2`）⇒ 今天新生成的工程会装到
+> **1.20.7**，而**同一个类型名在不同小版本里可能不是同一个东西**。实例：`t-dropdown` 的 `@click`
+> 参数在 1.20.2 是 `DropdownOption`，1.20.7 起改为 `TdDropdownItemProps['value']`
+> （`string | number | { [key: string]: any } | undefined`，见 `es/dropdown/type.d.ts` 的 `onClick` 声明）
+> ⇒ 资产里写 `function onUserMenu(d: DropdownOption)` 的代码在旧工程**编译通过**、在新工程**直接 TS2322**。
+> **正确做法**：参数类型写成**与包内声明等宽的并集**（不引用会漂变的类型名），取值时再自行收敛：
+> ```ts
+> type DropdownClickValue = string | number | { [key: string]: any } | undefined;
+> function onUserMenu(d: DropdownClickValue) {
+>   const value = d && typeof d === 'object' ? (d as { value?: string | number }).value : d;
+>   if (value === 'home') { /* … */ }
+> }
+> ```
+> **验收要求**：资产必须能在该 caret 范围内的**任意**小版本上 `vue-tsc --noEmit` 通过；
+> 改了依赖或换了包管理器后**必须重跑类型检查**（旧工程绿 ≠ 资产没问题，只说明它锁在旧小版本上）。
+
 | 症状 | 根因 | 修法 |
 |---|---|---|
 | `TS2322` on `@change`/`@expand` | `t-menu` 回调是 `(value: MenuValue[])`，写成 `(vals: string[])` | `import type { MenuValue }`；`function onChange(val: MenuValue)` + `String(val)` 归一 |
@@ -713,7 +730,8 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 | `TS2322` on `t-form @submit` | 回调是 `(ctx: SubmitContext)`（`validateResult` 在 ctx 里） | `function save(ctx: SubmitContext) { if (ctx.validateResult !== true) return; }` |
 | `t-input` 的 `type="email"` | `TdInputProps.type` 联合**没有 `'email'`**（只有 number/text/search/url/password/tel/submit/hidden） | 改 `type="text"`，格式校验交给校验规则 `{ type:'email' }`（见铁律 R2） |
 | `t-pagination` / `t-table :pagination="null"` 报类型错 | `TdPaginationProps` 不接受 `null` | 直接删掉该 prop（`props.pagination` falsy 即不渲染分页器，语义等价） |
-| `t-input-number` 的 `v-model` | `InputNumberValue = number \| string` | `ref<InputNumberValue>()`，空值用 `undefined` 而非 `null` |
+| `TS2322` on `t-input-number` 的 `v-model` | `InputNumberValue = number \| string` | `ref<InputNumberValue>()`，空值用 `undefined` 而非 `null` |
+| `TS2322` on `t-dropdown @click` | 参数类型**在 caret 范围内变过**：1.20.2 是 `DropdownOption`，1.20.7 起是 `TdDropdownItemProps['value']`（宽联合，含 `undefined`） | 写成**与包内声明等宽的并集**（见上方 `DropdownClickValue`），**不要**引用会漂变的类型名 |
 
 > **`t-input` 回车**：`@enter` 的签名是 `(value: InputValue, context: { e: KeyboardEvent })`，
 > 与 `t-form` 的 `@submit`（`SubmitContext`）**不同**，**不可共用一个 handler**——需单独写 `onSearchEnter()`，
@@ -843,6 +861,11 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 - [ ] 令牌只发 `Authorization: Bearer`（附 `X-Tenant`/`X-Tenant-Id`；**无** `Authentication` 头）；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
 - [ ] 登录页按 `LoginConfig` 动态组装（系统名/Logo/背景/login 开关/注册/oAuth/版权/备案），静态资源走 `/Content`
 - [ ] 侧栏菜单 = `MenuSidebar` + **`/api/Admin/Index/GetMenuTree`（区域族必带 `/api`；漏前缀 → 落 SPA 兜底、菜单静默为空）**，按设计系统落地（图标/激活态），submenu `:value` 唯一；**M5 同层互斥展开 = 垂直菜单 `:expand-mutex="true"`（勿写 `accordion`：1.20.7 无此 prop，写了不报错但无效）**，同级同时展开数 ≤ 1；**H3 vite 代理含 `'/api'` 一条即覆盖菜单端点**（勿再单加 `'^/Admin/Index/'`），否则请求落 SPA 兜底 → 菜单静默为空
+  - ★ **量「同级展开数」的判据别用 `.t-submenu__title`**（2026-09-13 踩两次）：该 class **只存在于 tdesign 的 CSS**，DOM 里组标题挂的是
+    `.t-menu__item`（两版实测一致）。用它取 `innerText` 恒为空串 → 「按文本找不到分组」+「openedCount 恒等于分组数」的**假 FAIL**。
+    正确量法：`li.t-submenu > div.t-menu__item > span.t-menu__content` 取组名、
+    `li.t-submenu > ul.t-menu__sub` 的 `getBoundingClientRect().height > 0` 判是否展开；
+    并**先做一次不点击的正向对照**（路由所在分组应已由 `syncActiveByRoute` 自动展开），否则「展开数 ≤ 1」会因量不到而恒真。
 - [ ] 搜索栏由 `GetPage.search` 驱动（字符串入 Q、数值/枚举/布尔/日期走字段参数、日期范围 dtStart/dtEnd），`Index.stat` 已展示
 - [ ] 未把 GetPage schema 当行数据（**数据行端点 = `GET /api/{area}/{ctrl}`（无 action 段），`GetPage` 只给字段描述符、`data.list` 是列定义非行**）；`extractListPayload` 不读 `list`
 - [ ] ConfigController/ControllerBaseX 非实体控制器经 `SPECIAL_CONTROLLERS` 单列处理（ConfigView/DbView），未塞 ListPage

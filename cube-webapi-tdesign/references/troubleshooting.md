@@ -730,3 +730,50 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 ⇒ **资产一致性 ≠ 工程可运行；骨架文件在场 ≠ 骨架接线正确。**
 第①步的出口必须是「**能启动 + `vue-tsc` 0 错误**」，不能只看闸门颜色。
 
+---
+
+## G18 ★★★ 「老工程编译通过、新生成的工程 `vue-tsc` 报 TS2322」：依赖 caret 范围 + 组件库小版本收紧事件签名（2026-09-13 从零建 CubeAdmin 实测）
+
+**症状**：技能资产在已验证工程里 `vue-tsc --noEmit` = 0 错误；但从同一份资产新生成一个工程，
+类型检查立刻报两条（`src/layouts/BasicLayout.vue`）：
+
+```
+error TS2322: Type '(d: DropdownOption) => void' is not assignable to type
+  '(dropdownItem: string | number | { [key: string]: any; } | undefined, context: { e: MouseEvent; }) => void'.
+  Types of parameters 'd' and 'dropdownItem' are incompatible.
+    Type 'undefined' is not assignable to type 'DropdownOption'.
+```
+
+**根因（两步，缺一不可）**：
+1. 技能 `package.json` 声明 **caret 范围** `tdesign-vue-next: ^1.20.2`（继承 CLI 骨架，未锁小版本）；
+2. **同一个类型名在不同小版本里不是同一个东西**——`t-dropdown` 的 `@click` 参数：
+   `es/dropdown/type.d.ts` 里 `onClick?: (dropdownItem: TdDropdownItemProps['value'], …) => void`，
+   而 `value?: string | number | { [key: string]: any } | undefined`（1.20.7）。
+   旧写法直接把它标注成 `DropdownOption`（1.20.2 的声明），**参数位置按逆变检查** ⇒ 新版本下必然 TS2322。
+
+| 工程 | 实装 tdesign-vue-next | `vue-tsc` |
+|---|---|---|
+| 已验证工程（早装，锁在旧小版本） | 1.20.2 | **0 错误**（假绿：只证明它锁在旧版本上） |
+| 新生成工程（今天装） | **1.20.7** | **2 条 TS2322** |
+
+**修法（版本无关，不要改回旧类型名）**：参数类型写成**与包内声明等宽的并集**，不引用会漂变的类型名：
+
+```ts
+// t-dropdown 的 @click 参数可能是 { value } 形状的对象，也可能是裸值；统一收敛后再分支。
+type DropdownClickValue = string | number | { [key: string]: any } | undefined;
+function onUserMenu(d: DropdownClickValue) {
+  const value = d && typeof d === 'object' ? (d as { value?: string | number }).value : d;
+  if (value === 'home') { goHome(); return }
+  if (value === 'logout') { auth.logout(); router.push('/login') }
+}
+```
+（同时把 `import type { …, DropdownOption }` 里不再使用的那个名字删掉，否则会被 `noUnusedLocals` 挡下。）
+
+**为什么必须记这条**：这是**时间炸弹型**缺陷——它不会在你写它的那天报错，而是在
+「下一个新工程」或「别人 clean install」时报错，且旧工程永远看起来是绿的。
+**「已验证工程能编过」不能作为资产正确的证据。**
+
+**通用规则**：凡依赖走 caret/`^` 范围的组件库，资产里**不要出现只在某个小版本成立的具体类型名**
+（`DropdownOption`、`XxxProps['yyy']` 之类）；改用包内表达式的**结构**（并集/`Record<string, unknown>` 收敛）。
+改依赖、换包管理器、或新建工程后，**必须重跑 `vue-tsc --noEmit`**。
+

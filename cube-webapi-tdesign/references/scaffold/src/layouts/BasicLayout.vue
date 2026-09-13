@@ -112,10 +112,15 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
-// TDesign 事件回调类型从包根导入：t-select 的 @change 是 `(value: SelectValue<SelectOption>)`，
-// t-dropdown 的 @click 是 `(dropdownItem: DropdownOption)`。二者都比本页需要的数据宽，
-// 写成 `(v: string)` / `(d: { value: string })` 会因参数逆变检查失败 → TS2322。
-import type { SelectValue, SelectOption, DropdownOption } from 'tdesign-vue-next';
+// TDesign 事件回调类型从包根导入：t-select 的 @change 是 `(value: SelectValue<SelectOption>)`。
+// ⚠️ 参数位置按**逆变**检查（strictFunctionTypes），把它写成更窄的类型会 TS2322。
+//
+// ★ 版本兼容（2026-09-13 实测）：`tdesign-vue-next: ^1.20.2` 是 caret 范围，新工程会装到 1.20.7+。
+//   而 1.20.7 起 t-dropdown 的 `onClick` 参数由 `DropdownOption` 改为
+//   `TdDropdownItemProps['value']` = `string | number | { [key: string]: any } | undefined`
+//   （旧写法 `(d: DropdownOption)` 在 1.20.2 能过、在 1.20.7 **编译失败** → 见 type DropdownClickValue）。
+//   故此处一律使用**与包内声明等宽的并集**，两个版本下都成立，不再依赖具体小版本。
+import type { SelectValue, SelectOption } from 'tdesign-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { useSettingStore } from '@/stores/setting';
 import { getUsernameFromToken } from '@/api/token';
@@ -209,12 +214,18 @@ const userMenu = [
   { content: '退出登录', value: 'logout' },
 ];
 
-function onUserMenu(d: DropdownOption) {
-  if (d.value === 'home') {
+// t-dropdown 的 @click 参数可能与 `{ value: string | number }` 形状的选项对象、也可能是裸值为真值的
+// 宽联合（见上方「版本兼容」说明）。统一收敛成字符串值再做分支，避免依赖具体版本的选项形状。
+type DropdownClickValue = string | number | { [key: string]: any } | undefined;
+
+function onUserMenu(d: DropdownClickValue) {
+  const value = d && typeof d === 'object' ? (d as { value?: string | number }).value : d;
+
+  if (value === 'home') {
     goHome();
     return;
   }
-  if (d.value === 'logout') {
+  if (value === 'logout') {
     auth.logout();
     router.push('/login');
   }
