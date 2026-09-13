@@ -71,7 +71,7 @@
         <t-radio-group
           :value="setting.layout"
           variant="default-filled"
-          @change="(v: LayoutMode) => setting.set('layout', v)"
+          @change="onLayoutChange"
         >
           <t-radio-button value="side">侧边</t-radio-button>
           <t-radio-button value="top">顶部</t-radio-button>
@@ -86,7 +86,7 @@
             :value="setting.collapsed"
             :disabled="setting.layout !== 'side'"
             size="small"
-            @change="(v: boolean) => setting.set('collapsed', v)"
+            @change="onCollapsedChange"
           />
         </div>
         <div class="sp-hint" v-if="setting.layout !== 'side'">顶部布局下不可用</div>
@@ -98,7 +98,7 @@
         <t-radio-group
           :value="compactValue"
           variant="default-filled"
-          @change="(v: string) => setting.set('compact', v === 'compact')"
+          @change="onCompactChange"
         >
           <t-radio-button value="default">默认</t-radio-button>
           <t-radio-button value="compact">紧凑</t-radio-button>
@@ -115,6 +115,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+// TDesign 事件回调类型从包根导入：t-radio-group 的 @change 是 `(value: RadioValue)`，
+// t-switch 的 @change 是 `(value: SwitchValue)`；两者都比业务语义宽（含 number / boolean），
+// 必须显式收窄回本项目的 'side' | 'top' 与 boolean，否则参数逆变检查失败 → TS2322。
+import type { RadioValue, SwitchValue } from 'tdesign-vue-next';
 import { useSettingStore, type LayoutMode } from '@/stores/setting';
 
 const setting = useSettingStore();
@@ -140,6 +144,19 @@ const modeOptions = [
 
 // compact 在 store 是 boolean，这里转成 radio 的 string 值（响应式读取）
 const compactValue = computed(() => (setting.compact ? 'compact' : 'default'));
+
+/* ---------- TDesign 事件 → store 写入（窄化） ----------
+ * t-radio-group / t-switch 回调值类型宽于业务语义，统一在此收窄，
+ * 避免在模板里写内联箭头函数（内联箭头同样会被逆变检查，且无法复用）。 */
+function onLayoutChange(v: RadioValue) {
+  setting.set('layout', v as LayoutMode);
+}
+function onCollapsedChange(v: SwitchValue) {
+  setting.set('collapsed', v === true);
+}
+function onCompactChange(v: RadioValue) {
+  setting.set('compact', v === 'compact');
+}
 
 // 颜色比较忽略大小写
 function sameColor(a: string, b: string) {

@@ -9,6 +9,9 @@
  * 例：modelValue=2990 → 显示 29.9 → 用户改 39.9 → emit 3990。
  */
 import { ref, watch } from 'vue'
+// t-input-number 的值类型是 InputNumberValue = number | string（用户清空时可能是 ''），
+// 直接声明成 `number | null` 会因参数逆变检查失败 → TS2322。
+import type { InputNumberValue } from 'tdesign-vue-next'
 
 const props = defineProps<{
   modelValue?: number | null
@@ -19,20 +22,23 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: number | null): void
 }>()
 
-const yuan = ref<number | null>(null)
+// 内部编辑态：必须用 InputNumberValue（而非 number | null），否则 v-model 回写类型不匹配。
+// undefined 表示「空」（TDesign 用 undefined 表达受控空值，null 不在其类型联合内）。
+const yuan = ref<InputNumberValue>()
 
 // 外部值（分）变化 → 显示（元）
 watch(
   () => props.modelValue,
   (v) => {
-    yuan.value = v == null || Number.isNaN(v) ? null : v / 100
+    yuan.value = v == null || Number.isNaN(v) ? undefined : v / 100
   },
   { immediate: true },
 )
 
-function onChange(v?: number | null) {
-  const x = v == null || Number.isNaN(v) ? null : Math.round(v * 100)
-  emit('update:modelValue', x)
+function onChange(v: InputNumberValue) {
+  // 清空 '' / undefined / null → 视为空值；其余转数字后 ×100 取整回写为「分」
+  const n = v == null || v === '' ? null : Number(v)
+  emit('update:modelValue', n == null || Number.isNaN(n) ? null : Math.round(n * 100))
 }
 </script>
 

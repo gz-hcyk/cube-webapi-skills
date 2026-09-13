@@ -95,6 +95,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+// TDesign 事件回调类型：**必须从 'tdesign-vue-next' 根导入**，不可自行声明窄类型。
+// t-menu 的 @change/@expand 回调签名是 `(value: MenuValue[])`（MenuValue = string | number），
+// 若写成 `(vals: string[])` 会在严格模式下参数逆变检查失败 → TS2322。
+import type { MenuValue } from 'tdesign-vue-next';
 // ⚠️ 必须使用项目唯一的 HTTP 层 @/api/http（令牌键 assets_token + Authorization: Bearer）。
 // 曾误用技能模板遗留的 api.ts（令牌键 cube_token，与 token.ts 不一致）→ 请求无令牌 → 401 → 菜单恒空。
 import { getRaw } from '@/api/http';
@@ -234,14 +238,16 @@ function onClick(node: any) {
   if (u) emit('navigate', u);
   active.value = pathOf(node, menus.value.indexOf(node));
 }
-function onChange(val: any) {
-  active.value = val;
+function onChange(val: MenuValue) {
+  // 同 onExpand：MenuValue 含 number，内部 active 统一 string
+  active.value = val == null ? '' : String(val);
 }
-function onExpand(vals: string[]) {
+function onExpand(vals: MenuValue[]) {
   // 受控展开：配合 :expand-mutex="true" 保证同层互斥（同一父节点下同时仅一个展开）。
-  // 注意：TDesign 1.20.7 的 Menu 无 accordion prop，互斥只认 expand-mutex
+  // 注意：TDesign Menu 无 accordion prop，互斥只认 expand-mutex
   //（源码 es/menu/utils/v-menu.mjs → VMenu.expand() 按 sameParentNodes 删除同级已展开项）。
-  expanded.value = vals;
+  // MenuValue = string | number，而本组件内部 value 统一是 string（pathOf 一定返回字符串）→ 归一化。
+  expanded.value = (vals || []).map((v) => String(v));
 }
 </script>
 

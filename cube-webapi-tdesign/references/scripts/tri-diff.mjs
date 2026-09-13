@@ -55,8 +55,10 @@
  *   ENG-ONLY        技能侧都没有，仅工程有                    → **工程独有**（业务页 / 本地专有适配），无需动作
  *   ENG-DRIFT       ① == ②，工程不同或缺件                    → **以技能版覆盖工程**（§11.1）
  *   CORE-DRIFT      ① == 工程，② 是异类                      → **以 scaffold/工程 覆盖 core**
- *   SCAFFOLD-DRIFT  ① 独有（② ③ ④ 均缺）                    → 属预期：DEV 验证页 pages/LovDemoView.vue
- *   ALL-DIFF        ① 有 · ② 缺 · ③④ 各不同                  → 属预期：工程外壳 4 件，不归本脚本判
+ *   SCAFFOLD-DRIFT  ① 独有（② ③ ④ 均缺），或命中 SCAFFOLD_ONLY_EXPECTED 且 ② 缺
+ *                                                             → 属预期：DEV 验证页 / 工程外壳 /
+ *                                                               `-temp all` 保留的上游基础设施（见该表注释）
+ *   ALL-DIFF        ① 有 · ② 缺 · ③④ 各不同                  → 属预期：工程外壳 3 件，不归本脚本判
  *   DEMO-STALE      ① == ② == 工程，③ 不同且**不在白名单**    → **同步 demo**（真陈旧副本）
  *   DEMO-DIVERGENT  ① == ② == 工程，③ 不同但**在白名单内**    → 属预期：demo 精简变体（12 件），非漂移
  *   DEMO-ONLY       仅 ③ 有（①② 均缺）                       → 属预期：注册 / 找回密码页只此一份
@@ -65,17 +67,23 @@
  *   会把「技能两侧都缺、仅工程有」的业务页（`pages/admin/*Page.vue` 等）误报成 ENG-DRIFT，
  *   照提示「以技能版覆盖工程」就会删掉业务页。
  *
- * ★ 期望的「健康态」= ENG-DRIFT=0 · CORE-DRIFT=0 · DEMO-STALE=0 · DEMO-WL-STALE=0，只剩
- *   1 条 SCAFFOLD-DRIFT + 4 条 ALL-DIFF + 12 条 DEMO-DIVERGENT + 6 条 DEMO-ONLY。
+ * ★ 期望的「健康态」= ENG-DRIFT=0 · CORE-DRIFT=0 · DEMO-STALE=0 · DEMO-WL-STALE=0 ·
+ *   SCAFFOLD-ONLY-WL-STALE=0，只剩 24 条 SCAFFOLD-DRIFT + 12 条 DEMO-DIVERGENT + 7 条 DEMO-ONLY。
+ *   （2026-09-13 scaffold 换代 `-temp all` 后：SCAFFOLD-DRIFT 由 1 → 24，ALL-DIFF 由 4 → 0，
+ *     DEMO-ONLY 由 6 → 7。）
  *   若出现其他条数，说明四根真的分叉了。
  *
  * ── 各根构成（勿把「预期」读成「漂移」）──
- *   references/scaffold/src/（36 件）= assets/core/（31 件，必拷，镜像源）
- *                                    + 工程外壳 4 件（App.vue / main.ts / router/index.ts / vite-env.d.ts，
- *                                      由 td-starter 生成，**恒不在 core 内**）
- *                                    + DEV 演示页 1 件（pages/LovDemoView.vue，`/lov-demo` 路由用，生产不注册）
- *   references/demo/src/（28 件）   = 精简示例工程，含 6 件 scaffold 没有的页面
- *                                    （注册 / 找回密码 / 主视图 / 主题展示等）
+ *   references/scaffold/src/（**55 件**，`-temp all` 血统）
+ *                                 = assets/core/（31 件，必拷，镜像源）
+ *                                 + 工程外壳 3 件（App.vue / main.ts / router/index.ts，
+ *                                   由 td-starter 生成，**恒不在 core 内**）
+ *                                 + DEV 演示页 1 件（pages/LovDemoView.vue，`/lov-demo` 路由用，生产不注册）
+ *                                 + 上游基础设施 20 件（types/5 · locales/4 · config/3 · constants/1 ·
+ *                                   hooks/1 · stores/index.ts · styles/*.less 5；**恒不在 core 内**）
+ *                                   ⇒ 共 24 件 scaffold 独有，全在 SCAFFOLD_ONLY_EXPECTED 内
+ *   references/demo/src/（28 件，**lite 血统**）= 精简示例工程，含 7 件 scaffold 没有的资产
+ *                                    （注册 / 找回密码 / 主视图 / 主题展示 / vite-env.d.ts 等）
  */
 
 import fs from 'node:fs';
@@ -108,6 +116,36 @@ const DEMO_DIVERGENT = new Map([
   ['pages/LoginView.vue',              '2625B/84 行 vs 15512B/342 行 —— demo 仅 Challenge，scaffold 为全特性'],
   ['theme/tokens.ts',                  '两版结构相同，仅十六进制大小写 + demo 多 3 行注释'],
   ['utils/camel.ts',                   '879B vs 2306B'],
+]);
+
+/**
+ * scaffold 独有且**恒定不在 `core` 内**的 24 件（2026-09-13 起，scaffold 换代 `-temp all` 后）。
+ *
+ * 命中本表 ⇒ 不判 `CORE-DRIFT`（那是「真分叉，须以 scaffold 覆盖 core」的反向提示），
+ * 改判 `SCAFFOLD-DRIFT`（**属预期，不是漂移**）。分三类：
+ *   ① 工程外壳 3 件：`main.ts` / `App.vue` / `router/index.ts`（由 td-starter 生成并改造）
+ *   ② DEV 验证页 1 件：`pages/LovDemoView.vue`（`/lov-demo` 路由用，生产不注册）
+ *   ③ `all` 模板保留的上游基础设施 20 件：`types/`5 + `locales/`4 + `config/`3 +
+ *      `constants/`1 + `hooks/`1 + `stores/index.ts`1 + `styles/*.less`5
+ *
+ * ⚠️ 这三类**都不该被拷进 `assets/core/`**：①② 与脚手架血统绑定（`lite` 血统下是另一组文件，
+ * 见 `assets/README.md`）；③ 只服务「完整脚手架」形态，属可裁件。
+ *
+ * ★ 自带腐化检测：条目若已不再是「scaffold 独有」，报 WARN 提示移除。
+ */
+const SCAFFOLD_ONLY_EXPECTED = new Set([
+  // ① 工程外壳
+  'App.vue', 'main.ts', 'router/index.ts',
+  // ② DEV 验证页
+  'pages/LovDemoView.vue',
+  // ③ all 模板保留的上游基础设施
+  'config/color.ts', 'config/global.ts', 'config/style.ts',
+  'constants/index.ts',
+  'hooks/index.ts',
+  'locales/index.ts', 'locales/useLocale.ts', 'locales/lang/en_US.json', 'locales/lang/zh_CN.json',
+  'stores/index.ts',
+  'styles/font-family.less', 'styles/index.less', 'styles/layout.less', 'styles/reset.less', 'styles/variables.less',
+  'types/axios.d.ts', 'types/env.d.ts', 'types/globals.d.ts', 'types/interface.d.ts', 'types/router.d.ts',
 ]);
 
 /* ── 参数解析 ───────────────────────────────────────────── */
@@ -199,6 +237,7 @@ for (const f of files) {
   else if (!ea && !eb && !ed && ec) flag = 'ENG-ONLY'; // 工程独有（业务新增页），技能侧本就不提供
   else if (ea && eb && ec && eq(ha, hb) && eq(hb, hc)) flag = 'ALL-SAME';
   else if (eq(ha, hb)) flag = 'ENG-DRIFT';             // 技能侧一致，工程分叉或缺件
+  else if (!eb && SCAFFOLD_ONLY_EXPECTED.has(f)) flag = 'SCAFFOLD-DRIFT'; // ★ scaffold 独有且必然不在 core 内（外壳/DEV 页/上游基础设施）→ 属预期
   else if (eq(ha, hc)) flag = 'CORE-DRIFT';            // scaffold==工程，core 是异类
   else if (eq(hb, hc)) flag = 'SCAFFOLD-DRIFT';        // core==工程，scaffold 独有
   else if (ea && !eb && !ec) flag = 'SCAFFOLD-DRIFT';  // scaffold 独有（core/工程均缺）
@@ -226,6 +265,10 @@ for (const f of files) {
 // 白名单腐化检测：条目若已不在 DEMO-DIVERGENT 组里（已同步 / 已删除 / 已改名），应清理
 const wlRot = [...DEMO_DIVERGENT.keys()].filter((f) => !GROUPS['DEMO-DIVERGENT'].includes(f));
 
+// 同类腐化检测（SCAFFOLD_ONLY_EXPECTED）：条目若已不再「scaffold 独有」，说明 core 收编了它或它被删了
+// —— 两种都不该继续留在表里，否则会把真分叉（CORE-DRIFT）静默吞掉。
+const sclRot = [...SCAFFOLD_ONLY_EXPECTED].filter((f) => !GROUPS['SCAFFOLD-DRIFT'].includes(f));
+
 const bad = GROUPS['ENG-DRIFT'].length + GROUPS['CORE-DRIFT'].length;
 const stale = opt.strict ? GROUPS['DEMO-STALE'].length : 0;
 const diverged = opt.strictDemo ? GROUPS['DEMO-DIVERGENT'].length : 0;
@@ -236,7 +279,7 @@ const FIX_HINT = {
   'ENG-ONLY': '工程独有（业务新增页 / 本地专有适配），技能侧不提供 —— 无需动作',
   'ENG-DRIFT': '以技能版（scaffold/core）覆盖工程 —— §11.1',
   'CORE-DRIFT': '以 scaffold/工程 覆盖 assets/core',
-  'SCAFFOLD-DRIFT': '预期：DEV 验证页 pages/LovDemoView.vue',
+  'SCAFFOLD-DRIFT': '预期：工程外壳 / DEV 验证页 / `all` 保留的上游基础设施（共 24 件，恒不在 core 内）',
   'ALL-DIFF': '预期：工程外壳 4 件，不归本脚本判',
   'DEMO-STALE': 'demo **陈旧副本**（不在已知差异白名单内）—— 须同步 references/demo/src',
   'DEMO-DIVERGENT': '预期：demo **精简变体**（层次差异，非漂移）—— 无需同步；如需同构见 scripts/README 的 20 动作迁移配方',
@@ -288,6 +331,13 @@ if (opt.json) {
     L.push(`⚠ DEMO-WL-STALE（${wlRot.length}）· 白名单腐化：下列条目已不再分歧（已同步 / 已删除 / 已改名），`);
     L.push(`  应从 tri-diff.mjs 的 DEMO_DIVERGENT 表中移除（本项不影响退出码）`);
     for (const f of wlRot) L.push(`  ${f}  —— ${DEMO_DIVERGENT.get(f)}`);
+    L.push('');
+  }
+  if (sclRot.length) {
+    L.push(`⚠ SCAFFOLD-ONLY-WL-STALE（${sclRot.length}）· 白名单腐化：下列条目已不再「scaffold 独有」`);
+    L.push(`  （core 已收编它，或它已被删除 / 改名），应从 tri-diff.mjs 的 SCAFFOLD_ONLY_EXPECTED 表中移除；`);
+    L.push(`  留着会把真分叉（CORE-DRIFT）**静默吞掉**（本项不影响退出码）`);
+    for (const f of sclRot) L.push(`  ${f}`);
     L.push('');
   }
   if (bad === 0) {

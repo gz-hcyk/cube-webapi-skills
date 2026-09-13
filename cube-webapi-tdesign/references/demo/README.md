@@ -15,9 +15,9 @@ npm run build       # vue-tsc --noEmit && vite build
 
 ## 已声明偏差（相对 `td-starter` 原始产物）
 
-`node ../scripts/check-starter-align.mjs .` 当前为 **0 FAIL / 1 WARN / 5 INFO**：
+`node ../scripts/check-starter-align.mjs .` 当前为 **0 FAIL / 1 WARN / 6 INFO**（脚本按 `tsconfig.node.json` 存在自动判为 **`lite` 血统** —— 本目录是 `lite` 形态的**历史保留示例**，新建工程请用 `-temp all`，见 `references/scaffold/README.md`）：
 
-- **WARN（已声明）· tsconfig 编译策略**：`moduleResolution: "Bundler"`（基线 `Node`）、`strict: false`（基线 `true`）、`lib` 多 `DOM.Iterable`、额外键 `noEmit` / `types`、`include` 未含 `*.tsx`。
+- **WARN（已声明）· tsconfig 编译策略**：`moduleResolution: "Bundler"`（基线 `Node`）、`strict: false`（基线 `true`）、`sourceMap` 未设（基线 `true`）、`lib` 多 `DOM.Iterable`、额外键 `noEmit` / `types`。
   理由：本目录定位是**浏览器端最小可运行演示**（无 `*.tsx` 消费方），且刻意放开 `strict` 以贴近「拷贝即用」；`Bundler` 解析更贴合 Vite 实际行为。**结构性契约（`paths['@/*']`、`references`）与基线一致，未偏离。**
 - **INFO · 已移除 CLI 演示件**：`.npmignore` / `public/tdesign-logo.svg` / `src/assets/svg/vite-logo.svg`；保留 `README.md` / `src/App.vue`（内容已替换为业务版）。
 - **已补 CLI 缺口**：`public/favicon.ico`、`tsconfig.node.json`、`index.html` 的 `<link rel="icon">`、`build` 加 `vue-tsc` 类型检查、`vue-router`/`pinia`/`axios`；`scripts.prepare`（CLI 致命脚本）未携带。

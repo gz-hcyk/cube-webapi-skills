@@ -43,6 +43,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+// 复用血统判定：工程外壳清单随 `all` / `lite` 血统不同（all 用 src/types/env.d.ts，无 vite-env.d.ts）
+import { detectLineage } from './check-starter-align.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_ROOT = process.env.SKILL_DIR || path.resolve(HERE, '..', '..');
@@ -205,12 +207,17 @@ export function check(root) {
   }
 
   // ④ 工程外壳（由 CLI 生成，不属 assets/）：仅作存在性提示，判定归 check-starter-align.mjs
-  const shell = ['main.ts', 'App.vue', 'router/index.ts', 'vite-env.d.ts'];
+  //    ⚠️ 清单随血统不同：all 用 src/types/env.d.ts（**无** src/vite-env.d.ts）；lite 反之。
+  const lineage = detectLineage(root).lineage;
+  const shell =
+    lineage === 'all'
+      ? ['main.ts', 'App.vue', 'router/index.ts', 'types/env.d.ts']
+      : ['main.ts', 'App.vue', 'router/index.ts', 'vite-env.d.ts'];
   const missingShell = shell.filter((s) => !fs.existsSync(path.join(srcRoot, s)));
   if (missingShell.length) {
     info(
       'shell',
-      `工程外壳缺 ${missingShell.map((s) => `src/${s}`).join(' ')} —— 不在 assets/ 内，由 td-starter CLI 生成；形态判定见 check-starter-align.mjs`,
+      `工程外壳缺 ${missingShell.map((s) => `src/${s}`).join(' ')} —— 不在 assets/ 内，由 td-starter CLI 生成；形态判定见 check-starter-align.mjs（血统 = ${lineage}）`,
     );
   }
 
@@ -238,7 +245,9 @@ function manifestLines() {
   DEPRECATED.forEach((d) => L.push(`   · ${d.rel || d.base} —— ${d.why}`));
 
   L.push('\n不在 assets/ 内（由 td-starter CLI 生成，形态判定见 check-starter-align.mjs）:');
-  L.push('   · src/main.ts / src/App.vue / src/router/index.ts / src/vite-env.d.ts');
+  L.push('   · all  血统：src/main.ts / src/App.vue / src/router/index.ts / src/types/env.d.ts（**无** vite-env.d.ts）');
+  L.push('   · lite 血统：src/main.ts / src/App.vue / src/router/index.ts / src/vite-env.d.ts');
+  L.push('   · 另见 tri-diff.mjs 的 SCAFFOLD_ONLY_EXPECTED 表（scaffold 独有 24 件，恒不在 core 内）');
   return L;
 }
 

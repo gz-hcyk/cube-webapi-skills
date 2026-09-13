@@ -286,22 +286,30 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 - 构建清空 dist 触发 safe-delete 报错 / dist 被进程锁定（环境 artifact + 正确处置）
 - ⚠️ `@wangeditor/editor-for-vue` 禁止把钩子放进 `defaultConfig`（高频坑，粘贴即抛错）
 - 📦 前端工程实践聚合（Vite / npm / 构建 / 脚手架 / 请求层，实测于 NewLife.Cube WebApi + Vue3 + TDesign 个人博客项目）
-- ⚠️ **tdesign-starter-cli 初始化四坑**（`-temp all` 交互式必崩 / `prepare` 致命导致 `npm install` 必败 / lite 缺三件套 / 无 `.gitignore`）—— **铁律 C1**
+- ⚠️ **tdesign-starter-cli 初始化四坑**（用 `-temp all` 且用 `printf '\n' |` 非交互 / `prepare` 致命 / 上游演示业务代码必删 / 对象式 `manualChunks` 在 vite@8 已废弃）—— **铁律 C1 · R4 · R5**
 - 改 Mock 后端 `backend/server.mjs` 后必须重启 Node 进程（高频坑：命中旧契约）
 - 「源码明明改对了，错误却一模一样复现」→ 先怀疑 stale（陈旧）构建产物，而非继续改源码（高频坑第一名，实测反复发生）
 
 **条目全文**：
 
-- **⚠️ tdesign-starter-cli 初始化四坑（铁律 C1，2026-09-13 实测）**：`td-starter init <名> -type vue3 -bt vite -temp lite`（v0.5.3）。四个坑一个比一个致命，**照下面顺序做**：
-  1. **`-temp all` 是交互式的，不可脚本化**：它会弹「选择包含模块」箭头多选菜单，非 TTY 环境下 readline 被关 → 实测抛 `ERR_USE_AFTER_CLOSE`。**固定用 `-temp lite`**（无交互、exit=0）。lite 产物共 **13 项**，清单 `node references/scripts/check-starter-align.mjs --manifest`。
-  2. **CLI 的 `scripts.prepare` 会让 `npm install` 必然失败（最致命）**：CLI 生成的 `package.json` 带 `"prepare": "node -e \"if(require('fs').existsSync('.git')){process.exit(1)}\" || is-ci || husky install"`，而 **`is-ci` / `husky` 根本不在 `dependencies` 里**；CLI 又**自行 `git init`**（`.git/HEAD` = `refs/heads/master`），于是 `existsSync('.git')` 为真 → `process.exit(1)` → 短路落到 `is-ci` → 命令不存在 → **实测 `npm run prepare` exit=1 ⇒ `npm install` 必然失败**。**生成后第一件事就是删掉该脚本**再 `npm install`：
+- **⚠️ tdesign-starter-cli 初始化四坑（铁律 C1 / R4 / R5，2026-09-13 实测）**：**唯一受支持组合 = `printf '\n' | npx --yes tdesign-starter-cli@0.5.3 init <名> -type vue3 -temp all`**（v0.5.3，**完整脚手架**，193 件；`-bt/--buildToolType` 只对 `lite` 生效，别再写）。四个坑按下面顺序处理：
+  1. **`-temp all` 的「选择包含模块」提示可以脚本化**：它会弹 `? 选择包含模块：`（选项 `全部` / `自定义选择`），**回车即选中默认项「全部」**，故命令前加 `printf '\n' |` 即可非交互执行；实测 exit=0、193 件。
+     > ⚠️ **旧断言已证伪**：早期文档称「`all` 是交互式箭头多选，非 TTY 下必崩（`ERR_USE_AFTER_CLOSE`），不可脚本化，固定用 `-temp lite`」——**作废**。`lite`（13 件）已废除：它连 `vue-router`/`pinia`/`axios` 都不含、没有 `tsconfig.paths`、没有 `@` 别名、没有 `.gitignore`，全部要手补。选 `all` 的收益正是「工具链完整」。
+     清单：`node references/scripts/check-starter-align.mjs --manifest`（打印 `all` / `lite` **两套**）。
+  2. **CLI 的 `scripts.prepare` 会让 `npm install` 失败（最致命）**：CLI 生成的 `package.json` 带 `"prepare": "node -e \"if(require('fs').existsSync('.git')){process.exit(1)}\" || is-ci || husky install"`，而 **`is-ci` 根本不在 `dependencies` 里**；CLI 又**自行 `git init`**（`.git/HEAD` = `refs/heads/master`），于是 `existsSync('.git')` 为真 → `process.exit(1)` → 短路落到 `is-ci` → 命令不存在 → **实测 `npm run prepare` exit=1**。
+     - `lite` 下 ⇒ **`npm install` 必然失败**；`all` 下 ⇒ 恰好**不阻断安装**（exit=0），但会持续污染安装日志。
+     - **两种血统都必须删**，生成后第一件事：
      ```bash
-     node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
+     node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;p.private=true;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
      ```
-  3. **lite 模板不含 `vue-router` / `pinia` / `axios`**：不补则路由与请求层直接跑不起来（`createRouter` 报模块不存在）。**必须 `npm i vue-router pinia axios`**。
-  4. **CLI 不生成 `.gitignore`**：它反而会 `git init` 出一个仓库却没有忽略规则，别把 `node_modules` / `dist` 提上去。
-  **验证**：`node references/scripts/check-starter-align.mjs <工程目录>`，退出码 0 = 仍是 CLI 产物形态（骨架 8 件齐全 / 无 `prepare` / 三件套已补 / `@` 别名 vite+tsconfig 成对 / `index.html` 有 favicon 与挂载点）。
-  **症状 → 根因速查**：`npm install` 报 `'is-ci' 不是内部或外部命令` → 坑 2；`init` 报 `ERR_USE_AFTER_CLOSE` → 坑 1；`Cannot find module 'vue-router'` → 坑 3；`public/favicon.ico` 缺失 / 浏览器对 `/favicon.ico` 报 404 → CLI 产物被误删或未走 CLI（骨架文件必须保留）；`build` 不做类型检查 → 未把 `build` 保持为 `vue-tsc --noEmit && vite build`。
+     - 若要保留 husky 能力，可另起一个非 `prepare` 名的脚本：`"husky:init": "husky"`。
+  3. **`all` 的 `src/permission.ts`、`src/pages/**`、`src/layouts/**`、`src/api/**`、`src/router/modules/**`、`src/store/**`、`src/style/**`、`src/utils/**`、`src/components/**`、`src/assets/**`、`mock/**` 必须删**：这些是上游演示业务代码，与本技能 `assets/core/` **同路径不同内容** —— 不删则「同名文件互相覆盖 / 悬空 import / 编译出一堆与本技能无关的页」。删完记得**目录归一**：`src/store/` → `src/stores/`、`src/style/` → `src/styles/`（与 `assets/core/{stores,styles}/` 一致，`main.ts` 的 `import ... from './stores'` 同步改）。
+     另删上游仓库文档与 CI：`README*.md` `CHANGELOG.md` `LICENSE` `PUBLISH.md` `docs/` `.github/` `.cnb*` `.gitattributes`。
+     **要保留**的 `all` 工具链件：`.gitignore` `.editorconfig` `.npmrc` `.prettierrc.js` `.stylelintignore` `.vscode/` `.husky/` `.env*` `eslint.config.js` `stylelint.config.js` `commitlint.config.js` `package-lock.json`。
+  4. **`all` 是 `vite@8`（rolldown），对象式 `manualChunks` 已废弃**：写 `build.rollupOptions.output.manualChunks = { ... }` 会 **TS2322**（该字段只剩函数形式，源码注释明示 *object form is not supported*）且运行时**被静默忽略**；`manualChunks` 与 `codeSplitting` 并存时前者被静默忽略。对象式分包必须写 **`build.rolldownOptions.output.codeSplitting.groups`**（`CodeSplittingGroup[]`，字段 `name` + `test`）。详见 SKILL.md §4.19.1 R4。
+     > 附带坑（R5）：`all` 用 `vue-tsc@3` + `typescript@6` + `tdesign-vue-next@1.20.2`，**TDesign 事件/属性类型远比 `lite` 严格**。模板里写内联窄类型箭头（如 `@change="(v: LayoutMode) => ..."`）会因**参数逆变**报 `TS2322`。修法见 SKILL.md §4.19.1 R5 的症状对照表。
+  **验证**：`node references/scripts/check-starter-align.mjs <工程目录>`，退出码 0 = 仍是 CLI 产物形态（脚本**自动判 `all`/`lite` 血统**：骨架齐全 / 无 `prepare` / 必需依赖在位 / `@` 别名 vite+tsconfig 成对 / `index.html` 有 favicon 与挂载点 / 无对象式 `manualChunks`）。再补 `npx vue-tsc --noEmit`（**0 错误**）+ `npx vite build`。
+  **症状 → 根因速查**：`npm install` 报 `'is-ci' 不是内部或外部命令` → 坑 2；`init` 提示「选择包含模块」卡住 → 漏了 `printf '\n' |`（坑 1，**不是**「不可脚本化」）；`Cannot find module 'vue-router'` → 误用了 `-temp lite`（坑 3）；`vue-tsc` 报一串 `TS2322 ... is not assignable to type '(value: X, ...) => void'` → R5（事件参数写窄了）；`vite.config.ts` 写对象式 `manualChunks` 报 TS2322 → R4；`public/favicon.ico` 缺失 / 浏览器对 `/favicon.ico` 报 404 → CLI 产物被误删或未走 CLI；`build` 不做类型检查 → 未把 `build` 保持为 `vue-tsc --noEmit && vite build`。
 
 - **构建清空 dist 触发 safe-delete 报错 / dist 被进程锁定（环境 artifact + 正确处置）**：在 WorkBuddy 沙箱中 `vite build` 清空旧 `dist` 时，底层把 `fs.rmSync` 包装成 trash 操作，可能在 Windows 上抛 `safe-delete` 错误（**与代码无关，模块编译均通过**，不是编译失败）。此外若有 node 进程（静态服务 / vite 监视器）持有 `dist` 内文件句柄，`dist` 会**创建/改名均 `Permission denied`**。**正确处置（按序）**：① 先构建到**临时目录**验证编译与产物：`npm run build -- --outDir dist-check`，再 `grep` 该目录产物确认新逻辑存在；② **不要**对 `dist` 做 `mv`/`rm -rf` 后再 `mv` 新目录回去——沙箱 shim 会异步清掉临时目录，实测出现「`dist` 和 `dist-check` 同时消失、产物丢失」；③ 若 `dist` 被锁（服务正持有其句柄），直接 `cp -r dist-check/. dist/` **覆盖内容**（服务持有的目录句柄不变，硬刷新即生效），并核验 `index.html` 引用的 hash 与新产物一致（`grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' dist/index.html`，再确认该文件存在）；④ 治本：停掉占用 `dist` 的服务进程（Windows：`Get-CimInstance Win32_Process -Filter "Name='node.exe'"` 找 PID → `Stop-Process -Id <pid> -Force`）后再 `npm run build`。
 
@@ -310,7 +318,7 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 - **📦 前端工程实践聚合（Vite / npm / 构建 / 脚手架 / 请求层，实测于 NewLife.Cube WebApi + Vue3 + TDesign 个人博客项目）**：以下前端专属落地细节统一归口本 skill（与 `cube-webapi-backend` 第十四节后端契约互补，避免前后端知识错置）：
   - **Vite 代理 target 必须 `127.0.0.1` 而非 `localhost`**：Windows 沙箱下 `localhost` 间歇 502（DNS 解析问题）。代理 `/api /Auth /Mfa /cube /Content` → `http://127.0.0.1:<后端端口>`（注：本 skill 319 行搜索栏段亦提及同坑，两个方向恰好相反——代理 target 用 127.0.0.1、浏览器入口用 localhost，排查先 `netstat` 确认监听协议栈）。
   - **npm registry 卡死**：默认 registry 在沙箱/国内环境会**长时间无进展**（实测 21 分钟 0 输出）。改用 `npm install --registry=https://registry.npmmirror.com`（2 分钟装完）。`rm -rf node_modules` 触发沙箱批量删除拦截，**不要强删**，直接重试 install 增量对齐。
-  - **TDesign 全量引入 chunk 过大**：`npm run build` 报 chunk >500KB。Vite `build.rollupOptions.output.manualChunks` 拆 `vue`/`tdesign`/`markdown`/`axios` 独立 vendor，消除告警并改善缓存。
+  - **TDesign 全量引入 chunk 过大**：`npm run build` 报 chunk >500KB。**`all` 血统（vite@8 / rolldown）用 `build.rolldownOptions.output.codeSplitting.groups`** 拆 `vue`/`tdesign`/`vendor` 独立包（**不要**写对象式 `manualChunks`，已废弃，见铁律 R4）；`lite` 血统（vite@5 / rollup）才是 `build.rollupOptions.output.manualChunks`。⚠️ 无论怎么拆，`tdesign` 单包仍会 >500KB（全量组件库体量），**属预期**，不要为消警告去改配置。
   - **生产 base 路径**：部署到子路径（如 `/blog/`）时 `vite.config.ts` 设 `base: '/blog/'`，`createWebHistory('/blog/')` 同步，Nginx 按子路径反向代理（前端 `/blog` + 后端 `/blog/api`）。
   - **删除确认用 `DialogPlugin.confirm`** 而非 `window.confirm`（TDesign 规范、可定制文案、可防误删）。
   - **SQLite 并发死锁 → 首页加载转圈**：后端 SQLite 同页 3+ 并发查询会死锁（busy timeout 不够），前端表现为列表永远 loading。**前端规避**：串行发请求（先 `loadMeta()` await 完再 `loadArticles()`），勿 `Promise.all` 并发打同库多接口；治本可在后端连接串加 `Busy Timeout=15000`（见 `cube-webapi-backend` 第十二节）。

@@ -100,7 +100,10 @@ for (const f of files) {
   }
 }
 // 反向：scaffold 有、core 无 → 只提示，不判失败
-// （工程外壳 4 件 + DEV 验证页 LovDemoView.vue 恒不在 core 内，属预期；详见 tri-diff.mjs 头注）
+// （2026-09-13 scaffold 换代 `-temp all` 后为 **24 件**：工程外壳 3 + DEV 验证页 1 +
+//   `all` 模板保留的上游基础设施 20，恒不在 core 内，属预期；清单见 tri-diff.mjs 的
+//   SCAFFOLD_ONLY_EXPECTED 表）
+const EXPECTED_SCAFFOLD_ONLY = 24
 let scaffoldOnly = 0
 for (const f of files) {
   const r = rel(f)
@@ -109,9 +112,9 @@ for (const f of files) {
   if (!existsSync(join(ROOT, 'assets/core', m[1]))) scaffoldOnly++
 }
 lines.push(`  core/scaffold 差异数: ${diffCnt}`)
-lines.push(`  scaffold 独有（预期 5 件：工程外壳 4 + DEV 页 1）: ${scaffoldOnly}`)
-if (scaffoldOnly !== 5) {
-  lines.push(`  ! scaffold 独有件数非 5 —— 用 tri-diff.mjs 复查四根构成`)
+lines.push(`  scaffold 独有（预期 ${EXPECTED_SCAFFOLD_ONLY} 件：工程外壳 3 + DEV 页 1 + all 上游基础设施 20）: ${scaffoldOnly}`)
+if (scaffoldOnly !== EXPECTED_SCAFFOLD_ONLY) {
+  lines.push(`  ! scaffold 独有件数非 ${EXPECTED_SCAFFOLD_ONLY} —— 用 tri-diff.mjs 复查四根构成（SCAFFOLD_ONLY_EXPECTED 表）`)
 }
 
 const exitCode = missing.size || diffCnt ? 1 : 0

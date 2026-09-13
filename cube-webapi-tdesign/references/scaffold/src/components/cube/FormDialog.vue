@@ -130,11 +130,12 @@
                 :disabled="item.disabled"
               />
 
-              <!-- 邮箱（itemType=mail） -->
+              <!-- 邮箱（itemType=mail）：TDesign 无 type="email"（TdInputProps.type 联合里没有 email），
+                   格式校验由 rules 里的内置 `{ type:'email' }` 承担（铁律 R2），故此处用 type="text" -->
               <t-input
                 v-else-if="item.control === 'email'"
                 v-model="formData[item.name]"
-                type="email"
+                type="text"
                 :maxlength="item.maxlength"
                 :placeholder="item.placeholder || '请输入邮箱'"
                 :disabled="item.disabled"
@@ -262,6 +263,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+// TDesign 官方类型从包根导入（铁律 R5）：
+//  - RequestMethodResponse：t-upload :request-method 的返回契约，**response 必填**；
+//  - PrimaryTableCol / TableRowData：t-table :columns 的列类型，align 只接受 'left'|'center'|'right'|undefined。
+import type { PrimaryTableCol, RequestMethodResponse, TableRowData } from 'tdesign-vue-next';
 import { useEntityResource, type DataField, type PageSchema } from '../../api/useEntityResource';
 import {
   buildFormItems,
@@ -329,8 +334,11 @@ const lovActive = ref<{
 const lovSelected = ref<any[]>([]);
 const lovLabels = reactive<Record<string, string>>({});
 
-// LOV 弹窗列定义：有 lovListConfig.TableColumns 时按其权威列渲染，否则默认 ID/名称两列
-const lovColumns = computed(() => {
+// LOV 弹窗列定义：有 lovListConfig.TableColumns 时按其权威列渲染，否则默认 ID/名称两列。
+// ⚠️ 铁律 R5：必须显式标注 PrimaryTableCol<TableRowData>[]。省略标注时 TS 会把三元表达式
+//    的 align 推导成 string | undefined，与 PrimaryTableCol.align（'left'|'center'|'right'|undefined）
+//    不兼容 → t-table 的 :columns 绑定报 TS2322。
+const lovColumns = computed<PrimaryTableCol<TableRowData>[]>(() => {
   const code = lovActive.value?.item?.lovCode;
   const cfg = code ? props.lovListConfig?.[code] : undefined;
   if (cfg?.tableColumns?.length) {
@@ -498,7 +506,7 @@ watch(
 async function uploadRequest(
   item: any,
   file: any,
-): Promise<{ status: 'success' | 'fail'; response?: any; error?: string }> {
+): Promise<RequestMethodResponse> {
   try {
     const fd = new FormData();
     fd.append('file', file.raw);
@@ -514,10 +522,15 @@ async function uploadRequest(
       typeof data === 'string'
         ? data
         : data?.url ?? data?.Url ?? data?.path ?? data?.Path ?? data?.filePath ?? data?.FileName;
-    if (!url2) return { status: 'fail', error: '上传响应缺少 url：' + JSON.stringify(r).slice(0, 200) };
+    if (!url2) {
+      // ⚠️ 铁律 R5（2026-09-13 实测）：TDesign 的 RequestMethodResponse.response 是**必填**字段
+      //    （response: { url?; files?; [k: string]: any }），失败分支也必须给 response，
+      //    否则 t-upload 的 :request-method 绑定报 TS2322（参数逆变检查失败）。
+      return { status: 'fail', response: {}, error: '上传响应缺少 url：' + JSON.stringify(r).slice(0, 200) };
+    }
     return { status: 'success', response: { url: String(url2) } };
   } catch (e: any) {
-    return { status: 'fail', error: e?.message ?? String(e) };
+    return { status: 'fail', response: {}, error: e?.message ?? String(e) };
   }
 }
 

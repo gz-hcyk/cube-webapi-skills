@@ -1,9 +1,9 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { isAuthed } from '@/api/token'
-import LoginView from '@/pages/LoginView.vue'
-import BasicLayout from '@/layouts/BasicLayout.vue'
-import EntityPage from '@/pages/EntityPage.vue'
-import DashboardView from '@/pages/DashboardView.vue'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { isAuthed } from '@/api/token';
+import LoginView from '@/pages/LoginView.vue';
+import BasicLayout from '@/layouts/BasicLayout.vue';
+import EntityPage from '@/pages/EntityPage.vue';
+import DashboardView from '@/pages/DashboardView.vue';
 
 /**
  * 组件可视化验证页（**仅 DEV 注册**，生产构建不暴露；连同对应 .vue 一起可整段删除）：
@@ -15,7 +15,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
       { path: 'theme', name: 'theme', component: () => import('@/components/cube/ThemeShowcase.vue') },
       { path: 'lov-demo', name: 'lov-demo', component: () => import('@/pages/LovDemoView.vue') },
     ]
-  : []
+  : [];
 
 // 路由表（铁律 M1/M3）
 // 业务菜单的唯一权威是后端 GET /Admin/Index/GetMenuTree（**无 /api 前缀**）：这里只注册「壳 + 泛型实体页」，
@@ -40,12 +40,12 @@ const router = createRouter({
     },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
-})
+});
 
 router.beforeEach((to) => {
-  if (to.path !== '/login' && !isAuthed()) return '/login'
-  if (to.path === '/login' && isAuthed()) return '/dashboard'
-  return true
-})
+  if (to.path !== '/login' && !isAuthed()) return '/login';
+  if (to.path === '/login' && isAuthed()) return '/dashboard';
+  return true;
+});
 
-export default router
+export default router;

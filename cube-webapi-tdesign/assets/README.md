@@ -12,8 +12,8 @@ cp -r assets/core/.  <你的工程>/src/
 
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
-| `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install`。★ 2026-09-13 **复测**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（**3938 模块** / CSS 472.45 kB / JS 8,845.54 kB gzip 971.38 kB / 29.13s） | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
-| `references/demo/` | **不随包携带依赖**（`node_modules`/`dist` 已清空，同 scaffold）；★ 2026-09-13 **双侧构建实证**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程 | **精简示例层**（层次独立，非同步目标）：体积约为 scaffold 同构版的 1/5，同名文件为 core 的 1/3~1/8；**登录页是极简版**（83 行纯账密，完整版在 scaffold）。独占资产仅注册/找回密码两页 |
+| `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install`。★ 2026-09-13 **`all` 血统复测**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（**3953 模块** / CSS 472.45 kB / JS 7,206.42 kB gzip ≈951.64 kB / 24.15s / dist 7.4 MB） | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
+| `references/demo/` | **不随包携带依赖**（`node_modules`/`dist` 已清空，同 scaffold）；★ 2026-09-13 **双侧构建实证**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程。**血统：`lite`**（有 `tsconfig.node.json` + `src/vite-env.d.ts`），**保留以校验存量 lite 工程**，不再是新建工程的模板 | **精简示例层**（层次独立，非同步目标）：体积约为 scaffold 同构版的 1/5，同名文件为 core 的 1/3~1/8；**登录页是极简版**（83 行纯账密，完整版在 scaffold）。独占资产仅注册/找回密码两页 |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
 
@@ -23,7 +23,7 @@ cp -r assets/core/.  <你的工程>/src/
 
 | 维度 | 实际情况 |
 |---|---|
-| **何时取得** | 曾在**完整安装依赖**的工程内跑通（`vue-tsc --noEmit` + `vite build` + CDP 实测）。★ **scaffold 侧已于 2026-09-13 在本机复测确认**（exit=0 / 3938 模块）；demo 侧另有独立实测（见末行）。⚠️ 本包已将 `node_modules`/`dist` **清空为声明式**，故不再有现场物证，一切以本记录 + 下方复现命令为准 |
+| **何时取得** | 曾在**完整安装依赖**的工程内跑通（`vue-tsc --noEmit` + `vite build` + CDP 实测）。★ **scaffold 侧已于 2026-09-13 在本机以 `all` 血统复测确认**（exit=0 / 3953 模块）；demo 侧另有独立实测（见末行）。⚠️ 本包已将 `node_modules`/`dist` **清空为声明式**，故不再有现场物证，一切以本记录 + 下方复现命令为准 |
 | **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
 | **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
 | **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
@@ -31,7 +31,7 @@ cp -r assets/core/.  <你的工程>/src/
 
 ## ★ 唯一真相源与同步铁律
 
-- **真相源 = `references/scaffold/src/`**（**2026-09-13 复测** `vue-tsc --noEmit` 与 `vite build` 0 错误、exit=0，3938 模块；历史上亦曾在完整依赖环境下编译并 CDP 实测过。**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
+- **真相源 = `references/scaffold/src/`**（**2026-09-13 「`all` 血统」复测** `vue-tsc --noEmit` 与 `vite build` 0 错误、exit=0，3953 模块；历史上亦曾在完整依赖环境下编译并 CDP 实测过。**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
 - 改任一资产：**先在 scaffold 的已装依赖工作副本内改并编译验证 0 错误**，再同步回本目录；禁止只改本目录。
 - **一致性校验用脚本，不要手写 `diff`/`find`**（`find`+进程替换在 Windows Git Bash 下不可靠，且只比文件名、不比内容）：
 
@@ -41,10 +41,12 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 
   逐文件 MD5 比对 + 已下线黑名单反扫，判据见 `references/scripts/README.md`。同一命令换目标路径即可查任意业务工程是否真的把 `assets/` 并入且未漂移。
 
-`scaffold/src`（36 件）相对 `assets/core`（31 件）**只多 5 件**，且这 5 件**恒不在 `core` 内**：
-「工程外壳」4 件（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，
-由 `tdesign-starter-cli` 生成）+ DEV 验证页 `pages/LovDemoView.vue`（`/lov-demo` 路由用，生产构建不注册）。
-⇒ `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
+`scaffold/src`（**55 件**）相对 `assets/core`（31 件）**多 24 件**，且这 24 件**恒不在 `core` 内**：
+「工程外壳」3 件（`main.ts` / `App.vue` / `router/index.ts`，由 `tdesign-starter-cli -temp all` 生成）
++ DEV 验证页 `pages/LovDemoView.vue`（`/lov-demo` 路由用，生产构建不注册）
++ `all` 模板保留的上游基础设施 20 件（`src/types/`5 + `src/locales/`4 + `src/config/`3 + `src/constants/`1 + `src/hooks/`1 + `src/stores/index.ts`1 + `src/styles/*.less`5）。
+⇒ `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 3 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
+> ⚠️ **工程外壳清单随血统不同**：`all` 的环境类型根是 `src/types/env.d.ts`（**无** `tsconfig.node.json` / **无** `src/vite-env.d.ts`）；`lite` 才是 `tsconfig.node.json` + `src/vite-env.d.ts`。
 
 第四根 `references/demo/src/`（28 件）是**精简示例层**（技能侧样例，**非** scaffold 的同步目标），
 与 `core` 的关系是**子集**（14 件 `core` 资产 demo 不收录，缺件≠漂移，脚本单独打印该计数）；

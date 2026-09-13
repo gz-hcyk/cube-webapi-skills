@@ -14,7 +14,9 @@
  * 后端接口形态见 cube-webapi-backend §9（Get 读 Config<T>.Current 单对象 / Update 回存整对象）。
  */
 import { ref, reactive, computed, onMounted } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
+// t-form 的 @submit 回调类型是 SubmitContext<T>（{ validateResult, firstError, e }），
+// 解构出 `{ validateResult: boolean }` 会因参数逆变检查失败 → TS2322。必须用官方类型。
+import { MessagePlugin, type SubmitContext } from 'tdesign-vue-next';
 import { getApi, postApi, putApi } from '@/api/http';
 import {
   buildFormRules,
@@ -257,8 +259,9 @@ async function load() {
   }
 }
 
-async function save({ validateResult }: { validateResult: boolean }) {
-  if (validateResult !== true) return;
+async function save(ctx: SubmitContext) {
+  // FormValidateResult<T> = boolean | ValidateResultObj<T>，只有严格 === true 才代表校验全通过
+  if (ctx.validateResult !== true) return;
   saving.value = true;
   try {
     const fn = props.saveMethod === 'PUT' ? putApi : postApi;

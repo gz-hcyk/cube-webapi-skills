@@ -16,6 +16,7 @@
          onSubmit 回调参数是 { validateResult, firstError, e } 对象（无 preventDefault 方法），
          .prevent 会让 Vue withModifiers 先调 e.preventDefault() 导致 TypeError。 -->
     <t-form
+      ref="searchFormRef"
       v-if="showSearch"
       layout="inline"
       :data="searchModel"
@@ -24,9 +25,12 @@
       @submit="onSearchSubmit"
     >
       <!-- 关键词（Q）：NewLife.Cube 全局模糊搜索，**默认自带**（setting.enableKey 控制）。
-           实测 ?Q=行政部 生效；字符串字段精确参数不生效，统一走 Q 关键词。 -->
+           实测 ?Q=行政部 生效；字符串字段精确参数不生效，统一走 Q 关键词。
+           ⚠️ t-input 的 @enter 回调签名是 (value: InputValue, context: { e: KeyboardEvent })，与
+           t-form 的 @submit (ctx: SubmitContext) 完全不同，**不可共用同一个 handler**（会 TS2322）。
+           故单独走 onSearchEnter：先调 t-form 内置 validate()，通过再查询（等价于点了「查询」）。 -->
       <t-form-item v-if="setting.enableKey !== false" label="关键词" name="Q">
-        <t-input v-model="searchKeyword" clearable placeholder="关键词" style="width: 180px" @enter="onSearchSubmit" />
+        <t-input v-model="searchKeyword" clearable placeholder="关键词" style="width: 180px" @enter="onSearchEnter" />
       </t-form-item>
       <template v-for="item in searchItems" :key="item.name">
         <t-form-item :label="item.label" :name="item.name">
@@ -42,8 +46,9 @@
           <t-date-range-picker v-else-if="item.control === 'daterange'" v-model="searchModel[item.name]" clearable style="width: 280px" />
           <t-date-range-picker v-else-if="item.control === 'datetimerange'" v-model="searchModel[item.name]" enable-time-picker clearable style="width: 320px" />
           <t-input-number v-else-if="item.control === 'number'" v-model="searchModel[item.name]" clearable style="width: 160px" />
-          <!-- 邮箱（itemType=mail）：email 输入 + 格式校验 -->
-          <t-input v-else-if="item.control === 'email'" v-model="searchModel[item.name]" type="email" clearable placeholder="邮箱" style="width: 180px" />
+          <!-- 邮箱（itemType=mail）：TDesign 无 type="email"（TdInputProps.type 联合里没有 email），
+               格式校验由内置 `{ type:'email' }` 规则承担（铁律 R2），故此处用 type="text" -->
+          <t-input v-else-if="item.control === 'email'" v-model="searchModel[item.name]" type="text" clearable placeholder="邮箱" style="width: 180px" />
           <!-- 手机号（itemType=mobile）：tel 输入 + 格式校验 -->
           <t-input v-else-if="item.control === 'tel'" v-model="searchModel[item.name]" type="tel" clearable placeholder="手机号" style="width: 180px" />
           <!-- 其余（html/textarea/image/input）搜索场景统一文本输入 -->
@@ -172,6 +177,9 @@ import {
 } from '../../api/fieldRender';
 import { camel, getRowKey, useEntityResource } from '../../api/useEntityResource';
 import { MessagePlugin } from 'tdesign-vue-next';
+// TDesign 官方类型从包根导入（铁律 R5）：t-form 的 @submit 回调是 SubmitContext，
+// 不是自定义的 `{ validateResult?, firstError? }`。
+import type { SubmitContext } from 'tdesign-vue-next';
 import { useLookups, type LookupOverrides } from '../../api/useLookups';
 import { useLov } from '../../api/useLov';
 import FormDialog from './FormDialog.vue';
@@ -373,6 +381,8 @@ const searchFields = computed(() => res.schema.value?.search ?? []);
 const showSearch = computed(() => searchFields.value.length > 0 || setting.value.enableKey !== false);
 /** 搜索条件模型（键 = formItemName(f)，映射字段用原始字段名如 RoleName → roleID） */
 const searchModel = reactive<Record<string, any>>({});
+/** 搜索表单实例：供关键词框回车时手动触发内置校验（validate()） */
+const searchFormRef = ref();
 /** 关键词（全局模糊搜索 Q）：独立于 search 字段组，默认自带 */
 const searchKeyword = ref('');
 // 搜索项控件（复用表单控件选型，searchMode=true；字典/值集分批到达后自动重建）
@@ -433,11 +443,22 @@ function buildSearchParams(): Record<string, unknown> {
 
 /**
  * 查询提交：TDesign t-form 提交时会自动按 :rules 校验，并把结果通过
- * `{ validateResult, firstError }` 传给 @submit。firstError 非空即校验未过，
- * 拦截查询；否则拼装参数交给 onSearch。
+ * `SubmitContext`（{ validateResult, firstError, e }）传给 @submit。
+ * ⚠️ 铁律 R5：参数类型必须是官方 `SubmitContext`，写成自定义窄形状
+ *    （如 `{ validateResult?: Record<string, any> }`）会因参数逆变检查失败 → TS2322。
+ * FormValidateResult<T> = boolean | ValidateResultObj<T>，只有严格 === true 才算校验全过。
  */
-function onSearchSubmit(ctx?: { validateResult?: Record<string, any>; firstError?: string }) {
-  if (ctx?.firstError) return; // 校验未过（如邮箱/手机号格式非法），不发起查询
+function onSearchSubmit(ctx?: SubmitContext) {
+  if (ctx?.validateResult !== true) return; // 校验未过（如邮箱/手机号格式非法），不发起查询
+  onSearch(buildSearchParams());
+}
+/**
+ * 关键词框回车：与「查询」按钮等价。因 t-input 的 @enter 与 t-form 的 @submit 签名不同，
+ * 单独走此 handler：先调用 t-form 内置 validate()（复用 R2 的内置校验规则），通过后再查询。
+ */
+async function onSearchEnter() {
+  const r = await searchFormRef.value?.validate?.();
+  if (r !== true) return;
   onSearch(buildSearchParams());
 }
 /** 重置：清空全部条件（含关键词）后按无过滤条件重新加载 */

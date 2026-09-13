@@ -30,7 +30,7 @@ node scan-assets-refs.mjs [--json] [--out r.txt]
 |---|---|---|
 | ① 悬空引用 | 必须 **0** | 例外：`references/scripts/README.md` 被整体跳过——它刻意记录「已修复/已删除」的历史路径 |
 | ② `core → scaffold` 漂移 | 必须 **0** | `core` 有而 `scaffold` 缺同样计入（唯一真相源是 scaffold，缺件即错） |
-| ② `scaffold → core` 独有 | 允许 **5** | 工程外壳 4 件 + DEV 验证页 `LovDemoView.vue`，**恒不在 `core` 内**；≠5 会提示用 `tri-diff.mjs` 复查 |
+| ② `scaffold → core` 独有 | 允许 **24** | 工程外壳 3 件 + DEV 验证页 `LovDemoView.vue` + `-temp all` 保留的上游基础设施 20 件，**恒不在 `core` 内**（清单见 `tri-diff.mjs` 的 `SCAFFOLD_ONLY_EXPECTED`）；≠24 会提示用 `tri-diff.mjs` 复查 |
 | ③ 比对口径 | **文本等价** | CRLF/CR → LF 后再 md5；二进制扩展名仍按字节 |
 
 > ⚠️ **已修的假阳性（2026-09-13）**：② 原先按**原始字节**比对，把
@@ -46,29 +46,36 @@ node scan-assets-refs.mjs [--json] [--out r.txt]
 node check-starter-align.mjs                       # 默认检查 references/scaffold
 node check-starter-align.mjs <工程目录>             # 检查任意工程（含真实业务工程）
 node check-starter-align.mjs <工程目录> --json      # JSON 输出（CI 用）
-node check-starter-align.mjs --manifest            # 打印 CLI 基线清单（13 项产物 / 必须保留 / 可删 / 必须删 / 必须补）
+node check-starter-align.mjs --manifest            # 打印**两套**基线清单（all / lite：产物 / 必须保留 / 工具链 / 可删 / 必须删 / 必须补）
 ```
 
 **退出码 0 = 无 FAIL，1 = 有 FAIL** —— 可直接进 CI / 收尾自检。
+
+**★ 双基线（2026-09-13 起）**：`all`（`-temp all`，193 件，**当前唯一受支持**）与 `lite`（13 件，**历史形态**，仅用于校验存量工程）。
+脚本按 **`tsconfig.node.json` 是否存在自动判定血统**（存在 ⇒ `lite`；缺失 ⇒ `all`），再按对应基线校验；`--json` 输出的 `lineage` 字段含判据。
 
 **三层判据**（不是一票否决，分级才有用）：
 
 | 级别 | 含义 | 典型项 |
 |---|---|---|
-| **FAIL** | 工程骨架 / 构建契约被破坏，**必修** | 缺 CLI 骨架 8 件（`index.html` `package.json` `tsconfig.json` `tsconfig.node.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/vite-env.d.ts`）、`build` 无 `vue-tsc`、存在 `scripts.prepare`、缺 `vue-router`/`pinia`/`axios`、缺 `@` 别名、`tsconfig` 缺 `paths`/`references`、`index.html` 缺挂载点或 favicon、`main.ts` 缺外壳 |
-| **WARN** | 「工程选择」级偏离：**允许，但须在工程 README 显式声明** | `tsconfig` / `tsconfig.node.json` 的编译策略（`target`/`moduleResolution`/`strict`/`lib`/额外键/`include`） |
-| **INFO** | CLI 演示件去留，**不扣分** | `.npmignore` / `README.md` / `tdesign-logo.svg` / `vite-logo.svg` / `App.vue` |
+| **FAIL** | 工程骨架 / 构建契约被破坏，**必修** | 缺骨架（`all` 7 件：`index.html` `package.json` `tsconfig.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/types/env.d.ts`；`lite` 8 件：另含 `tsconfig.node.json` `src/vite-env.d.ts`）、`build` 无 `vue-tsc`、存在 `scripts.prepare`、缺必需依赖、缺 `@` 别名、血统自相矛盾（`all` 却写了 `references`） |
+| **WARN** | 「工程选择」级偏离：**允许，但须在工程 README 显式声明** | `tsconfig` / `tsconfig.node.json` 的编译策略（`target`/`moduleResolution`/`strict`/`lib`/额外键/`include`）；`all` 工具链件缺失（`eslint.config.js`/`.husky/`/`.env*` 等）；`all` 上游演示业务代码残留；`all` 出现 `src/vite-env.d.ts`；对象式 `manualChunks` |
+| **INFO** | CLI 演示件 / 上游文档件去留，**不扣分** | `all`：`README*.md` `LICENSE` `docs/` `.github/` `src/permission.ts` `mock/`；`lite`：`.npmignore` `tdesign-logo.svg` `vite-logo.svg` `App.vue` |
 
-**基线**：`td-starter init <名> -type vue3 -bt vite -temp lite`（tdesign-starter-cli v0.5.3，2026-09-13 实测）。
-两条踩过的硬坑已写进脚本：① `-temp all` 是**交互式**多选，非 TTY 下必崩（`ERR_USE_AFTER_CLOSE`），不可脚本化；② CLI 的 `scripts.prepare` 调 `is-ci`/`husky`（**不在 dependencies**），实测 `npm run prepare` → exit=1 ⇒ **`npm install` 必然失败**，故「有 `prepare`」判 FAIL。
+**基线**：
+- `all` = `td-starter init <名> -type vue3 -temp all`（**用 `printf '\n' |` 非交互**，回车即选中默认项「全部」）；
+- `lite` = `td-starter init <名> -type vue3 -bt vite -temp lite`（**已废除**，不再用于新建；`-bt` 只对 lite 生效）。
 
-**当前结果（2026-09-13）**：
+两条踩过的硬坑已写进脚本：① `scripts.prepare` 调 `is-ci`/`husky`（**不在 dependencies**），实测 `npm run prepare` → exit=1（lite 下 `npm install` **必然失败**，all 下恰好不阻断但仍属必删项），故「有 `prepare`」判 FAIL；② `rollupOptions.output.manualChunks` 写**对象**在 `vite@8`（rolldown）下已废弃（TS2322 + 运行时静默忽略），须改用 `rolldownOptions.output.codeSplitting.groups`。
+> ⚠️ **旧断言已证伪**：早期文档称「`-temp all` 是交互式箭头多选，非 TTY 下必崩（`ERR_USE_AFTER_CLOSE`），不可脚本化」——2026-09-13 实测 `printf '\n' | npx --yes tdesign-starter-cli@0.5.3 init <名> -type vue3 -temp all` → **exit=0，193 件**。
 
-| 目标 | FAIL | WARN | 说明 |
-|---|---|---|---|
-| `references/scaffold` | **0** | 0 | 完整对齐；tsconfig 与 CLI 基线逐字一致 |
-| `references/demo` | **0** | 1 | WARN = tsconfig 编译策略偏离，已在 `demo/README.md` §「已声明偏差」声明 |
-| `(真实工程) cube-webapi-frontend` | **0** | 2 | 已补 `public/favicon.ico` / `index.html` favicon / `build` 加 `vue-tsc` / 补 `vue-tsc` devDep |
+**当前结果（2026-09-13，双基线版脚本）**：
+
+| 目标 | 血统 | FAIL | WARN | 说明 |
+|---|---|---|---|---|
+| `references/scaffold` | `all` | **0** | 0 | 完整对齐；tsconfig 与 `all` 基线逐字一致；R4/R5 修复后 `vue-tsc` 0 错误 |
+| `references/demo` | `lite` | **0** | 1 | WARN = tsconfig 编译策略偏离，已在 `demo/README.md` §「已声明偏差」声明 |
+| `(真实工程) cube-webapi-frontend` | `lite` | **0** | 2 | 已补 `public/favicon.ico` / `index.html` favicon / `build` 加 `vue-tsc` / 补 `vue-tsc` devDep |
 
 ## `check-assets-copied.mjs` 用法（「三条主线」第②步的机检入口）
 
@@ -92,7 +99,7 @@ node check-assets-copied.mjs --manifest            # 打印映射表与黑名单
 |---|---|---|
 | **FAIL** | 资产缺失，**必修**——`core` 之间是**静态 import** 关系（`specialControllers.ts` → `ConfigView.vue`/`DbView.vue`，`FormDialog.vue` → `LovListField.vue`），缺一个即构建失败 | `api/http.ts` `api/token.ts` `api/menuTitles.ts` `utils/camel.ts` `stores/auth.ts` `LovListField.vue` `DashboardView.vue` |
 | **WARN** | ① **内容漂移**：同名文件存在但 MD5 不一致（工程是前代产物，或本地改过未回灌）；② **残留已下线资产**：命中黑名单。命中即「拷了旧版资产」，比缺失更危险（静默错版） | 漂移看体积对比「工程 B vs 技能 B」；残留见下 |
-| **INFO** | 不扣分 | 工程外壳 4 件（`main.ts`/`App.vue`/`router/index.ts`/`vite-env.d.ts`）——它们由 CLI 生成，不归本脚本判。（原「`assets/optional/` 已拷几个」的 INFO 项随 optional 层取消而**失效**，2026-09-13） |
+| **INFO** | 不扣分 | 工程外壳（`main.ts`/`App.vue`/`router/index.ts` + **`all` 用 `types/env.d.ts`、`lite` 用 `vite-env.d.ts`**）——它们由 CLI 生成，不归本脚本判（血统由 `check-starter-align.mjs` 的 `detectLineage()` 判定后取对应清单）。（原「`assets/optional/` 已拷几个」的 INFO 项随 optional 层取消而**失效**，2026-09-13） |
 
 **已下线黑名单（10 条，命中即 WARN）**：`components/cube/` 下 `ListNavbar` `ListSearchBar` `ListToolbar` `ListFooter` `DetailContent.vue` `CodeEditor.vue`；`api/api.ts`（第二套 axios，违 H1）；`api/permissions.ts`；`api/menuTree.ts`；`tdesign-icons.d.ts`（遮蔽包内真实类型的声明）。每条带 `why`，输出里直接说明「能力已并入谁」。
 
@@ -154,8 +161,8 @@ node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层�
 | `ENG-ONLY` | 技能侧都没有，**仅工程有** | **工程独有**（业务新增页 `pages/admin/*Page.vue`、本地专有适配），无需动作 |
 | `ENG-DRIFT` | `scaffold == core`，**工程分叉或缺件** | **以技能版覆盖工程**（§11.1）；**不是**从工程回灌 |
 | `CORE-DRIFT` | `scaffold == 工程`，`core` 是异类 | **以 scaffold/工程覆盖 `core`** |
-| `SCAFFOLD-DRIFT` | `scaffold` 独有（`core`/工程均缺） | 属预期：DEV 验证页 `pages/LovDemoView.vue` |
-| `ALL-DIFF` | ① 有 · ② 缺 · ③④ 各不同 | 工程外壳 4 件（`App.vue`/`main.ts`/`router/index.ts`/`vite-env.d.ts`），不归本脚本判 |
+| `SCAFFOLD-DRIFT` | `scaffold` 独有（`core`/工程均缺），或命中 `SCAFFOLD_ONLY_EXPECTED` 而 `core` 缺 | 属预期：**24 件** = 工程外壳 3（`App.vue`/`main.ts`/`router/index.ts`）+ DEV 验证页 `pages/LovDemoView.vue` + `-temp all` 保留的上游基础设施 20 |
+| `ALL-DIFF` | ① 有 · ② 缺 · ③④ 各不同 | `lite` 血统旧工程的工程外壳（`App.vue`/`main.ts`/`router/index.ts`/`vite-env.d.ts`），不归本脚本判。`all` 血统下已归入 `SCAFFOLD-DRIFT`，故当前为 **0** |
 | `DEMO-STALE` | `scaffold == core == 工程`，**唯 `demo` 不同**且**不在白名单** | **同步 `references/demo/src`**（真陈旧副本） |
 | `DEMO-DIVERGENT` | 同上，但**命中白名单**（12 件） | 属预期：demo 精简变体（层次差异），**无需同步** |
 | `DEMO-ONLY` | **仅 `demo` 有**（①② 均缺） | 属预期：注册 / 找回密码两页只此一份 |
@@ -175,13 +182,15 @@ node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层�
 | `--no-demo --strict` | 同 `--no-demo` | **0** |
 | 无参数 | 用法错误 | **2** |
 
-> ★ **白名单腐化 `DEMO-WL-STALE`**：若某白名单条目**已不再分歧**（被同步 / 被删除 / 已改名），
-> 脚本会提示「应从 `DEMO_DIVERGENT` 表中移除」——**该项永不影响退出码**，只作清理提示。
+> ★ **白名单腐化 `DEMO-WL-STALE` / `SCAFFOLD-ONLY-WL-STALE`**：若某白名单条目**已不再分歧**
+> （被同步 / 被删除 / 已改名），脚本会提示「应从 `DEMO_DIVERGENT` / `SCAFFOLD_ONLY_EXPECTED` 表中移除」
+> ——**两项均永不影响退出码**，只作清理提示。`SCAFFOLD_ONLY_EXPECTED` 腐化尤其危险：留着会把真分叉
+> （`CORE-DRIFT`）**静默吞掉**。
 > 自测方法：`node tri-diff.mjs <工程> --demo <skill>/references/scaffold/src`（令 ④ 侧 demo 恒等于 ①，
 > 12 条白名单全部「不再分歧」→ 应报 12 条 `DEMO-WL-STALE`，exit 仍为 **0**）。
 
-⇒ 健康态 = `ENG-DRIFT=0  CORE-DRIFT=0  DEMO-STALE=0  DEMO-WL-STALE=0`，只剩 1 条 `SCAFFOLD-DRIFT`
-+ 4 条 `ALL-DIFF` + **12 条 `DEMO-DIVERGENT`** + 6 条 `DEMO-ONLY`（+ N 条 `ENG-ONLY`）。
+⇒ 健康态（2026-09-13 scaffold 换代 `all` 后）= `ENG-DRIFT=0  CORE-DRIFT=0  DEMO-STALE=0  DEMO-WL-STALE=0  SCAFFOLD-ONLY-WL-STALE=0`，
+只剩 **24 条 `SCAFFOLD-DRIFT`** + **0 条 `ALL-DIFF`** + **12 条 `DEMO-DIVERGENT`** + **7 条 `DEMO-ONLY`**（+ N 条 `ENG-ONLY`）。
 md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差异不算漂移）。
 
 ### ③ 为何是「层次差异」而非「陈旧」（2026-09-13 双侧构建实证）
@@ -273,10 +282,14 @@ md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差
 2. `components/cube/MenuSidebar.vue` 新版 `import ... from '@/api/menuTitles'` → demo 无该文件；
 3. `pages/LoginView.vue` 新版 `import ... from '@/stores/auth'` → demo 的 auth store 还在 `api/auth.ts`。
 
-**验证**：迁移后 `vue-tsc --noEmit && vite build` **exit=0**（3931 模块 / JS 8,844.10 kB）。
-**代价**：JS 1.54 MB → 8.84 MB（**5.7×**），demo 不再是「源码级轻量可读」样例。
+**验证**：迁移后 `vue-tsc --noEmit && vite build` **exit=0**（当时的 lite 血统 scaffold：3931 模块 / JS 8,844.10 kB）。
+**代价**：JS 1.54 MB → 约 7~9 MB（**≈5×**），demo 不再是「源码级轻量可读」样例。
+> ⚠️ 2026-09-13 scaffold 换代 `-temp all` 后，同构迁移的 JS 体积基准变为 **7,206.42 kB**（3953 模块）。
 
 ### 首次四方实测（2026-09-13，目标工程 `cube-webapi-frontend`，`tri-diff.mjs` 新口径）
+
+> 该次实测发生在 **scaffold 换代前（`lite` 血统）**，故 `SCAFFOLD-DRIFT=1` / `ALL-DIFF=4`。
+> 换代后的当前健康态见其下方小节。
 
 ```
 共 49 文件（4 根并集）
@@ -288,6 +301,20 @@ exit=0
 - **12 条 `DEMO-DIVERGENT`**：`api/{fieldRender,http,useEntityResource,useLookups,useLov}.ts`、`components/cube/{DetailDrawer,FormDialog,ListPage,MenuSidebar}.vue`、`pages/LoginView.vue`、`theme/tokens.ts`、`utils/camel.ts` —— 全部命中白名单，**非漂移**。
 - **6 条 `DEMO-ONLY`**：`api/auth.ts`、`api/permissions.ts`、`pages/{ForgotPasswordView,MainView,RegisterView,ThemeShowcase}.vue` —— 属预期；其中 `RegisterView`/`ForgotPasswordView` 是 demo 的**唯一独占价值**。
 - **回归**：`--no-demo` 输出与扩展前三根结果**逐项一致**（`ALL-SAME=31  ENG-ONLY=10  SCAFFOLD-DRIFT=1  ALL-DIFF=4`），旧 flag 语义未变。
+
+### 换代后健康态（2026-09-13，scaffold = `-temp all` 血统，目标 = `references/scaffold`）
+
+```
+共 62 文件（4 根并集）
+ALL-SAME=19  ENG-ONLY=0  ENG-DRIFT=0  CORE-DRIFT=0  SCAFFOLD-DRIFT=24  ALL-DIFF=0  DEMO-STALE=0  DEMO-DIVERGENT=12  DEMO-ONLY=7
+demo 未收录的 ①② 资产：34 件（③ 是精简子集，缺件≠漂移）
+exit=0
+```
+
+- **24 条 `SCAFFOLD-DRIFT`**（全部命中新表 `SCAFFOLD_ONLY_EXPECTED`）：工程外壳 3 + DEV 验证页 1 + 上游基础设施 20。**这是换代带来的主要口径变化**（1 → 24）。
+- **`ALL-DIFF` 归零**：`all` 血统的工程外壳缺 `src/vite-env.d.ts`，原先触发 `ALL-DIFF` 的路径改由 `SCAFFOLD_ONLY_EXPECTED` 接管。
+- **`DEMO-ONLY` 6 → 7**：demo 的 `vite-env.d.ts`（`lite` 血统专属）计入。
+- **回归**：换代后 `check-starter-align.mjs` = 0 FAIL / 0 WARN、`check-assets-copied.mjs` = 缺失 0 · 漂移 0、`scan-assets-refs.mjs` = 悬空 0 · 漂移 0。
 
 ## 读结果的三个坑（重要）
 

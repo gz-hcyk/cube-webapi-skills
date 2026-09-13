@@ -1,28 +1,101 @@
 {
   "name": "cube-webapi-tdesign-scaffold",
+  "version": "0.14.0",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
-  "description": "Base on tdesign-starter-cli (vue3 + vite + lite) + cube-webapi-tdesign skill assets",
   "scripts": {
-    "dev": "vite",
+    "dev:mock": "vite --open --mode mock",
+    "dev": "vite --open --mode development",
+    "dev:linux": "vite --mode development",
     "mock": "node backend/server.mjs",
-    "build": "vue-tsc --noEmit && vite build",
-    "typecheck": "vue-tsc --noEmit",
-    "preview": "vite preview --port 5173"
+    "build:test": "vite build --mode test",
+    "build": "vue-tsc --noEmit && vite build --mode release",
+    "build:type": "vue-tsc --noEmit",
+    "build:site": "vue-tsc --noEmit && vite build --mode site",
+    "preview": "vite preview",
+    "lint": "eslint --ext .vue,.js,.jsx,.ts,.tsx ./ --max-warnings 0",
+    "lint:fix": "eslint --ext .vue,.js,jsx,.ts,.tsx ./ --max-warnings 0 --fix",
+    "stylelint": "stylelint src/**/*.{html,vue,css,sass,less}",
+    "stylelint:fix": "stylelint --fix src/**/*.{html,vue,css,sass,less}",
+    "husky:init": "husky",
+    "site:preview": "npm run build && cp -r dist _site",
+    "test": "echo \"no test specified,work in process\"",
+    "test:coverage": "echo \"no test:coverage specified,work in process\""
   },
   "dependencies": {
+    "@vueuse/core": "^14.3.0",
     "axios": "^1.20.0",
-    "pinia": "^4.0.3",
-    "tdesign-icons-vue-next": "^0.4.11",
-    "tdesign-vue-next": "^1.20.7",
-    "vue": "^3.5.42",
-    "vue-router": "^4.6.4"
+    "dayjs": "^1.11.23",
+    "echarts": "^6.1.0",
+    "lightningcss": "^1.32.0",
+    "lodash": "^4.18.1",
+    "nprogress": "^0.2.0",
+    "pinia": "^3.0.4",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "qs": "^6.15.3",
+    "tdesign-icons-vue-next": "^0.4.4",
+    "tdesign-vue-next": "^1.20.2",
+    "tvision-color": "^1.6.0",
+    "vue": "^3.5.39",
+    "vue-i18n": "^11.4.6",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.4",
-    "typescript": "^5.9.3",
-    "vite": "^5.4.21",
-    "vue-tsc": "^2.2.12"
-  }
+    "@antfu/eslint-config": "^9.1.0",
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
+    "@types/echarts": "^5.0.0",
+    "@types/lodash": "^4.17.24",
+    "@types/mockjs": "^1.0.10",
+    "@types/node": "^25.9.4",
+    "@types/nprogress": "^0.2.3",
+    "@types/qs": "^6.15.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vue/compiler-sfc": "~3.5.42",
+    "commitizen": "^4.3.2",
+    "cz-conventional-changelog": "^3.3.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "eslint-plugin-vue-scoped-css": "^3.1.1",
+    "globals": "^17.7.0",
+    "husky": "^9.1.7",
+    "less": "^4.6.7",
+    "lint-staged": "^17.0.8",
+    "mockjs": "^1.1.0",
+    "postcss-html": "^1.8.1",
+    "postcss-less": "^6.0.0",
+    "prettier": "^3.9.6",
+    "rspack-resolver": "^1.3.0",
+    "stylelint": "~17.11.1",
+    "stylelint-config-standard": "^40.0.0",
+    "stylelint-order": "~8.1.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.62.0",
+    "vite": "^8.1.5",
+    "vite-plugin-mock": "^3.0.2",
+    "vite-svg-loader": "^5.1.1",
+    "vue-tsc": "^3.3.6"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "lint-staged": {
+    "*.{js,jsx,vue,ts,tsx}": [
+      "prettier --write",
+      "npm run lint:fix"
+    ],
+    "*.{html,vue,css,sass,less}": [
+      "npm run stylelint:fix"
+    ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "description": "Base on tdesign-starter-cli"
 }

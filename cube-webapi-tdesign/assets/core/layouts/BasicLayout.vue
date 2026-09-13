@@ -108,6 +108,10 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
+// TDesign 事件回调类型从包根导入：t-select 的 @change 是 `(value: SelectValue<SelectOption>)`，
+// t-dropdown 的 @click 是 `(dropdownItem: DropdownOption)`。二者都比本页需要的数据宽，
+// 写成 `(v: string)` / `(d: { value: string })` 会因参数逆变检查失败 → TS2322。
+import type { SelectValue, SelectOption, DropdownOption } from 'tdesign-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { useSettingStore } from '@/stores/setting';
 import { getUsernameFromToken } from '@/api/token';
@@ -176,10 +180,15 @@ function onNavigate(url: string) {
   router.push(target);
 }
 
-function onTenant(v: string) {
-  tenant.value = v;
-  auth.setTenant(v);
-  MessagePlugin.success(v ? '已切换租户，刷新数据' : '已切回总控');
+function onTenant(v: SelectValue<SelectOption>) {
+  // SelectValue 是宽联合（string|number|boolean|bigint|SelectOption|数组）。
+  // 本页 tenantOptions 的 value 均为字符串，但类型上必须显式归一化后才能写入 string ref。
+  // ⚠️ 不可断言成 SelectOption：SelectOption = SelectOption | SelectOptionGroup，其中
+  //    SelectOptionGroup 没有 value 属性 → TS2339。统一按 Record<string, any> 取 value。
+  const s = v == null ? '' : String(typeof v === 'object' ? ((v as Record<string, any>).value ?? '') : v);
+  tenant.value = s;
+  auth.setTenant(s);
+  MessagePlugin.success(s ? '已切换租户，刷新数据' : '已切回总控');
   window.location.reload();
 }
 
@@ -193,7 +202,7 @@ const userMenu = [
   { content: '退出登录', value: 'logout' },
 ];
 
-function onUserMenu(d: { value: string }) {
+function onUserMenu(d: DropdownOption) {
   if (d.value === 'home') {
     goHome();
     return;

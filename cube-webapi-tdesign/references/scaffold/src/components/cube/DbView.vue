@@ -11,7 +11,6 @@
         :loading="loading"
         size="medium"
         stripe
-        :pagination="null"
       >
         <template #operation="{ row }">
           <t-space>
