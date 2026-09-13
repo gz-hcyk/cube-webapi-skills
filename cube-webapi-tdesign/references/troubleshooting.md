@@ -700,3 +700,33 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
   2. **「固定列失效」绝大多数不是 `fixed` 配置问题，而是「表格内部没有滚动可贴」** —— 先查滚动，再查配置；
   3. 用户报「多个现象」时，**先假设它们同源**，用容器链几何数据验证，再决定改几处。
 
+## G17 ★★★ 第①步「抄少了一件」：只拷 `assets/core` 会得到一个**跑不起来**的工程（2026-09-13 从零建 CubeAdmin 实测）
+
+**症状分四档（按发现顺序）**：
+
+| 症状 | 根因 | 一眼定位 |
+|---|---|---|
+| dev / 构建**直接失败**：`Cannot find module './modules'`（或 `./style/variables.less`） | 只执行了 `cp -r assets/core/. src/`；`src/router/index.ts` 仍是 CLI **上游版**（`import './modules'`，而 `src/router/modules/` 已被必删清单删掉）；`vite.config.ts` 同为上游版（引 `mock/`、`src/style/variables.less`） | `head -8 src/router/index.ts` 看是否上游 demo 路由 |
+| 工程能起，但**样式全丢、右下角齿轮切不出暗黑** | `src/main.ts` 是上游版 —— 未引 `tokens.css` / `theme-dark.css`、未调 `setting.load()`（**铁律 C3 静默不达标**） | `grep -n "tokens.css\|theme-dark\|setting.load" src/main.ts` 应各命中 |
+| 菜单出得来但**接口 404 / 菜单静默为空**；产物**没有分包** | `vite.config.ts` 是上游版：无 H3 代理（`/api` + `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content`）、无 `codeSplitting.groups`（R4） | `grep -n "proxy\|codeSplitting" vite.config.ts` |
+| 装依赖像"卡住"（`.bin` 长时间为 0） | **不是卡住，是 IO**：要向 NTFS 写约 **5 万个文件**（同规模工程实测 50,790 个），Defender 逐文件扫 | 看是否仍在写入：`find node_modules -maxdepth 2 -newermt "-60 seconds" \| wc -l` |
+| 裁完依赖后 `check-starter-align.mjs` **变红** | 删掉了骨架 keep 清单里的**配置文件**（见下） | 报错直接点名缺哪个文件 |
+
+**★ 正确做法：第④步必须三步都做**
+`assets/core/.`（31 件交付载荷）**＋** `references/scaffold/src/.`（24 件 = 外壳 3 + DEV 页 1 + 上游基础设施 20）
+**＋** `references/scaffold/` 的**工程根外壳**（`vite.config.ts` / `index.html` / `.env*` / `package.json`），
+最终 `src/` 应为 **55 件 = 31 + 24**，与 `references/scaffold/src/` 同构。命令见 SKILL.md §4.1 步骤 ④。
+
+**★ 裁依赖 / 换包管理器的红线**
+`check-starter-align.mjs` 要求这些文件**存在**（缺一 FAIL）：`.prettierrc.js` `.stylelintignore` `.husky/`
+`commitlint.config.js` `eslint.config.js` `stylelint.config.js` `package-lock.json`；
+但它**只校验 4 个运行时依赖**。⇒ **只删依赖与相关 scripts，配置文件原地留着**；
+`package-lock.json` 用 `npm install --package-lock-only` 重算对齐。详见 SKILL.md §4.1.1。
+
+**★ 方法论（本条最值钱的部分）**：这是典型的「文档少写一步」型缺陷 —— 表现为**工程跑不起来**，
+而技能自带的两个闸门**都会给出误导性的全绿**：
+`check-assets-copied`（31 件确实一致）绿、`check-starter-align`（骨架文件本来就在 CLI 产物里）也绿。
+**缺陷只在"真的把工程跑起来"时才现形。**
+⇒ **资产一致性 ≠ 工程可运行；骨架文件在场 ≠ 骨架接线正确。**
+第①步的出口必须是「**能启动 + `vue-tsc` 0 错误**」，不能只看闸门颜色。
+

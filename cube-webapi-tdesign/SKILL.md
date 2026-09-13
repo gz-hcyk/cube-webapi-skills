@@ -247,13 +247,34 @@ mkdir -p src/stores src/styles          # all 用单数 store/style，本项目�
 # ③ 删掉致命的 prepare 脚本 + 补 private（不删则 npm run prepare 必然 exit=1）
 node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;p.private=true;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
-# ④ 拷入技能资产（31 件，含全部配方件）
-cp -r <skill>/assets/core/. src/
+# ④ 套用技能资产与工程外壳（**三步，只做第一步工程跑不起来**）
+cp -r <skill>/assets/core/. src/                  # ④-1 交付载荷 31 件（唯一拷贝动作）
+cp -r <skill>/references/scaffold/src/. src/      # ④-2 工程外壳 3 + DEV 验证页 1 + 上游基础设施 20 = 24 件
+cp <skill>/references/scaffold/vite.config.ts \
+   <skill>/references/scaffold/index.html \
+   <skill>/references/scaffold/.env \
+   <skill>/references/scaffold/.env.development \
+   <skill>/references/scaffold/.env.site \
+   <skill>/references/scaffold/.env.test \
+   <skill>/references/scaffold/package.json .     # ④-3 工程根外壳（CLI 版仍是上游 demo 版，必须换）
+cp -r <skill>/references/scaffold/backend .       # ④-4 可选：Mock 后端（vite.config 里默认 enable:false）
+node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));p.name='<项目名>';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
-# ⑤ 装依赖 + 两道校验（缺一不可）
-npm install
+# ⑤ 装依赖 + 两道校验（缺一不可；包管理器与依赖裁剪见 §4.1.1）
+pnpm install                                      # 或 npm install
 node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 = 对齐
 npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
+```
+
+> ★★★ **为什么 ④ 必须三步都做（2026-09-13 从零建工程实测）**：
+> - **只做 ④-1** → `src/router/index.ts` 仍是 CLI 的**上游版**（`import ... from './modules'`，而 `src/router/modules/` 已被必删清单删掉）
+>   ⇒ 构建/启动**直接报模块找不到**；`src/main.ts` 也是上游版，**未引 `tokens.css`/`theme-dark.css`、未调 `setting.load()`** ⇒ 铁律 C3 静默不达标。
+> - **工程根外壳（④-3）同理**：CLI 的 `vite.config.ts` 引 `mock/` 与 `src/style/variables.less`（都已被删/改名），
+>   且**没有 H3 代理、没有 R4 分包**；`index.html` 带腾讯 Aegis 埋点且 `lang="en"`。
+>   ⇒ 直接套用 `references/scaffold/` 的**已补丁外壳**才是正解，不要逐条手工打补丁。
+> - ④-2/④-3 与 ④-1 的关系：`scaffold/src/` ⊃ `assets/core/`（逐件同 md5），故 ④-2 只**新增** 24 件、不会与 ④-1 打架；
+>   这正是 `check-assets-copied.mjs`（只比对 31 件载荷）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
+> - 最终 `src/` 应为 **55 件 = 31 + 24**（与 `references/scaffold/src/` 同构），可用 `find src -type f | wc -l` 自证。
 ```
 
 **CLI `all` 产物共 193 项**（`--manifest` 可打印两套基线的结构与骨架条目）：
@@ -293,6 +314,54 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 > · 已归档的 lite demo（历史基线，供回溯）：3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s。
 > ⇒ ① scaffold 的「0 错误」由历史结论升级为**实测结论**；② 归档前的 demo 曾是**可独立构建通过**的精简示例工程，**层次独立**（同名文件为精简变体），**从来不是** scaffold 的同步目标。
 > ⚠️ 上述结论**均须先 `npm install`**（本包不携带 `node_modules`）；复现口径见 `assets/README.md` §「验证结论的适用范围」。
+
+### 4.1.1 包管理器与依赖裁剪（性能最优解 + 不可越过的闸门边界）
+
+**先取证再优化**：`all` 血统装依赖要写约 **5 万个文件**（同规模工程 `node_modules` 实测 **50,790 个**），
+Windows 下每个文件都要过 Defender 实时扫描 ⇒ **瓶颈是 IO，不是网络**
+（2026-09-13 实测：该产物**无**任何浏览器/二进制下载类依赖、npm 缓存已热，故 `--no-audit/--no-fund` 之类的
+纯参数优化收益有限，别把它当主方案）。
+
+| 方案 | 效果 | 代价 |
+|---|---|---|
+| **改用 pnpm** | 全局内容寻址存储 + 硬链接 ⇒ 文件数与磁盘大幅下降，**同机后续安装基本秒级** | 需安装 pnpm；lockfile 变 `pnpm-lock.yaml` |
+| Defender 排除项目目录 | 小文件 IO 常提速 **2–5×** | 需管理员权限、改系统安全设置 |
+| `--no-audit --no-fund --prefer-offline` | 10–30%（省网络往返、命中缓存） | 零风险 |
+| 裁 devDependencies | 见下（**880 → 353 包**） | 失去对应工具链 |
+
+> `all` 产物的 `.npmrc` 里 `shamefully-hoist` / `hoist` 本就是 **pnpm** 的配置项 ⇒ **脚手架原意即 pnpm**。
+
+**★★★ 裁剪依赖 / 换包管理器前必须做的检查（否则等于自己造红灯）**：
+`check-starter-align.mjs` 的骨架 keep 清单要求下列文件**存在**（缺一 → **FAIL**），
+但它**只校验 4 个运行时依赖**（`vue-router` / `pinia` / `axios` / `tdesign-vue-next`）：
+
+```
+.prettierrc.js   .stylelintignore   .husky/   commitlint.config.js   eslint.config.js
+stylelint.config.js   package-lock.json          ← 全是「工具链配置文件」，必须保留
+```
+
+⇒ **正确做法：只删依赖与相关 npm scripts，配置文件原地留着**（留着但无对应依赖 = 无害）。
+`package-lock.json` 同属骨架件、**不能删**；裁依赖后用
+`npm install --package-lock-only --no-audit --no-fund` 只重算锁文件（不落地 `node_modules`，秒级）即可对齐。
+
+**可安全裁掉的 lint / 提交规范链（21 项，与"跑起来"和"构建"无关）**：
+`@antfu/eslint-config` · `eslint` · `eslint-config-prettier` · `eslint-plugin-prettier` ·
+`eslint-plugin-simple-import-sort` · `eslint-plugin-vue-scoped-css` · `typescript-eslint` · `globals` ·
+`stylelint` · `stylelint-config-standard` · `stylelint-order` · `postcss-html` · `postcss-less` ·
+`@commitlint/cli` · `@commitlint/config-conventional` · `commitizen` · `cz-conventional-changelog` ·
+`husky` · `lint-staged` · `prettier` · `rspack-resolver`
+
+连带删除的 scripts：`lint` · `lint:fix` · `stylelint` · `stylelint:fix` · `husky:init`
+（对应工具已移除，留着必然报错）。**必须保留**的 devDependencies 是构建/运行类：
+`vite` · `vue-tsc` · `typescript` · `@vitejs/plugin-vue(-jsx)` · `@vue/compiler-sfc` · `less` ·
+`esbuild` · `vite-plugin-mock` · `vite-svg-loader` · `mockjs` · `@types/*`。
+
+> 2026-09-13 实测（CubeAdmin 工程）：依赖树 **880 → 353 包（−60%）**，裁后 `vue-tsc --noEmit` 与
+> `vite build` 仍 exit=0、`check-starter-align` 仍 exit=0。
+> **裁剪属「工程选择」级偏离，必须在工程 README 显式声明**（含影响面：`pnpm run lint` / 提交钩子按设计不可用、如何恢复）。
+>
+> 附：`all` 产物里 `scripts.test` / `scripts.test:coverage` 是 `echo` **占位桩**（**不需要 vitest**），
+> 不要因为看到 test 脚本就顺手装测试框架。
 
 ### 4.2 落地 API 请求层（唯一 HTTP 层）
 
@@ -749,6 +818,11 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 ### ① 骨架 —— 退出条件：`check-starter-align.mjs` 退出码 0
 
 - [ ] **C1** 工程由 `printf '\n' | td-starter init <名> -type vue3 -temp all` 生成（**完整脚手架血统**），且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架齐全、`prepare` 已删、必需依赖在位、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点；脚本自动判 `all`/`lite` 血统）
+- [ ] ★★★ **第④步三步都做了**：`src/` 共 **55 件 = `assets/core` 31 + `references/scaffold/src` 独有 24**（`find src -type f | wc -l` 自证）；
+  **工程根外壳取自 `references/scaffold/`**（`vite.config.ts` / `index.html` / `.env*` / `package.json`），**不是** CLI 的上游版。
+  ⚠️ 漏做此步时**上面那个闸门仍会全绿**，但 `src/router/index.ts` 还 import 已删的 `./modules` ⇒ **工程根本跑不起来**（见 troubleshooting G17）
+- [ ] ★ **工程能真的启动**：`npx vite build` 或 `npm run dev` 不报 `Cannot find module './modules'` / `./style/variables.less`；`main.ts` 已引 `tokens.css` + `theme-dark.css` 且调了 `setting.load()`（骨架文件在场 ≠ 接线正确）
+- [ ] **依赖安装方式已声明**：若改用 pnpm 或裁剪了 devDependencies（如剔除 lint/commit 链），工程 README 的「已声明偏差」段有对应条目与影响面；**骨架配置文件全部保留**（见 §4.1.1）
 - [ ] 工程根保留 **`all` 骨架 7 件**（`index.html` `package.json` `tsconfig.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/types/env.d.ts`）；**无** `tsconfig.node.json`、**无** `src/vite-env.d.ts`（`all` 血统恒无）
 - [ ] 上游仓库文档件与演示业务代码已按「必删清单」清理（`check-starter-align.mjs` 的 `all:upstream-residue` 无 WARN）
 - [ ] `scripts.prepare` 已删除；`@` 别名 vite + tsconfig 成对；`all` 自带 `vue-router`/`pinia`/`axios`/`tdesign-vue-next` 均在位
