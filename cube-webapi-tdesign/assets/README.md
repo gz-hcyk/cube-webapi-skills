@@ -14,24 +14,36 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/com
 
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
-| `references/scaffold/` | **已装 `node_modules`、已有 `dist`**，跑过 `vue-tsc --noEmit` + `vite build` | **唯一真相源**：资产改动必须先在此编译 0 错误再同步回 `assets/` |
+| `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install` | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
 | `references/demo/` | **无 `node_modules`、无 `dist`**（从未编译，源码级演示） | 零依赖演示工程：展示登录/MFA/令牌板等**完整形态**页面，**不保证可直接编译**，拷贝前须自行过 `vue-tsc` |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
 
+### ★ 验证结论的适用范围（2026-09 实测口径 —— 勿误读）
+
+本文档与 `SKILL.md` 中反复出现的「`vue-tsc --noEmit` 与 `vite build` 0 错误」，其适用范围如下：
+
+| 维度 | 实际情况 |
+|---|---|
+| **何时取得** | 曾在**完整安装依赖**的工程内跑通（`vue-tsc --noEmit` + `vite build` + CDP 实测）。⚠️ 本包已将 `node_modules`/`dist` **清空为声明式**，故不再有现场物证，一切以本记录 + 下方复现命令为准 |
+| **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
+| **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
+| **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
+| **`references/demo/` 里的「0 错误」** | **不适用** —— demo 无 `node_modules`、无 `dist`、从未编译；其文档中的「0 错误」是**预期目标**，非实测结论 |
+
 ## ★ 唯一真相源与同步铁律
 
-- **真相源 = `references/scaffold/src/`**（可运行、`vue-tsc --noEmit` 与 `vite build` 0 错误、CDP 实测过）。
-- 改任一资产：**先在 scaffold 内改并编译验证 0 错误**，再同步回本目录；禁止只改本目录。
+- **真相源 = `references/scaffold/src/`**（历史在完整依赖环境下 `vue-tsc --noEmit` 与 `vite build` 0 错误、CDP 实测过；**复现须先 `npm install`**，见上节「验证结论的适用范围」）。
+- 改任一资产：**先在 scaffold 的已装依赖工作副本内改并编译验证 0 错误**，再同步回本目录；禁止只改本目录。
 - 一致性可用一行校验（应仅剩工程外壳 + 可选件差异）：
 
 ```bash
 diff <(cd assets/core && find . -type f | sort) \
-     <(cd references/scaffold/src && find . -type f | sort | grep -vE '^\./(main\.ts|App\.vue|router/|tdesign-icons\.d\.ts|vite-env\.d\.ts|pages/LovDemoView\.vue|components/cube/(PriceYuanInput|RoleMenuEditor|ThemeShowcase)\.vue)')
+     <(cd references/scaffold/src && find . -type f | sort | grep -vE '^\./(main\.ts|App\.vue|router/|vite-env\.d\.ts|pages/LovDemoView\.vue|components/cube/(PriceYuanInput|RoleMenuEditor|ThemeShowcase)\.vue)')
 ```
 
-`scaffold/src` 相对 `assets/core` 只多出「工程外壳」5 个文件
-（`main.ts` / `App.vue` / `router/index.ts` / `tdesign-icons.d.ts` / `vite-env.d.ts`，
+`scaffold/src` 相对 `assets/core` 只多出「工程外壳」4 个文件
+（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，
 由 `tdesign-starter-cli` 生成，随 scaffold 提供）、DEV 验证页 `pages/LovDemoView.vue`
 与三个**零依赖可选件**（`PriceYuanInput` / `RoleMenuEditor` / `ThemeShowcase`，
 scaffold 为演示而附带，业务工程按需拷）。
@@ -40,13 +52,13 @@ scaffold 为演示而附带，业务工程按需拷）。
 
 | 文件（→ 目标路径） | 作用 | 被谁引用 |
 |---|---|---|
-| `api/http.ts` → `src/api/` | **唯一 HTTP 层**（`Authorization: Bearer` + `assets_token` + 信封处理） | 全局 |
-| `api/token.ts` → `src/api/` | 令牌/租户持久化 + `normToken` 三向兜底 + JWT 显示名 | http、router、auth |
+| `api/http.ts` → `src/api/` | **唯一 HTTP 层**，导出双实例 `http`（baseURL 已含 `/api`）/`rawHttp`（同源根）；`Authorization: Bearer` + `assets_token` + 信封处理 + 401 刷新重放；**无全局 camelize** | 全局 |
+| `api/token.ts` → `src/api/` | 令牌/租户持久化（`assets_token`/`assets_refresh_token`）+ `normToken` 三向兜底 + JWT 显示名 | http、router、auth |
 | `api/fieldRender.ts` → `src/api/` | 字段元数据 → 控件/列/表单/rules 选型（单真相源） | ListPage/FormDialog/DetailDrawer |
 | `api/useEntityResource.ts` → `src/api/` | `GetPage`/`Index`/CRUD 封装 | ListPage/FormDialog |
 | `api/useLookups.ts` → `src/api/` | 约定式外键字典（`xxxID` → 同名控制器 Index） | ListPage |
 | `api/menuTitles.ts` → `src/api/` | 后端 `displayName` 登记为页面标题权威源 | MenuSidebar、ListPage |
-| `utils/camel.ts` → `src/utils/` | PascalCase → camelCase | 多处 |
+| `utils/camel.ts` → `src/utils/` | PascalCase → camelCase（**消费端归一，http 层已无全局 camelize**） | 多处 |
 | `utils/color.ts` → `src/utils/` | 品牌色阶推导（`getBrandPalette`） | setting |
 | `stores/auth.ts` → `src/stores/` | 登录态 / `POST /Auth/Login` | LoginView、router |
 | `stores/setting.ts` → `src/stores/` | 个性化偏好（主题模式 / 品牌色 / 布局）+ `load()` | main、BasicLayout、SettingPanel |

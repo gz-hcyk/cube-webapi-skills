@@ -21,7 +21,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
 | LIST 型值集弹窗（LovListField）行为/FR/验证清单 | `references/lov-list-field.md` |
 | 演示工程（**源码级**，未装依赖/未编译；完整形态页面参考） | `references/demo/`（README 见 `references/demo/README.md`） |
-| 生产级编排层脚手架（**唯一真相源**，已 `vue-tsc`+`vite build`+CDP 实测） | `references/scaffold/` |
+| 生产级编排层脚手架（**唯一真相源**；历史在完整依赖环境下 `vue-tsc`+`vite build`+CDP 实测 0 错误，**复现须先 `npm install`**） | `references/scaffold/` |
 | 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
 | 新增实体验收清单 | 本文件 §4.21（枚举 LOV / 外键渲染人工核查） |
 | 资产体检（死文件/悬空引用/副本漂移） | `references/scripts/scan-assets-dead.mjs` + `scan-assets-refs.mjs`（见目录 README） |
@@ -55,7 +55,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
   ② `main.ts` 启动调用 `useSettingStore().load()`（还原偏好 + 把品牌色阶以 inline style 注入 `<html>`）；
   ③ `BasicLayout.vue` **挂载 `<SettingPanel />`**（右下角悬浮齿轮 = 主题模式/品牌色的 UI 唯一入口）。
 - 违反判定：无 CLI 产物形态 / 主色非政务蓝或三处不同源 / `theme-dark.css` 未引入 或 `setting.load()` 未调用 或 `SettingPanel` 未挂载 —— 任一条即不合格。
-- 参考实现：`references/scaffold/`（已按 C1~C3 落实；`vue-tsc --noEmit` 与 `vite build` 均 0 错误；CDP 实测：默认 `--td-brand-color=#0f4c9e`，点齿轮 → 选「暗色」→ `<html>` 得 `t-theme-dark`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好落 `localStorage['cube-personalization']`）。
+- 参考实现：`references/scaffold/`（已按 C1~C3 落实；`vue-tsc --noEmit` 与 `vite build` 均 0 错误 —— 该结论在**完整依赖环境**下取得，技能目录内**不随包携带依赖**（`node_modules`/`dist` 已清空为声明式），复现须先 `npm install`，口径见 `assets/README.md` §「验证结论的适用范围」；CDP 实测：默认 `--td-brand-color=#0f4c9e`，点齿轮 → 选「暗色」→ `<html>` 得 `t-theme-dark`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好落 `localStorage['cube-personalization']`）。
 
 ## 铁律：父子表（主从表）前端只展现父表（不可违反）
 
@@ -100,7 +100,7 @@ Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计
 | 步骤 | 动作 | 拷贝源 → 目标 | 要点 |
 |---|---|---|---|
 | 1 脚手架 | `td-starter init`（Vue3+TS+Vite+Pinia） | — | 结构：`api/ store/ pages/ layouts/ router/`；新工程一律走此 CLI，禁止从零手搭（§九） |
-| 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **唯一 axios 实例**（铁律 H1）；头只发 `Authorization: Bearer`（H2）；`X-Tenant`+`X-Tenant-Id`；响应 `code`+401 跳登录；`baseURL='/'` 故调用方写全 `/api`；`getRaw` 供非实体端点（`/Auth/*`、`/api/Admin/Index/GetMenuTree`） |
+| 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **全项目唯一 HTTP 层**，导出**双实例**（铁律 H1）：`http`（`baseURL=API_BASE`，**已含 `/api`**，实体接口只写 `/{area}/{ctrl}`）+ `rawHttp`（`baseURL=SERVER_BASE`，非实体端点/菜单树自带 `/api`）——方向相反勿混（H2）。头只发 `Authorization: Bearer`+`X-Tenant`/`X-Tenant-Id`；响应判 `code`+401 跳登录（带 refresh 重放一次）；**无全局 camelize**（键归一在 `useEntityResource.normalizeRows`）。`/api` 由后端 `CubeSetting.ApiPrefixes` 决定，前端经 `VITE_API_BASE`/`VITE_SERVER_BASE` 对齐 |
 | 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts`；`permissions.ts` | `references/demo/src/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
 | 4 资源/渲染器 | `useEntityResource.ts`/`fieldRender.ts`/`useLookups.ts`/`useLov.ts` → `src/api/` | 同上 | 见 §4.4/§4.8/§4.20 |
 | 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
@@ -121,9 +121,9 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 拷贝 `assets/core/api/http.ts` → `src/api/http.ts`、`assets/core/api/token.ts` → `src/api/token.ts`、`assets/core/utils/camel.ts` → `src/utils/camel.ts`。这是**全项目唯一**的请求层（铁律 H1）。
 
-- **令牌**：`token.ts` 统一读写 `localStorage['assets_token']`（配套 `normToken` 三向兜底 + `getUsernameFromToken`）；`http.ts` 请求拦截调 `getToken()`，头写 **`Authorization: Bearer ${token}`**（实测后端只认这一个头，见 H2）。登录/登出/401 清令牌一律经 `token.ts`，**任何组件不得自行 `localStorage.getItem/setItem` 令牌**。
-- **两套实例同一份拦截逻辑**：`http`（`baseURL:'/'`，实体接口用）与 `rawHttp`（`baseURL:'/'`，登录/菜单等）。二者都以 `/` 为基址 → **调用方自己写全前缀**：实体写 `/api/{area}/{controller}`，非实体写 `/Auth/Login`、`/api/Admin/Index/GetMenuTree`。
-- **便捷方法**：`getApi/postApi/putApi/deleteApi`（返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw<T>`（同 http 实例，语义上用于非实体端点）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 清令牌并跳 `/login`**）与 `camelize`（PascalCase→camelCase，缩写白名单见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
+- **令牌**：`token.ts` 统一读写 `localStorage['assets_token']`（推荐 API：`getToken/getRefreshToken/setTokens/clearTokens/getTenant/getTenantCode/setTenantCode`；兼容 API：`setToken/clearToken/isAuthed/normToken/getUsernameFromToken/clearTenant`）+ `normToken` 三向兜底 + `getUsernameFromToken`；`http.ts` 请求拦截调 `getToken()`，头写 **`Authorization: Bearer ${token}`**（实测后端只认这一个头，见 H2）。**401 时 `tryRefresh()` 用 `REFRESH_KEY` 的 refreshToken 打 `POST /Auth/Refresh` 并重放原请求一次（`inFlight` 守卫防并发风暴）**。登录/登出/401 清令牌一律经 `token.ts`，**任何组件不得自行 `localStorage.getItem/setItem` 令牌**。
+- **两套实例同一份拦截逻辑（方向相反，务必分清）**：`http`（`baseURL = API_BASE`，**已含 `/api`**，实体接口用）与 `rawHttp`（`baseURL = SERVER_BASE`，默认空串=同源根，登录/菜单等非实体端点用）；拦截器由 `attachInterceptors()` 统一挂载。**调用方写作规则**：实体接口**只写 `/{area}/{controller}`（绝不写 `/api`）**；非实体端点分两类——后端根级端点写 `/Auth/Login`、`/Mfa/Verify`（本就无前缀），而挂在 `/api` 下的后端路由（如菜单树）**必须自带 `/api`**：`getRaw('/api/Admin/Index/GetMenuTree')`。基址派生：`SERVER_BASE = (VITE_SERVER_BASE||'').replace(/\/+$/,'')`、`API_BASE = VITE_API_BASE || (SERVER_BASE ? \`${SERVER_BASE}/api\` : '/api')`——`/api` 由后端 `CubeSetting.ApiPrefixes` 决定（默认 `/api`，可多前缀），前端只用 `VITE_API_BASE` 对齐，**勿硬编码散落各处**。
+- **便捷方法**：`getApi/postApi/putApi/deleteApi`（走 `http`，返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw/postRaw`（走 `rawHttp`，用于非实体端点，路径自带 `/api` 或为根级端点）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 先 `tryRefresh()` 重放、失败则清令牌跳 `/login`**）+ 捕获 `x-tenant` 响应头写 `setTenantCode`。**不含全局 `camelize`**：后端 PascalCase 键原样到达，行数据归一由 `useEntityResource.normalizeRows` 承担（详见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
 - **多租户**：请求头 `X-Tenant`（租户 Code，主）+ `X-Tenant-Id`（兼容旧后端），Code 由登录响应头 `X-Tenant` 捕获后持久化。
 - ⚠️ **反面教材（该文件现已不存在，仅作历史记录）**：技能早期版本附带过一套 `api.ts`（另一套 axios 实例）（键名 `cube_token`，`baseURL:'/api'`，双令牌头）。它与 `token.ts` 键名冲突，任何组件误引即产生「请求不带令牌 → 全接口 401 → 菜单树恒空」。**不要再引入它**；如遇老项目残留，删除并全量 `grep "api/api"` 清零引用。
 
@@ -378,7 +378,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - **编排层**：`BasicLayout.vue`（侧栏 `MenuSidebar` + 顶栏面包屑/用户菜单 + 内容区 + **`SettingPanel` 挂载**）、`pages/EntityPage.vue`（`area/controller` 驱动、按 `specialControllers.ts` 分发专用页/ListPage）、`pages/LoginView.vue`（门禁，系统名读 `/Auth/LoginConfig`）、`router/index.ts`（登录拦截 + `/dashboard` + `/entity/:area/:controller` 泛型兜底）、`main.ts`（TDesign → tokens.css → theme-dark.css → `setting.load()`）。
 - **分支（非实体控制器）**：`src/specialControllers.ts` + `components/cube/ConfigView.vue` / `DbView.vue`（见 §4.17 / §4.18）。
 - 用法：`npm install` → `VITE_API_TARGET=http://127.0.0.1:<port> npm run dev`。**唯一必改项是代理 target**；`/Admin`、`/Asset` 等 SPA 路由**切勿**代理（硬刷新 404）。
-- 质量门槛：`vue-tsc --noEmit` 与 `vite build` 必须 0 错误（本目录已达标）。旧版片段式说明（只给 `src/**` 片段、缺工程文件）已废弃。
+- 质量门槛：`vue-tsc --noEmit` 与 `vite build` 必须 0 错误（本目录**历史在完整依赖环境下已达标**；技能目录内不随包携带依赖（已清空为声明式），复现须先 `npm install`）。旧版片段式说明（只给 `src/**` 片段、缺工程文件）已废弃。
 
 ### 4.16 品牌主色系统 + 暗色模式
 
@@ -429,7 +429,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 | 步骤 | 落点 | 说明 |
 |---|---|---|
-| ① 拿元数据 | `assets/core/api/useLov.ts` → `src/api/useLov.ts` | `useLov().load(fields)` 批量拉 `GET /api/Admin/Lov/Meta`，LIST 型进 `lovListConfig[lovCode]`（`listConfig`/`searchFields`/`tableColumns`）。⚠️ 响应已被 http 层 camelize，**必须读 `data.meta` / `data.inlineEnums`（小写）**；只读 `data.Meta` 恒 `undefined`（历史缺陷，已修）。另导出 `lovFetchRows(meta,params,pageIndex,pageSize)`——LIST 型**取数共用函数**（直连/代理二选一 + 解包），宿主（FormDialog）做 id→名称回显时直接复用它，不必重写取数分支。 |
+| ① 拿元数据 | `assets/core/api/useLov.ts` → `src/api/useLov.ts` | `useLov().load(fields)` 批量拉 `GET /Admin/Lov/Meta`（**`useLov` 走 `http` 实例，`baseURL` 已含 `/api`，调用点不写 `/api`**），LIST 型进 `lovListConfig[lovCode]`（`listConfig`/`searchFields`/`tableColumns`）。⚠️ 后端 `data` 下键为**小写驼峰**（`System.Text.Json` Web 策略产生，非前端 camelize），**必须读 `data.meta` / `data.inlineEnums`**；只读 `data.Meta` 恒 `undefined`（已双向兜底）。另导出 `lovFetchRows(meta,params,pageIndex,pageSize)`——LIST 型**取数共用函数**（直连/代理二选一 + 解包），宿主（FormDialog）做 id→名称回显时直接复用它，不必重写取数分支。 |
 | ② 弹窗控件 | `assets/core/components/cube/LovListField.vue` → `src/components/cube/` | 搜索栏 + 单选/多选选择列 + 分页 + 「已选 N 项」+ 取消/确定 + `refLovCode` 列字典翻译。props：`dialogVisible` / `lovCode` / `lovMeta` / `inlineEnums` / `multiple` / `modelValue`（另有可选 `fetcher` 逃生舱，便于单测/无后端演示）；emits：`update:dialogVisible` / **`select({row,display})`** / **`confirm({values,rows,display})`**——`display` 是组件按 `meta.labelField` 解析出的**名称串**（顿号连接），宿主只读框直接显示它，提交仍用 id（见 ④）。 |
 | ③ 控件选型 | `fieldRender.controlOf` 头部 | `if (isListLov(f)) return 'lov-list'`（`isListLov` = `lovCode` 以 `List.` 开头），**必须置于 `isMappedField` 之前**（否则 LIST 型被误判成外键下拉）；`FormItem` 加 `lovCode` 透传，`multiple` 由字段名 `xxxIDs` 判定。 |
 | ④ 挂模板分支 | `FormDialog` | `<LovListField v-else-if="it.control==='lov-list'">` + 只读展示输入（点击开弹窗）+ `useLov().load(props.fields)`；**显示名称、提交 id 分离**：`model[it.key]` 存 id（单选单值 / 多选逗号串），`lovDisplay[it.key]` 存名称（只读框绑它）；单选 `@select` 回填 `payload.row` 的 id + `payload.display`，多选 `@confirm` 回填 `payload.values.join(',')` + `payload.rows` 解析的名称；**编辑态回显**由 `seedDisplay` 完成（先原值兜底，再经 `lovFetchRows` 整表取数匹配 id→名称，映射字段命中 `fallbackKey` 时免请求）。**只 import 不挂模板分支 = 死代码**（`vue-tsc` 不报错但永不渲染）。搜索栏由 `buildSearchItems` 把 `lov-list` **降级为文本输入**（LIST 是动态数据、无静态候选，弹窗不适配内联搜索栏）。 |
@@ -440,7 +440,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - 行点击事件是**单 context 对象** `{row,index,e}`（非 `(e,ctx)` 双参；写错则点行永远选不中）；`t-dialog` 默认 `destroyOnClose=false`（DOM 永久存在），本模板显式置 `true`。
 - **取数二选一**：`listConfig.requestUrl` 以 `/` 开头 ⇒ 前端直连 `getApi`；否则按 `proxyRequest` 决定是否走 `POST /api/Admin/Lov/ListData` 服务端代理（需后端 `AddCubeLov()` 注册；未注册时值集须 `ProxyRequest=false`）。
 - **搜索参数**：字符串并入 **`Q` 关键词**，数值/枚举/日期走字段参数（与 `fieldRender.buildSearchParams` 同源）。
-- **⚠️ `InlineEnums` 的键会被 camelize 破坏（实测缺陷）**：http 层 camelize 是「**首字母小写**」，`Enum.Admin.RoleKind` → `enum.Admin.RoleKind`；而字段 `RefLovCode` 的**值**是普通字符串、保持原样 ⇒ 字典键与引用值对不上 ⇒ **`refLovCode` 列字典翻译恒失效（显示原始 0/1/2）**。`useLov` 已按「本次请求的规范 lovCode」大小写不敏感复原键（无匹配再首字母还原大写）。新增值集后**必须实测翻译列已出中文**。
+- **⚠️（已闭环）历史缺陷：`InlineEnums` 的键曾被全局 camelize 破坏**：旧版 http 层 camelize 是「**首字母小写**」，`Enum.Admin.RoleKind` → `enum.Admin.RoleKind`；而字段 `RefLovCode` 的**值**是普通字符串、保持原样 ⇒ 字典键与引用值对不上 ⇒ **`refLovCode` 列字典翻译恒失效（显示原始 0/1/2）**。**2026-09 起全局 camelize 已移除，键原样到达、根因消除**；`useLov` 仍保留「按本次请求的规范 lovCode 大小写不敏感复原键」的兜底（双保险）。新增值集后**必须实测翻译列已出中文**。
 - **选中即自关闭**：单选 `pickRow`、多选 `onConfirm` 均在 emit 后 `close()`（官方实现只 emit、关闭交父组件；本模板内聚关闭以免"忘了关"，即差异 #6）。如需恢复「父组件决定关闭」契约，删掉对应 `close()` 即可。
 - `LovController` 不可达必须**静默退化**，不阻断主页面。
 - **端到端验证入口**：scaffold 的 DEV 路由 `/lov-demo`（`src/pages/LovDemoView.vue`）+ `npm run mock`（Mock 已实现 `/api/Admin/Lov/Meta` 与 ListData 代理，含 24 行数据供跨页验证）。
@@ -493,7 +493,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 9. **代理**：dev 代理 `/api` `/Auth` `/Mfa` `/cube` `/Content` → 后端（target 写 `127.0.0.1` 勿 localhost）；**切勿代理 `/Admin` 等 SPA 路由**（硬刷新 404）。
 10. **`dist` 构建沙箱坑**：safe-delete 报错与代码无关；`dist` 被进程锁 → 先 `--outDir dist-check` 验证再 `cp -r` 覆盖，**勿 `mv`/`rm` 替换**；治本停占用进程。
 11. **「支持暗黑模式」= 三处接线，不是一个 css 文件**：`theme-dark.css` 存在 ≠ 用户能切。必须 ① `main.ts` 在 TDesign 样式**之后** `import '@/styles/theme-dark.css'`；② `main.ts` 调 `useSettingStore().load()`；③ `BasicLayout.vue` 挂 `<SettingPanel />`。缺任一处 → 齿轮不存在 / 类名不切换 / 首屏不还原，等同于没做。验收只认两件事：**右下角有齿轮**、**点「暗色」后 `<html>` 出现 `t-theme-dark`**（`--td-bg-color-page` 应变 `#181818`）。
-12. **技能资产必须与当前 `fieldRender` 契约同版本**：`assets/` 若混入早期组件（旧 `ListSearchBar`/`DetailContent` 引用 `formItemName`/`selectFormControl`/`LookupMap` 等已删导出），**拷贝即编译失败**。判断法：把待用资产临时放进 `references/scaffold/src/` 跑一次 `vue-tsc --noEmit`，0 错误才算可用。**当前真相源 = `references/scaffold/src/`**（已过 `vue-tsc` + `vite build`，并含 C1~C3 三约定）。
+12. **技能资产必须与当前 `fieldRender` 契约同版本**：`assets/` 若混入早期组件（旧 `ListSearchBar`/`DetailContent` 引用 `formItemName`/`selectFormControl`/`LookupMap` 等已删导出），**拷贝即编译失败**。判断法：把待用资产临时放进 `references/scaffold/src/` 跑一次 `vue-tsc --noEmit`，0 错误才算可用 —— ⚠️ **技能目录内 scaffold 不随包携带依赖（`node_modules`/`dist` 已清空为声明式，仅留 `package.json`/`package-lock.json`），须先 `cd references/scaffold && npm install`**，或直接放进自己的业务工程验证。**当前真相源 = `references/scaffold/src/`**（历史在完整依赖环境下过 `vue-tsc` + `vite build`，并含 C1~C3 三约定）。
 13. **CDP 验收选 t-select 必踩 stale-popup（G9）**：同一弹窗内**连续点开两个下拉**（如仓库→单据类型）时，用 `[...document.querySelectorAll('.t-select-option,.t-option,.t-popup li')].find(e=>e.getBoundingClientRect().width>0)` 取「全局首个可见选项」会**误选上一个下拉的残留项**（值填错，如单据类型选成了「总务仓库」）。根因：TDesign `.t-popup` 关闭后仅 `display:none`/`visibility:hidden`，**不卸载**，重开别的 select 时 DOM 同时挂着多个 popup，「首个可见」可能是上次残留。**正确策略**：先过滤出所有可见 popup `[...document.querySelectorAll('.t-popup')].filter(p=>p.getBoundingClientRect().width>0)`，**取最后一个**（=最新打开的那个），在其内部再取首个可见 `.t-select-option` 点击。等 popup 就绪同样判「最后可见 popup 内有可见选项」而非全局。定位触发元素用 `t-form-item__<字段名>` class（探针实测 `t-form-item__warehouseID`）比 label 文本匹配稳。
 
 ## 七、推荐检查项（验收 checklist）
@@ -516,7 +516,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - [ ] 审计字段不拉字典（useLookups 排除 createUserID/updateUserID）
 - [ ] 多选 value 恒数组、daterange 落单列逗号串、`itemType=image/mail/mobile` 三端特化（email `{type:'email'}`、mobile `{telnumber:true}` 内置规则）
 - [ ] `MessagePlugin` 用法；`@submit` 无 `.prevent`；路由视图 `:key="route.path"`；`pagination` 稳定 reactive；init 幂等
-- [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（响应已 camelize）；**`InlineEnums` 的键也须复原**（camelize 首字母小写会把 `Enum.X` 变成 `enum.X`，导致 `refLovCode` 列翻译失效——`useLov` 已按请求 code 复原，改后实测翻译列出中文）
+- [ ] Lov 值集接入（`useLov` / EnumController），不可达静默退化；读 Meta 响应必须用**小写键** `data.meta` / `data.inlineEnums`（**后端 `data` 下键本就是小写驼峰**，非前端 camelize）；`InlineEnums` 字典键**已随全局 camelize 移除而不再被破坏**，`useLov` 另留大小写不敏感复原兜底——改后实测 `refLovCode` 翻译列已出中文
 - [ ] LIST 型值集控件为 `LovListField`（TDesign 内置 `row-select`，多选 `:selected-row-keys` 受控 + 跨页 `reserveSelectedRowOnPaginate`）；行点击用**单 context 对象**；选中/确定后自关闭；`FormDialog` 已挂模板分支（非只 import）
 - [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染，无违规；改契约/登录代码已做 dist 产物核验闭环
 - [ ] 后端字段 PascalCase 已归一（camel/normalizeRows）；Int64 字符串传输
@@ -530,14 +530,14 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 > ⚠️ **本目录当前未装 `node_modules`、未构建**（源码级参考）。它的价值是展示
 > **完整形态**页面（登录含 MFA/注册/找回密码、令牌板、权限编辑等），
-> 拷贝其中的文件到业务工程前**必须先在 `references/scaffold/` 内过一遍 `vue-tsc`**。
+> 拷贝其中的文件到业务工程前**必须先在已装依赖的工程内过一遍 `vue-tsc`**（`references/scaffold/` 须先 `npm install`——它不随包携带 `node_modules`（已清空为声明式），直接跑会找不到 `vue-tsc`）。
 > 已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。
 ```bash
 cd references/demo
 npm install
 npm run mock   # 终端1：Mock 后端 :3001（server.mjs，实现《认证接口设计.md》契约）
 npm run dev    # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
-npm run typecheck   # vue-tsc --noEmit（当前 0 错误）
+npm run typecheck   # vue-tsc --noEmit（⚠️ demo 无 node_modules、从未编译；须先 npm install，实测结论以 scaffold 为准）
 ```
 登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
 
@@ -548,7 +548,7 @@ demo 与 `references/scaffold/` **同源**：已按铁律 C1~C3 落实（政务�
 
 `references/demo`/`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
 1. **改代理 target**（唯一必改项）：vite proxy 的 `/api` `/Auth` `/Mfa` `/cube` `/Content` target 指向真实后端（`VITE_API_TARGET`）；勿代理 SPA 路由。
-2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的 `baseURL` 指向后端基址或保持 `'/'` 同源部署。
+2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的基址由 `VITE_API_BASE` / `VITE_SERVER_BASE` 控制（同源部署时留空即可，`API_BASE` 自动落到 `/api`）；跨域部署时填后端基址。**实体调用点无需改动**（只写 `/{area}/{ctrl}`，前缀由 `API_BASE` 承载）。
 3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌双头 / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
 
 ## 十、生成生产部署包（前端构建与同步）
@@ -568,7 +568,7 @@ PY
 ```
 - `base`：根路径 `/`；子路径 `/blog/` → `vite.config base` + `createWebHistory('/blog/')` + Nginx 子路径反代同步。
 - `manualChunks` 拆 `vue/tdesign/markdown/axios` vendor（消除 chunk>500KB 告警）。
-- 上线前：`baseURL` 指向真实后端/同源 `/`，去掉 dev proxy；改契约后重 build 并核验 dist 产物（§六 第 1 条闭环）。
+- 上线前：用 `VITE_API_BASE`/`VITE_SERVER_BASE` 指向真实后端基址（同源部署留空），去掉 dev proxy；改契约后重 build 并核验 dist 产物（§六 第 1 条闭环）。
 
 ## 十一、新工程初始化与内置模块页面模板复用（tdesign-starter-cli）
 
@@ -580,7 +580,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 ### 11.1 拷入技能模板（assets/ → 目标路径映射）
 
-> **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、编译 0 错误、自带 Mock 后端可端到端跑），只改 `vite.config.ts` 的代理 target。下表用于「并入既有工程」的对照拷贝。
+> **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、自带 Mock 后端可端到端跑；「编译 0 错误」是**在完整依赖环境下的历史结论**，随包 `node_modules`/`dist` 已清空为声明式，用前先 `npm install`），只改 `vite.config.ts` 的代理 target。下表用于「并入既有工程」的对照拷贝。
 
 `assets/` **按「核心 / 可选 / 已归档」三分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
 
@@ -613,10 +613,12 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 > 即 `itemType=json/markdown` 的富编辑**主链路并未实现**，留着只会误导。
 > 若确需该能力：先给 `fieldRender.controlOf` 加 `json/markdown → 'code-editor'` 分支，
 > 再自行封装 CodeMirror 6（`npm i codemirror @codemirror/state @codemirror/view @codemirror/commands @codemirror/lang-json @codemirror/lang-markdown`），
-> 并放进 `references/scaffold/` 跑 `vue-tsc` 验证。**在此之前，json/markdown 字段按普通多行文本渲染即可。**
+> 并放进**已装依赖的工程**（`references/scaffold/` 须先 `npm install`，或直接用自己的业务工程）跑 `vue-tsc` 验证。**在此之前，json/markdown 字段按普通多行文本渲染即可。**
 
 > **已下线**：`ListNavbar/ListSearchBar/ListToolbar/ListFooter`、`DetailContent.vue`（早期 `fieldRender` 契约，拷贝即编译失败，能力已并入自包含 `ListPage.vue` / `FormDialog.vue`，见 §4.5）。
-> **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `tdesign-icons.d.ts` / `vite-env.d.ts`）不在 `assets/` 里——它们随 `td-starter` 生成、随 `references/scaffold/` 提供。
+> **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`）不在 `assets/` 里——它们随 `td-starter` 生成、随 `references/scaffold/` 提供。
+>
+> **已删除 `tdesign-icons.d.ts`**（2026-09-13）：早期为规避 TS7016 手写的「15 图标白名单」环境模块声明。事实上 `tdesign-icons-vue-next` 的发布包**自带完整类型**（`esm/index.d.ts` barrel → `esm/icons.d.ts`，约 2350 个图标导出），`moduleResolution` 取 `Bundler` 或 `Node` 均直接命中，**无需任何声明**；反倒是该 `declare module 'tdesign-icons-vue-next'` 会**捕获模块名并遮蔽真实类型**——实测声明在场时，包内确实导出的 `AddIcon` 会被判为 `has no exported member`（TS2305 假报错），类型可达性从 2350 被压缩到 15。scaffold/src 内图标一律走全局 `<t-icon name="...">` 字符串，无具名导入消费方，删除零影响。若某工程确需具名导入图标：`npm i tdesign-icons-vue-next` 后直接用真实类型，**勿再手写白名单声明**。
 > 分类依据与同步铁律（**唯一真相源 = `references/scaffold/src/`**）见 `assets/README.md`。
 
 ### 11.2 魔方框架内置功能页面（以 GetMenuTree 为唯一权威）

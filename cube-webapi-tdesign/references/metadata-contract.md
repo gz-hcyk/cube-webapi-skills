@@ -150,9 +150,9 @@ GET  /api/Admin/Index/GetMenuTree   → { code:0, data:[ 菜单树，仅含当�
 > 登录路径为 `/Admin/User/Login`；权限位不通过独立接口下发，而是体现在 `GetPage.setting`（enableAdd/isReadOnly…）与菜单树中。
 > 登录/菜单的 `/api` 前缀：官方文档写不带 `/api`，**但实测真实部署（如 localhost:7116）在 `/api` 下**（`POST /api/Admin/User/Login` 返回 `data.access_token`）——前端 auth.ts 已按 `/api` 前缀 + `access_token` 对齐，落地时用 curl 探一遍。
 
-**令牌传递方式（实测需 `Authentication` + `Authorization` 双头，高频坑）**：
-`Authentication: <jwt>`（官方文档推荐）/ **`Authorization: <jwt>`（实测部分后端只认这个，单发 `Authentication` → 401）** / `Cookie`（后端 Set-Cookie）/ Query `?token=xxx`。
-前端 `api.ts` 请求拦截**同时注入 `Authentication` + `Authorization` 两个头（值同为 token）**与 `X-Tenant-Id` 头，两端通吃；`/Admin/...` 这类非 `/api` 接口走 `rawHttp`（`getRaw`/`postRaw`）。
+**令牌传递方式（实测：只发 `Authorization: Bearer <jwt>`，勿加 `Authentication`）**：
+后端可接受的形态有 `Authentication: <jwt>`（官方文档推荐）／ **`Authorization: Bearer <jwt>`（本项目多次实测的**唯一**可用头——单发 `Authentication: Bearer` → 401；只带 Cookie `.Cube.Session` → 401）** ／ `Cookie`（后端 Set-Cookie）／ Query `?token=xxx`。
+因此技能 `http.ts` 请求拦截**只注入 `Authorization: Bearer ${token}` 一个头**（外加 `X-Tenant` / `X-Tenant-Id`），避免多头发送带来的歧义；后端根级非实体端点（`/Auth/*`、`/Mfa/*`）以及挂 `/api` 下的菜单树（`/api/Admin/Index/GetMenuTree`）均走 `rawHttp`（`getRaw`/`postRaw`），实体接口走 `http`（`baseURL` 已含 `/api`）。
 
 **前端权限判定（以 GetPage.setting 为准，而非独立权限位接口）**：
 - `setting.enableAdd !== false && !setting.isReadOnly` ⇒ 显示“新增”；

@@ -80,7 +80,7 @@ const dialogWidth = computed(() => {
 
 | 现象 | 根因/修复 |
 |---|---|
-| vite dev 下矩阵空、请求打到 index.html | 组件数据源必须是 `/api/Admin/Menu`（带 /api 前缀） |
+| vite dev 下矩阵空、请求打到 index.html | 组件数据源经 `http` 实例取 `getApi('/Admin/Menu')`（**调用点只写 `/Admin/Menu`，不带 `/api`**——`http` baseURL 已含，写了反而双前缀 404） |
 | permission 仍渲染成文本框 | ListPage 特判 key 用 `toLowerCase()==='permission'`（camelCase），按 `'Permission'` 判失效 |
 | 页签没出现/矩阵贴行 | item 需 `category:'权限设置'`；组件以全宽 div 渲染，勿套 label form-item |
 | 自动化同帧连点丢位 | 受控 checkbox-group 竞态；本组件已用独立 t-checkbox 规避，验收脚本仍建议逐项间隔点击 |

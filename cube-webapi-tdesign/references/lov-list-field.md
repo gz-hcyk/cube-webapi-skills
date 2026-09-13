@@ -139,7 +139,7 @@ node lov_form_cdp.mjs   # 表单集成 15 项：A1-A3 / B1-B3 / C1-C4 / D1-D5
 
 ### 11. 问题可能原因分析（本组件踩过 / 易误判）
 
-- **★ `InlineEnums` 的"键"被 camelize 破坏 → `refLovCode` 列翻译恒失效**（V8）。`camelize` 只把首字母小写：字典键 `Enum.Admin.RoleKind` → `enum.Admin.RoleKind`，而字段 `RefLovCode` 的**值**保持不变 → 查不到。修复在 `useLov`（按请求 code 复原键），**不在本组件**。症状：该列显示原始 `1/2`。
+- **★（已闭环）历史缺陷：`InlineEnums` 的"键"曾被全局 camelize 破坏 → `refLovCode` 列翻译恒失效**（V8）。旧版 `http` 层 camelize 只把首字母小写：字典键 `Enum.Admin.RoleKind` → `enum.Admin.RoleKind`，而字段 `RefLovCode` 的**值**保持不变 → 查不到。**2026-09 全局 camelize 已移除，根因消除**；`useLov` 另按请求 code 复原键作兜底（**不在本组件**）。症状若仍出现：该列显示原始 `1/2`。
 - **★ TDesign dialog 隐藏后仍在 DOM 且无 `t-dialog--hidden` 类**（V6/V7 的 CDP 判定）。可见与隐藏弹窗 className 相同，唯一差别是 `getBoundingClientRect()`（隐藏 = `0×0`）。**"点确定后弹窗关闭"必须用尺寸判定**；同页若有**标题相同的多个弹窗**（两个 lov-list 字段同 LovCode），靠 header 无法区分，必须叠加尺寸过滤——否则误判"未关闭"。
 - **行点击签名**（F2）：TDesign `row-click` 回调是**单对象** `{row,index,e}`；写成 `(e, ctx)` 会 `ctx===undefined`，点行永不选中。
 - **分页引用不稳**（F4）：`pagination` 每次 render 新建字面量 → 表格内部重算当前页 → 翻页回弹；必须 `reactive` 一次。

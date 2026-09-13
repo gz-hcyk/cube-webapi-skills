@@ -91,7 +91,7 @@ import { orderSettingFields } from '@/configs/orderSetting';
 
 ### 4.3 HTTP 封装 / 解包注意
 
-`ConfigView` 复用技能封装的 `@/api/http`（`getApi`/`postApi`/`putApi` + `Authorization: Bearer` 令牌拦截器；`baseURL='/'`，故路径须自带 `/api` 前缀）。
+`ConfigView` 复用技能封装的 `@/api/http`（`getApi`/`postApi`/`putApi` + `Authorization: Bearer` 令牌拦截器；`http` 实例 `baseURL` 已含 `/api`，故路径**只写 `/{area}/{controller}`、不要自带 `/api`**，否则双前缀 404）。
 内部 `unwrap()` 自动区分**信封**（有 `code` 字段取 `data`）与**裸对象**（直接当配置对象），两种后端返回
 形态都兼容。若后端 `ConfigController<T>` 的 Update 用 `PUT` 而非 `POST`，把 `saveMethod="PUT"` 传入即可；
 端点也可经 `loadUrl`/`saveUrl` 自定义。

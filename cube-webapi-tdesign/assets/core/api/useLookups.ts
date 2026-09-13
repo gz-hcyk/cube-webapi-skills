@@ -11,8 +11,8 @@ import { DataField, lookupBaseName, mapDictOf, isMappedField } from './fieldRend
  * 枚举字段（有 dataSource）不参与——它的选项由 dataSource 直接解析，无需网络。
  *
  * 契约（docs/16-前端接口契约实测报告.md）：
- *   - 实体接口**带** `/api` 前缀：`/api/{area}/{ctrl}`（`/{area}/{ctrl}` 实测 404）；
- *   - Assets 库无 Dept/User 实体，须回退 Cube 内置：`/api/Admin/Department`、`/api/Admin/User`（实测均 200）。
+ *   - 实体接口只写 `/{area}/{ctrl}`（**不带 `/api`**）：`/api` 由 `http` 实例 baseURL 统一承载；
+ *   - Assets 库无 Dept/User 实体，须回退 Cube 内置：`/Admin/Department`、`/Admin/User`（实测均 200）。
  */
 export function useLookups() {
   const lookups = ref<Record<string, Record<string, string>>>({})
@@ -75,11 +75,11 @@ function candidates(area: string, base: string): string[] {
   const b = base.toLowerCase()
   const admin = ADMIN_ALIAS[b]
   const local = AREA_ALIAS[b]
-  const localAliased = `/api/${area}/${local || base}`
-  const localRaw = `/api/${area}/${base}`
+  const localAliased = `/${area}/${local || base}`
+  const localRaw = `/${area}/${base}`
   const list = admin
-    ? [`/api/Admin/${admin}`, localAliased, localRaw]
-    : [localAliased, localRaw, `/api/Admin/${base}`]
+    ? [`/Admin/${admin}`, localAliased, localRaw]
+    : [localAliased, localRaw, `/Admin/${base}`]
   return [...new Set(list)]
 }
 

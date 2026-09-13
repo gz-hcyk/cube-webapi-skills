@@ -79,8 +79,8 @@ async function load() {
   loading.value = true;
   try {
     // GET /api/Admin/Db 返回信封，data 直接是数组（非 rows 包裹）
-    // http 实例 baseURL 为 '/'，须写全 /api 前缀
-    const r = await getApi<DbItem[]>(`/api/${area}/${controller}`);
+    // 行数据接口为 GET /api/{area}/{controller}；http 实例 baseURL 已含 /api，故此处只写 /{area}/{controller}
+    const r = await getApi<DbItem[]>(`/${area}/${controller}`);
     // 兼容两种后端形态：
     //  - 标准信封 { code, message, data: [...] }
     //  - 个别 Cube 版本直接返回裸数组（无信封）→ getApi 直接给数组
@@ -102,7 +102,7 @@ async function load() {
 async function backup(row: DbItem) {
   row.__backing = true;
   try {
-    await postApi(`/api/${area}/${controller}/Backup`, { name: row.name });
+    await postApi(`/${area}/${controller}/Backup`, { name: row.name });
     MessagePlugin.success(`已触发备份：${row.name}`);
     await load();
   } catch (e: any) {
@@ -115,7 +115,7 @@ async function backup(row: DbItem) {
 async function download(row: DbItem) {
   try {
     // 文件流下载：用 http 实例（自带令牌拦截器），responseType=blob
-    const r = await http.get(`/api/${area}/${controller}/Download`, {
+    const r = await http.get(`/${area}/${controller}/Download`, {
       params: { name: row.name },
       responseType: 'blob',
     });

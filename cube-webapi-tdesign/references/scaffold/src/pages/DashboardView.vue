@@ -102,7 +102,7 @@ async function loadCounts() {
   }
   await pool(targets, 5, async (c) => {
     try {
-      const env: any = await getApi(`/api/${c.area}/${c.controller}`, { pageIndex: 1, pageSize: 1 })
+      const env: any = await getApi(`/${c.area}/${c.controller}`, { pageIndex: 1, pageSize: 1 })
       c.count = Number(env?.page?.totalCount ?? 0)
     } catch {
       c.count = -1
@@ -115,7 +115,7 @@ async function loadCounts() {
 async function loadLogs() {
   logsLoading.value = true
   try {
-    const env: any = await getApi('/api/Admin/Log', { pageIndex: 1, pageSize: 10 })
+    const env: any = await getApi('/Admin/Log', { pageIndex: 1, pageSize: 10 })
     recentLogs.value = Array.isArray(env?.data) ? env.data : []
   } catch {
     recentLogs.value = []

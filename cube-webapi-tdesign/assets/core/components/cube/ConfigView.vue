@@ -21,7 +21,7 @@ const props = withDefaults(
   { title: '' },
 )
 
-const url = computed(() => `/api/${props.area}/${props.controller}`)
+const url = computed(() => `/${props.area}/${props.controller}`)
 const loading = ref(true)
 const saving = ref(false)
 const model = reactive<Record<string, any>>({})

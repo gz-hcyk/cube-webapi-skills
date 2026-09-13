@@ -13,7 +13,8 @@ import { MessagePlugin } from 'tdesign-vue-next'
  * 契约（NewLife.Cube 标准）：角色菜单权限存于 Role.Permission，格式为逗号分隔的
  * `菜单ID#权限位掩码`，例如 `1#3,2#7`（3=查看+新增；7=查看+新增+修改；-1=全动作）。
  * 权限位：1=查看 / 2=新增 / 4=修改 / 8=删除（位掩码组合）。菜单源 `GET /api/Admin/Menu`
- * （Index 端点，1000 条扁平行 {id,name,displayName,parentId}，响应拦截器已 camelize）。
+ * （Index 端点，1000 条扁平行 {id,name,displayName,parentId}；`http` 层已无全局 camelize，
+ *  行数据由消费端 `camelize`/`normalizeRows` 归一）。
  */
 const props = defineProps<{
   modelValue?: string
@@ -158,7 +159,7 @@ watch(
 onMounted(async () => {
   loading.value = true
   try {
-    const env: any = await getApi('/api/Admin/Menu', { page: 1, pageSize: 1000 })
+    const env: any = await getApi('/Admin/Menu', { page: 1, pageSize: 1000 })
     menus.value = env?.data ?? []
     permMap.value = parse(props.modelValue)
   } catch (e: any) {

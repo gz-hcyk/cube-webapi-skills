@@ -386,7 +386,7 @@ function handleUpdate(area, controller, id, body, res) {
   const row = ent.rows.find((r) => String(r.id) === String(id));
   if (!row) return fail(res, 404, '记录不存在');
   // 前端按真实 Cube 契约提交 **PascalCase**（RoleLovID/RoleIds…），mock 行是 camelCase；
-  // 归一化首字母小写再合并，避免同一字段出现大小写两份键（详情读回时 camelize 会互相覆盖）。
+  // 归一化首字母小写再合并，避免同一字段出现大小写两份键（详情读回时消费端 camelize 会互相覆盖）。
   const patch = {};
   for (const k of Object.keys(body)) {
     const ck = k.charAt(0).toLowerCase() + k.slice(1);
@@ -409,9 +409,10 @@ function handleDelete(area, controller, id, res) {
 
 /* ----------------------------- 值集（LovController） ----------------------------- */
 /**
- * LIST 型值集定义，严格模拟后端 `/api/Admin/Lov/Meta` 的 **PascalCase** 下发形态
- * （前端 http 层 camelize 后即 useLov 消费的 camelCase —— 注意 `Meta` / `InlineEnums`
- *  首字母大写键会被 camelize 成 `meta` / `inlineEnums`，useLov 两种写法都接受）。
+ * LIST 型值集定义，模拟后端 `/api/Admin/Lov/Meta` 的下发形态。
+ * ⚠️ 真实后端 `data` 下键为**小写驼峰**（`meta` / `inlineEnums`，System.Text.Json Web 策略产物），
+ * 本 Mock 沿用 PascalCase（`Meta` / `InlineEnums`）——**http 层已无全局 camelize**，两种写法
+ * 靠 useLov 的双向兜底（`r.data.meta ?? r.data.Meta`）都能吃下，故 Mock 不改数据 shape 也兼容。
  *
  * 两个 LIST 定义刻意覆盖 LovListField 的**两条取数通道**：
  *  · `List.Admin.Role`      RequestUrl 以 `/` 开头 → 前端**直连** getApi（不经代理）

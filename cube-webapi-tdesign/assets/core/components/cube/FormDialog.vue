@@ -38,7 +38,7 @@ const lovVisible = reactive<Record<string, boolean>>({})
 /** 每个 lov-list 字段的展示文本（id→名称）；缺省退回原始值 */
 const lovDisplay = reactive<Record<string, string>>({})
 
-/** 后端字段描述符可能 PascalCase（`ID`/`Name`），行数据经 camelize 是 camelCase → 大小写宽容取值 */
+/** 后端字段描述符可能 PascalCase（`ID`/`Name`），行数据经消费端归一（`camelize`）是 camelCase → 大小写宽容取值 */
 function pickField(row: any, field?: string): any {
   if (row == null || !field) return undefined
   if (field in row) return row[field]

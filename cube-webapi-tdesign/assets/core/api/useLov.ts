@@ -150,7 +150,7 @@ export async function lovFetchRows(
     data = env?.data;
     envTotal = Number(env?.page?.totalCount ?? 0);
   } else {
-    const env: any = await postApi('/api/Admin/Lov/ListData', { lovCode: meta.lovCode, ...q });
+    const env: any = await postApi('/Admin/Lov/ListData', { lovCode: meta.lovCode, ...q });
     data = env?.data;
     envTotal = Number(env?.page?.totalCount ?? 0);
   }
@@ -240,12 +240,13 @@ export function useLov() {
     if (!codes.length) return;
     loading.value = true;
     try {
-      // Meta 支持逗号分隔多 code 一次拉取；http.ts 的 baseURL 为 '/'，故此处须写全 /api 前缀
-      const r = await getApi<any>(`/api/Admin/Lov/Meta?lovCode=${encodeURIComponent(codes.join(','))}`);
+      // Meta 支持逗号分隔多 code 一次拉取；http 实例 baseURL 已含 /api，故此处**只写 /Admin/...**
+      // （写 /api/Admin/... 会双前缀 404）
+      const r = await getApi<any>(`/Admin/Lov/Meta?lovCode=${encodeURIComponent(codes.join(','))}`);
       if (r.code === 0 && r.data) {
-        // ⚠️ http 层响应拦截器已对整个信封做 camelize（`Meta`→`meta`、`InlineEnums`→`inlineEnums`），
-        //    故**必须优先读小写键**；大写键仅为「未经 camelize 的直连数据」保留。
-        //    （历史缺陷：只读 `r.data.Meta` → camelize 后恒为 undefined → 值集永远拉不到。）
+        // ⚠️ 后端 `data` 下键为**小写驼峰**（由 System.Text.Json Web 策略产生），
+        //    http 层已无全局 camelize，键名原样到达；仍双向兜底取键（小写优先）。
+        //    （历史缺陷：旧版 http 层 camelize 只读 `r.data.Meta` → 恒 undefined → 值集永远拉不到。）
         const metaArr = Array.isArray(r.data) ? r.data : (r.data.meta ?? r.data.Meta);
         if (Array.isArray(metaArr)) normalizeMeta(metaArr);
         // 内联枚举：InlineEnums 也可能携带枚举项（对象：lovCode → 选项数组）
@@ -253,10 +254,10 @@ export function useLov() {
         if (inline && typeof inline === 'object') {
           const merged: Record<string, LovOption[]> = { ...lovOptions.value };
           for (const [rawKey, opts] of Object.entries(inline)) {
-            // ⚠️ camelize 只把**首字母**小写：`Enum.Admin.RoleKind` → `enum.Admin.RoleKind`，
-            //    而字段里的 `RefLovCode` **值**是普通字符串、保持原样 → 字典键与引用值对不上
-            //    → refLovCode 列翻译恒失效（实测 B5 缺陷）。此处按「本次请求的规范 lovCode」
-            //    复原键（大小写不敏感匹配）；无匹配再兜底首字母还原大写（`Enum.`/`List.` 均适用）。
+            // 兜底：历史缺陷根因（旧版 http 层全局 camelize 把字典键 `Enum.Admin.RoleKind`
+            //    小写成 `enum.Admin.RoleKind`、与字段 `RefLovCode` 原值对不上 → 列翻译恒失效）
+            //    已随全局 camelize 移除而消除；此处仍按「本次请求的规范 lovCode」复原键
+            //    （大小写不敏感匹配），无匹配再兜底首字母还原大写（`Enum.`/`List.` 均适用），双保险。
             const code =
               codes.find((c) => c.toLowerCase() === rawKey.toLowerCase()) ??
               rawKey.charAt(0).toUpperCase() + rawKey.slice(1);

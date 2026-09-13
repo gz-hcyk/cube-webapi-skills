@@ -422,7 +422,7 @@ function selectFormControl(f: DataField): FieldControl {
 > `CodeEditor.vue`，但该组件**零引用、从未编译验证**（依赖 `@codemirror/*` 未装），
 > 且当前 `fieldRender.controlOf` **不产出** `code-editor` 控件、`FormDialog` **无对应分支**，
 > 故已在资产清理中**删除**。当前 json/markdown 字段按**普通多行文本**渲染。
-> 若需富编辑：先给 `controlOf` 加分支 + 封装 CodeMirror 6，并放进 `references/scaffold/` 过 `vue-tsc`。
+> 若需富编辑：先给 `controlOf` 加分支 + 封装 CodeMirror 6，并放进**已装依赖的工程**（`references/scaffold/` 须先 `npm install`，或直接用自己的业务工程）过 `vue-tsc`。
 
 | itemType / 控件 | 列表（buildColumns） | 表单（FormDialog） | 详情（DetailDrawer） | 值形态 |
 |----------------|--------------------|--------------------|--------------------|--------|

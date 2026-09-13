@@ -9,9 +9,11 @@
 npm install
 npm run mock        # 终端1：Mock 后端 :3001（零额外依赖）
 npm run dev         # 终端2：Vite :5173，dev proxy 转发 /api、/Auth、/Mfa、/Cube、/Content、/cube 到 mock
-npm run typecheck   # vue-tsc --noEmit（0 错误）
+npm run typecheck   # vue-tsc --noEmit（⚠️ 须先 npm install，见下方说明）
 npm run build       # vite build
 ```
+
+> ⚠️ **本目录未随包携带依赖、从未编译**（无 `node_modules`、无 `dist`）。上方命令须**先 `npm install`** 才能执行；本 README 中出现的「0 错误」均为**预期目标**而非实测结论。实测结论一律以 `references/scaffold/` 为准，且须在其 `npm install` 之后再复现。完整口径见 `assets/README.md` §「验证结论的适用范围」。
 
 浏览器打开 http://localhost:5173（若被占用 Vite 自动顺延）。**登录页即演示《认证接口设计.md》完整契约**：密码/短信/邮箱 Tab（由 `LoginConfig.login` 开关驱动）、OAuth 按钮、忘记密码 / 注册入口、用户名含 `mfa` 触发 MFA 二步验证；登录（任意账号 + 任意密码）后进入主界面，点左侧菜单切换实体页。
 
@@ -20,9 +22,9 @@ npm run build       # vite build
 
 ## 三条约定的落实（与 `references/scaffold/` 同源）
 
-| # | 约定 | demo 落点 | 实测结果 |
+| # | 约定 | demo 落点 | 验证状态（demo 自身未编译；结论引自 scaffold 实测） |
 |---|---|---|---|
-| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `index.html`），配 `@` 别名 + `paths` | `vue-tsc --noEmit` 与 `vite build` 均 0 错误 |
+| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `index.html`），配 `@` 别名 + `paths` | ⚠️ **本目录未编译**（无依赖、无 `dist`）——须 `npm install` 后自行跑 `vue-tsc --noEmit` / `vite build` |
 | C2 | 默认品牌色 = 政务蓝 `#0f4c9e` | `src/styles/tokens.css` + `src/stores/setting.ts` 的 `DEFAULT_BRAND` + `src/theme/tokens.ts` | 登录页/主界面 `--td-brand-color` 均为 `#0f4c9e`；设置面板品牌色预设政务蓝置首 |
 | C3 | 支持切换暗黑模式 | `theme-dark.css`（main.ts 引入）+ `setting.load()`（main.ts 调用）+ `<SettingPanel />`（MainView 挂载） | 右下角齿轮 → 选「暗色」→ `<html class="t-theme-dark">`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好持久化到 `localStorage['cube-personalization']` |
 

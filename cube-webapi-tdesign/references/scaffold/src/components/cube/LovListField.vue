@@ -229,7 +229,7 @@ let picked = false
 /* ───────────────────────── 字段读取（PascalCase 宽容） ───────────────────────── */
 /**
  * 取行字段值：元数据里的字段名来自后端（可能 PascalCase，如 `ID` / `Name`），
- * 而行数据经 http 层 camelize 后是 camelCase（`id` / `name`）。
+ * 而行数据经消费端归一（`camelize`/`normalizeRows`，http 层已无全局 camelize）后是 camelCase（`id` / `name`）。
  * 依次尝试：原名 → 首字母小写 → 全小写比对（兜住 `ID`→`id`、`SchoolID`→`schoolID`）。
  */
 function readField(row: Record<string, any> | undefined, field?: string): any {

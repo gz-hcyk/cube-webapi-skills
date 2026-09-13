@@ -24,7 +24,10 @@ function toPascal(row: any, keyMap: Map<string, string>): any {
   return out
 }
 
-/** 行数据键名归一到 camelCase（PascalCase → camelCase，ID/URL/API 等缩写白名单） */
+/**
+ * 行数据键名归一到 camelCase（PascalCase → camelCase；`camel` 含 ID/URL/IP 纯大写缩写分支）。
+ * ⚠️ http 层已不做全局 camelize，本函数即**唯一行数据归一入口**（避免值集键 Enum.X 被改写）。
+ */
 export function normalizeRows(rows: any[]): any[] {
   return Array.isArray(rows) ? rows.map(camelize) : []
 }
@@ -39,21 +42,22 @@ export interface EntitySchema {
 
 /**
  * 实体资源层：对接本后端契约（以 docs/16-前端接口契约实测报告.md 实测为准）
- *  - GetPage: GET /api/{area}/{ctrl}/GetPage → {data:{setting, list, addForm, editForm, detail, search}}
+ *  - GetPage: GET {base}/GetPage → {data:{setting, list, addForm, editForm, detail, search}}
  *      · list    列表列（含虚拟显示字段，如 WarehouseName→WarehouseID）
  *      · addForm 新增表单字段、editForm 编辑表单字段、detail 详情字段
  *      · search  可查询字段，**给出真实查询参数名**
- *  - Index:   GET /api/{area}/{ctrl} → {data:[rows(camelCase)], page:{pageIndex,pageSize,totalCount}}
- *  - Create:  POST /api/{area}/{ctrl}（实体体，字段名 PascalCase）
- *  - Update:  PUT  /api/{area}/{ctrl}（主键在 body）
- *  - Delete:  DELETE /api/{area}/{ctrl}?id=N
+ *  - Index:   GET {base} → {data:[rows], page:{pageIndex,pageSize,totalCount}}（行数据经 camelize 归一）
+ *  - Create:  POST {base}（实体体，字段名 PascalCase）
+ *  - Update:  PUT  {base}（**主键在 body，不在 URL**）
+ *  - Delete:  DELETE {base}?id=N（**id 在 query，不在 URL path**）
  *
- * ⚠️ 实体/菜单接口带 `/api` 前缀（Cube 路由为 api/{area}/{controller}/{action}）；
- *    而 /Auth/* 与 /Cube/* 不带前缀 —— 二者不可混用。
+ * ⚠️ `base` 只含 `/{area}/{controller}`，**不含 `/api`**：`/api` 由 `http` 实例 baseURL 统一承载
+ *    （同源 `/api`；独立部署 `${VITE_SERVER_BASE}/api`）。误写 `/api` → 双重前缀 404。
+ *    /Auth/*、/Cube/*、菜单等非实体端点走 `rawHttp`（框架根路径，不带 /api）。
  */
 export function useEntityResource(area: () => string, controller: () => string) {
   // area/controller 以 getter 传入，使其随 props 变化保持响应式（控制器切换时重新拉取）
-  const base = computed(() => `/api/${area()}/${controller()}`)
+  const base = computed(() => `/${area()}/${controller()}`)
   const fields = ref<DataField[]>([])
   const schema = ref<EntitySchema>({ list: [], addForm: [], editForm: [], detail: [], search: [] })
   const setting = ref<any>({})
