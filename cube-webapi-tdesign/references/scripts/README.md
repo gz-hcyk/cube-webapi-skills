@@ -27,7 +27,8 @@ node references/scripts/scan-assets-refs.mjs   # ① 文档悬空引用 ② asse
   `assets/api.ts`（已删除的反面教材）改叙述避免误报。
 - 死引用 1 处已修：SKILL.md 仍把已下线的 `ListNavbar/ListSearchBar/ListToolbar/ListFooter`
   列为「基类组件」。
-- `assets/optional/` 的 `IconPicker.vue` 在 scaffold 无副本 → 未经 `vue-tsc`，已标「取用前须验证」。
+- 新增标注：`references/demo/` **未装依赖、未编译**（源码级参考）；`assets/optional/` 的
+  `IconPicker.vue` 在 scaffold 无副本 → 未经 `vue-tsc`，已标「取用前须验证」。
 - **后续：用户确认删除 `CodeEditor.vue`**（`assets/optional/` 一份）。
   关键判据：主链路 `fieldRender.controlOf` **不产出** `code-editor`、`FormDialog` **无该分支**
   → 它从未真正接线，属「规划中资产」。相关文档（SKILL.md 资产表、`assets/README.md`、
@@ -37,6 +38,6 @@ node references/scripts/scan-assets-refs.mjs   # ① 文档悬空引用 ② asse
 
 - **删除 `assets/archive/`**（`api/menuTree.ts`、`api/permissions.ts`）：主链路零引用的历史残留，
   其职责已分别由 `MenuSidebar`+`BasicLayout` 的内联归一化、`DashboardView` 的内联权限位判定取代。
-- **删除 `references/demo/`**：源码级演示工程（从未编译），其展示职责已由 `references/scaffold/` 完整承接
-  （scaffold 即唯一真相源，自带 Mock 后端可端到端跑通登录 → 列表/表单 → 值集弹窗）。
-- 白名单随之收敛：`scan-assets-dead.mjs` 移除 `permissions.ts`、`assets/archive/`、`references/demo/backend/` 三项豁免。
+- 白名单随之收敛：`scan-assets-dead.mjs` 移除 `assets/archive/` 前缀豁免。
+  `permissions.ts`（basename）与 `references/demo/backend/`（前缀）两项**保留**——
+  `references/demo/` 是源码级演示工程（未删），其 `src/api/permissions.ts` 零 import 属正常。

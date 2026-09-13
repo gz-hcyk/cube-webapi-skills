@@ -10,11 +10,12 @@ cp -r assets/core/.  <你的工程>/src/
 cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/components/cube/
 ```
 
-## ★ 参考工程的职责边界（2026-09 实测）
+## ★ 两个参考工程的职责边界（2026-09 实测）
 
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
 | `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install` | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
+| `references/demo/` | **无 `node_modules`、无 `dist`**（从未编译，源码级演示） | 零依赖演示工程：展示登录/MFA/令牌板等**完整形态**页面，**不保证可直接编译**，拷贝前须自行过 `vue-tsc` |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
 
@@ -28,6 +29,7 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue  <你的工程>/src/com
 | **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
 | **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
 | **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
+| **`references/demo/` 里的「0 错误」** | **不适用** —— demo 无 `node_modules`、无 `dist`、从未编译；其文档中的「0 错误」是**预期目标**，非实测结论 |
 
 ## ★ 唯一真相源与同步铁律
 
@@ -92,4 +94,4 @@ scaffold 为演示而附带，业务工程按需拷）。
 | `components/cube/RoleMenuEditor.vue` | 角色权限设置（菜单树 + 权限位勾选，§4.12.1） | 需要角色授权页 | 无 | ✅ scaffold 内有副本，过 `vue-tsc` |
 | `components/cube/PriceYuanInput.vue` | 金额输入（元/分换算） | 有金额字段 | 无 | ✅ 同上 |
 | `components/cube/ThemeShowcase.vue` | 设计令牌板（可视化验证 `/theme`，已挂 DEV 路由） | 想看令牌全景 | 无 | ✅ 同上 |
-| `components/cube/IconPicker.vue` | 图标选择器（`itemType=icon`） | 表单需选图标 | 无（`tdesign-icons-vue-next` 已在依赖内） | ⚠️ **scaffold 内无副本**（模板仅此一份）→ 取用前须先在已装依赖工程过 `vue-tsc` |
+| `components/cube/IconPicker.vue` | 图标选择器（`itemType=icon`） | 表单需选图标 | 无（`tdesign-icons-vue-next` 已在依赖内） | ⚠️ **scaffold 内无副本**，仅 `references/demo/` 有源码级实现（demo 未编译）→ 拷贝前须自行过 `vue-tsc` |

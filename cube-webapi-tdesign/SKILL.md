@@ -20,6 +20,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | ConfigController<T> 单表单 | `references/config-controller.md` + `assets/core/components/cube/ConfigView.vue` |
 | 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
 | LIST 型值集弹窗（LovListField）行为/FR/验证清单 | `references/lov-list-field.md` |
+| 演示工程（**源码级**，未装依赖/未编译；完整形态页面参考） | `references/demo/`（README 见 `references/demo/README.md`） |
 | 生产级编排层脚手架（**唯一真相源**；历史在完整依赖环境下 `vue-tsc`+`vite build`+CDP 实测 0 错误，**复现须先 `npm install`**） | `references/scaffold/` |
 | 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
 | 新增实体验收清单 | 本文件 §4.21（枚举 LOV / 外键渲染人工核查） |
@@ -100,7 +101,7 @@ Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计
 |---|---|---|---|
 | 1 脚手架 | `td-starter init`（Vue3+TS+Vite+Pinia） | — | 结构：`api/ store/ pages/ layouts/ router/`；新工程一律走此 CLI，禁止从零手搭（§九） |
 | 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **全项目唯一 HTTP 层**，导出**双实例**（铁律 H1）：`http`（`baseURL=API_BASE`，**已含 `/api`**，实体接口只写 `/{area}/{ctrl}`）+ `rawHttp`（`baseURL=SERVER_BASE`，非实体端点/菜单树自带 `/api`）——方向相反勿混（H2）。头只发 `Authorization: Bearer`+`X-Tenant`/`X-Tenant-Id`；响应判 `code`+401 跳登录（带 refresh 重放一次）；**无全局 camelize**（键归一在 `useEntityResource.normalizeRows`）。`/api` 由后端 `CubeSetting.ApiPrefixes` 决定，前端经 `VITE_API_BASE`/`VITE_SERVER_BASE` 对齐 |
-| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts` | `assets/core/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
+| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts` | `references/demo/src/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
 | 4 资源/渲染器 | `useEntityResource.ts`/`fieldRender.ts`/`useLookups.ts`/`useLov.ts` → `src/api/` | 同上 | 见 §4.4/§4.8/§4.20 |
 | 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
 | 6 实体页 | `<ListPage area controller title />` | — | 见 §4.6 |
@@ -522,24 +523,29 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
 - [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
 
-## 八、端到端验证（脚手架）
+## 八、最小可运行 Demo（端到端验证脚手架）
 
-`references/scaffold/` 自带 Mock 后端，可端到端跑通「登录 → 实体列表/表单 → 值集弹窗」，也就是新增实体的最小闭环验证入口：
+`references/demo/`（README 见目录内 `README.md`）：
 
+> ⚠️ **本目录当前未装 `node_modules`、未构建**（源码级参考）。它的价值是展示
+> **完整形态**页面（登录含 MFA/注册/找回密码、令牌板、权限编辑等），
+> 拷贝其中的文件到业务工程前**必须先在已装依赖的工程内过一遍 `vue-tsc`**（`references/scaffold/` 须先 `npm install`——它不随包携带 `node_modules`（已清空为声明式），直接跑会找不到 `vue-tsc`）。
+> 已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。
 ```bash
-cd references/scaffold
+cd references/demo
 npm install
-npm run mock       # 终端1：Mock 后端 :3001（backend/server.mjs，实现《认证接口设计.md》契约）
-npm run dev        # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
-npm run typecheck  # vue-tsc --noEmit
+npm run mock   # 终端1：Mock 后端 :3001（server.mjs，实现《认证接口设计.md》契约）
+npm run dev    # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
+npm run typecheck   # vue-tsc --noEmit（⚠️ demo 无 node_modules、从未编译；须先 npm install，实测结论以 scaffold 为准）
 ```
-登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `backend/server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
+登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
 
-> `references/scaffold/` 是**唯一真相源**（已按铁律 C1~C3 落实，政务蓝默认 + 右下角齿轮可切暗黑，并遵守 H1/H2；旧 `api.ts` 已删除改名）。Mock 只是契约替身，换真实后端见 §九。
+demo 与 `references/scaffold/` **同源**：已按铁律 C1~C3 落实（政务蓝默认 + 右下角齿轮可切暗黑，实测 `--td-bg-color-page` `#f3f3f3`→`#181818`），并遵守 H1/H2（唯一 HTTP 层 `src/api/http.ts`、只发 `Authorization: Bearer`；旧 `api.ts` 已删除改名）。
+> 组件对 `src/api/*` 的引用用 `@/api/...`（已配 `@` 别名）；已下线 `ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent`（早期契约，拷贝即报错）。
 
 ## 九、以真实魔方后端替换 Mock（对接说明）
 
-`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
+`references/demo`/`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
 1. **改代理 target**（唯一必改项）：vite proxy 的 `/api` `/Auth` `/Mfa` `/cube` `/Content` target 指向真实后端（`VITE_API_TARGET`）；勿代理 SPA 路由。
 2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的基址由 `VITE_API_BASE` / `VITE_SERVER_BASE` 控制（同源部署时留空即可，`API_BASE` 自动落到 `/api`）；跨域部署时填后端基址。**实体调用点无需改动**（只写 `/{area}/{ctrl}`，前缀由 `API_BASE` 承载）。
 3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌头（只发 `Authorization: Bearer`，勿加 `Authentication`） / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
@@ -596,7 +602,7 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 | **optional** | `assets/optional/components/cube/RoleMenuEditor.vue` | 角色权限设置（§4.12.1）✅ 已随 scaffold 验证 |
 | **optional** | `assets/optional/components/cube/PriceYuanInput.vue` | 金额（分/元）换算输入（§4.13）✅ 已随 scaffold 验证 |
 | **optional** | `assets/optional/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 |
-| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 内无副本（模板仅此一份），**取用前须先在已装依赖工程过 `vue-tsc`** |
+| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 无副本、仅 demo 有源码实现，**取用前须先过 `vue-tsc`** |
 | — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
 
 > **已删除 `CodeEditor.vue`**（原 `assets/optional/components/cube/`；2026-09 资产清理）：零引用 +

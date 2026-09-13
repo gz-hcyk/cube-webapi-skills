@@ -9,7 +9,7 @@ import { join, relative, basename } from 'node:path'
 const ROOT = process.env.SKILL_DIR || 'C:/Users/admin/.workbuddy/skills/cube-webapi-tdesign'
 const SKIP = new Set(['node_modules', 'dist', '.git', 'public'])
 
-/** 白名单：basename → 原因（入口/外壳/可选组件，结构上天然零 import 引用） */
+/** 白名单：basename → 原因（入口/外壳/可选组件/权限模块，结构上天然零 import 引用） */
 const WL_BASENAME = new Map([
   ['main.ts', '应用入口，被 index.html 挂载，无人 import'],
   ['App.vue', '根组件，被 main.ts 挂载'],
@@ -17,6 +17,7 @@ const WL_BASENAME = new Map([
   ['vite-env.d.ts', '全局类型声明，靠 tsconfig include 生效'],
   ['shims-vue.d.ts', '全局类型声明'],
   ['env.d.ts', '全局类型声明'],
+  ['permissions.ts', '权限模块（references/demo 内的源码级实现），可零静态引用'],
   ['IconPicker.vue', '可选组件（assets/optional，按需人工拷贝）'],
   ['PriceYuanInput.vue', '可选组件（assets/optional，按需人工拷贝）'],
   ['RoleMenuEditor.vue', '可选组件（assets/optional，按需人工拷贝）'],
@@ -27,6 +28,7 @@ const WL_PATH_PREFIX = [
   'assets/optional/',    // 可选资产：按需人工拷贝，core 不静态引用（结构上零引用）
   'references/scripts/',  // 独立 CLI 脚本，由 `node xxx.mjs` 直跑
   'references/scaffold/backend/', // Mock 后端入口，`node server.mjs` 直跑
+  'references/demo/backend/',     // Mock 后端入口（demo 工程），同上
 ]
 
 /** 白名单：路径片段（任意层级的 router 入口等） */
