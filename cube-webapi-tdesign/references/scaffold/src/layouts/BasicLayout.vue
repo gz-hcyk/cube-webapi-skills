@@ -17,7 +17,7 @@
       </div>
     </t-aside>
 
-    <t-layout>
+    <t-layout class="main-layout">
       <!-- 顶部布局：横向菜单直接作为顶栏（logo + 菜单 + 操作区） -->
       <t-header v-if="setting.layout === 'top'" class="topbar topbar-head">
         <MenuSidebar orientation="horizontal" :theme="menuTheme" @navigate="onNavigate">
@@ -256,6 +256,17 @@ function onUserMenu(d: DropdownOption) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ★ 关键：内层 t-layout 也必须 min-width:0。
+   它同样是 flex 子项，默认 min-width:auto 表示「不小于内容的 min-content 宽」——列表页宽表
+   （LabAsset 实测 19 列 = 1982px，视口 1424px）会把它整个顶宽，.content 随之被顶宽；
+   .content 一旦「宽 = 内容宽」，它自身的 scrollWidth == clientWidth 就不再产生内部横向滚动，
+   内容溢出于是逃逸到 body → 页面级横向滚动条（观感＝「列表页把页面宽度撑出屏幕」）。
+   更隐蔽的连带故障：t-table 的 fixed 列靠 `position:sticky; right:0` 贴靠**滚动容器**
+   （.t-table__content，overflow-x:auto）——当滚动发生在 body 而非表格内部时，sticky 列
+   永远停在表格末尾、不会贴右，观感＝「操作列没有固定在右侧」。
+   故此处 min-width:0 让内层布局可收缩，把滚动权交还给 .content / .t-table__content。
+   （2026-09-13 CubeSkillLab 真机实测定位，见 troubleshooting G16） */
+.main-layout { min-width: 0; }
 /* 内容区：min-width:0 是关键——作为 t-layout 的 flex 子项，默认 min-width:auto 会被超宽表格撑大，
    导致页面出现浏览器横向滚动条，且 t-table 自身横向滚动失效。 */
 .content { padding: 20px; overflow: auto; background: var(--cube-content-bg); min-width: 0; }

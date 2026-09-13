@@ -641,3 +641,61 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
     并在脚本开头加**可达性哨兵**：检测到 Chrome 错误页（`ERR_CONNECTION_REFUSED` / 「拒绝了我们的连接请求」）直接 `FATAL` 中止，
     不要让后续断言在错误页上"跑完"。
 
+## G16 ★★★ 列表页「操作列没固定」+「页面被撑出屏幕」：**两个症状同源**（D-19，2026-09-13 CubeSkillLab 用户反馈）
+
+- ★★★ **症状**（用户原话两条，像是两个独立问题）：
+  1. 「列表页没有把操作列固定在右侧」；
+  2. 「列表页把页面宽度撑出屏幕了」。
+
+- ★★★ **一句根因**：**内层 `t-layout` 作为 flex 子项，`min-width` 默认是 `auto`，不肯收缩到内容宽度以下。**
+  于是 19 列表格的自然宽（1942px）把整条链一路顶宽，**溢出逃逸到 body**，
+  表格自己反而失去了内部横向滚动 —— 而 **固定列（`position:sticky; right:0`）在「没有滚动可贴」时必然失效**。
+
+- ★★★ **同源链路（务必按这个顺序量，不要分头调样式）**：
+  ```
+  table 自然宽 1942
+    └─ section.t-layout（内层，min-width: auto ❌） 宽 1982   ← 元凶在这一层
+        └─ main.content（已写 min-width:0 ✅ 但父级不让它收缩） 宽 1982
+            └─ section.t-layout--with-sider 宽 1424 但 scrollWidth 2214
+                └─ body 出现横向滚动条（docHasHScroll: true）
+  .t-table__content  scrollWidth 1942 / clientWidth 1942  → 内部不滚动 → 固定列无滚动可贴
+  ```
+
+- ⚠️ **易踩的误判**：`BasicLayout.vue` 里 `.content` **本来就写了** `min-width: 0`（这一条是**对的**），
+  但真正卡住收缩的是它**外面那一层** `t-layout`。**修错层 = 白改**。
+  排查时别只看 `.content`，要把**整条 flex 祖先链**的 `min-width / clientWidth / scrollWidth` 全量出来。
+
+- ✅ **修复（最小改动，不动表格列宽语义）**：
+  ```vue
+  <!-- BasicLayout.vue：给内层布局一个可收缩的类 -->
+  <t-layout class="main-layout"> ... </t-layout>
+  ```
+  ```css
+  /* 内层 flex 子项必须可收缩，否则超宽表格会把整页顶宽、且表格自己失去内部滚动 */
+  .main-layout { min-width: 0; }
+  ```
+  **把「能收缩」还给 flex 子项，滚动权交还 `.content`（`overflow: auto`）**。
+
+- 📊 **实测数据（修复前 → 修复后）**：
+  | 指标 | 修复前 | 修复后 |
+  |---|---|---|
+  | 文档 `scrollWidth` | 2214 | **1424（= 视口宽）** |
+  | 页面横向滚动条 | 有 ❌ | **无** ✅ |
+  | 内层 `t-layout` `min-width` | `auto` | **`0px`** ✅ |
+  | `.t-table__content` scroll/client | 1942 / 1942（不滚） | **1942 / 1152**（内部滚动）✅ |
+
+- 🧪 **判据（写进回归脚本，别只看"类挂上了没"）**：
+  1. `document.documentElement.scrollWidth <= 视口宽 + 2` 且 `document.body` 无横向滚动条；
+  2. `.t-table__content` 的 `scrollWidth > clientWidth`（**表格内部确实能滚**）；
+  3. **真机把表格横向滚到最右**，再量操作列（`.t-table__cell--fixed-right`）右缘是否**精确贴合容器右缘**（±2px）；
+     滚动前量没意义 —— 不在最右时它本来就在原位；
+  4. 固定列的背景必须**不透明**（半透明会导致滚动时内容穿透）；
+  5. 操作列内多链接的间隙要量一下（本次 16px），确认没被挤成一坨；
+  6. **补一个窄视口复测（如 1280）**，确认修复不是只对 1440 有效。
+  > 纯渲染断言（"`fixed` 类存在吗"）**抓不到本缺陷** —— 类一直是正确挂上的。必须真机滚动 + 量几何。
+
+- **硬规则（写进 SKILL.md §11.4）**：
+  1. **flex 布局链上每一层都要能收缩**，`min-width: 0` 不是只加在内容容器上；
+  2. **「固定列失效」绝大多数不是 `fixed` 配置问题，而是「表格内部没有滚动可贴」** —— 先查滚动，再查配置；
+  3. 用户报「多个现象」时，**先假设它们同源**，用容器链几何数据验证，再决定改几处。
+
