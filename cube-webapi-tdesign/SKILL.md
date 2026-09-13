@@ -20,7 +20,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | ConfigController<T> 单表单 | `references/config-controller.md` + `assets/core/components/cube/ConfigView.vue` |
 | 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
 | LIST 型值集弹窗（LovListField）行为/FR/验证清单 | `references/lov-list-field.md` |
-| 演示工程（**源码级**轻量示例，不随包带依赖；**仅**注册/找回密码两页为独占资产，见 §八） | `references/demo/`（README 见 `references/demo/README.md`） |
+| lite 血统最小可运行示例（**已于 2026-09-13 归档移出技能**，见 §八） | 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/` |
 | 生产级编排层脚手架（**唯一真相源**；历史在完整依赖环境下 `vue-tsc`+`vite build`+CDP 实测 0 错误，**复现须先 `npm install`**） | `references/scaffold/` |
 | 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
 | 新增实体验收清单 | 本文件 §4.21（枚举 LOV / 外键渲染人工核查） |
@@ -63,7 +63,8 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 ## 铁律：登录页文案与预填（L1~L4，不可违反）
 
 登录页是**产品门面**，必须像产品、不像脚手架。生成/改写任何项目的登录页时四条必须同时满足（模板：`assets/core/pages/LoginView.vue` = `references/scaffold/src/pages/LoginView.vue`，**全特性版**，342 行 —— MFA / Challenge / OAuth / 短信邮件码 / 图形码 / 注册入口 / 忘记密码入口 / AuthCategory 门控齐备）。
-> ⚠️ **勿把 `references/demo/src/pages/LoginView.vue` 当作「更完整的登录页」**（2026-09-13 实测校准）：demo 侧同名文件**仅 84 行、只实现 Challenge 一条链路**，是**精简示例**；scaffold/core 才是完整版。demo 的**独立价值**只在于两页 scaffold/core 完全不提供的页面——`RegisterView.vue`（注册）/ `ForgotPasswordView.vue`（找回密码），二者在 `tri-diff` 里报 `DEMO-ONLY`（属预期），需要这两页时**从 demo 取**，需要登录主页时**一律取 scaffold/core**。
+> ⚠️ **历史校准（2026-09-13，归档后仍值得记）**：曾有一份 lite 血统 demo 也带同名 `pages/LoginView.vue`，但**仅 84 行、只实现 Challenge 一条链路**，属**精简示例**，**不可**当作「更完整的登录页」——完整版**一律取 scaffold/core**。
+> 该 demo 已于 2026-09-13 **归档移出技能**（现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。其历史独立价值在于两页 scaffold/core 完全不提供的页面：`RegisterView.vue`（注册）/ `ForgotPasswordView.vue`（找回密码）；**需要这两页时去归档里取**（技能内已不携带）。
 
 - **L1 左栏文案必须按当前项目生成**（不得沿用模板默认值）：模板顶部 `PROJECT` 常量三项 —— `tagline`（一句定位语）/ `highlights`（2~4 条核心能力要点）/ `subtitle`（表单上方一行说明）——**必须按项目业务填写**（留空则该项不渲染，但 `tagline` + `highlights` 至少要给出内容）。生成口径：从**项目名 / 后端 `LoginConfig.title`** 出发，用**业务语言**写；示例（IoTHub 物联网设备管理平台）→ `tagline:'设备接入 · 协议配置 · 运行监控'`、`highlights:['多协议驱动统一接入','设备实例集中管理','运行状态实时监控']`。
   ⚠️ **禁止**左栏出现技术栈/框架话术（`NewLife.Cube · TDesign Vue Next`、`Powered by …`、`Sign in to continue` 等模板残留）；左栏 Logo 走 `LoginConfig.loginLogo || logo`（`/Content` 下，无则回退系统名首字方块），不得写死资源。
@@ -283,14 +284,14 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 | 工具链 | `eslint`/`stylelint`/`commitlint`/`.husky`/`.env*` 齐全 | 仅 3 件配置 |
 | **血统判据** | `tsconfig.node.json` **缺失** | `tsconfig.node.json` **存在** |
 
-> 对照基线（2026-09-13 双基线脚本实测）：`references/scaffold/` = **all 血统，0 FAIL / 0 WARN**；`references/demo/` = **lite 血统，0 FAIL / 1 WARN**（1 条 tsconfig 策略 WARN，已在 demo `README.md` 声明）；两份 `README.md` 均含「已声明偏差」段。
+> 对照基线（2026-09-13 双基线脚本实测）：`references/scaffold/` = **all 血统，0 FAIL / 0 WARN**；~~`references/demo/` = lite 血统，0 FAIL / 1 WARN~~（该基线随 demo 于 2026-09-13 归档移出技能，记录保留供回溯）；两份 `README.md` 均含「已声明偏差」段（demo 那份现随归档）。
 > ★ **2026-09-13 `all` 血统构建实证**（scaffold 自身在完整依赖环境下复测，命令序列同上方 ①~⑤）：
 > · `npm install` → exit=0（**880 包**）；`vue-tsc --noEmit` → exit=0（**0 条错误**）；`vite build` → exit=0；
 > · **3953 模块** / CSS **472.45 kB**（`index` 27.10 + `tdesign` 443.58）/ JS **7,206.42 kB**（≈ gzip 951.64 kB）/ **24.15s** / dist **7.4 MB**；
 > · 分包实证（`build.rolldownOptions.output.codeSplitting.groups` 生效）：`vue` 139.19 kB / `tdesign` 6,821.54 kB / `vendor` 49.96 kB / `index` 195.58 kB / `rolldown-runtime` 0.15 kB；
 > · `tdesign` 单包仍 > 500 kB（TDesign 全量组件库体量所致，**属预期**，非配置缺陷）。
-> · `references/demo/`（lite 血统基线）：3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s。
-> ⇒ ① scaffold 的「0 错误」由历史结论升级为**实测结论**；② demo 是**可独立构建通过**的精简示例工程，**层次独立**（同名文件为精简变体），**不是** scaffold 的同步目标。
+> · 已归档的 lite demo（历史基线，供回溯）：3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s。
+> ⇒ ① scaffold 的「0 错误」由历史结论升级为**实测结论**；② 归档前的 demo 曾是**可独立构建通过**的精简示例工程，**层次独立**（同名文件为精简变体），**从来不是** scaffold 的同步目标。
 > ⚠️ 上述结论**均须先 `npm install`**（本包不携带 `node_modules`）；复现口径见 `assets/README.md` §「验证结论的适用范围」。
 
 ### 4.2 落地 API 请求层（唯一 HTTP 层）
@@ -788,40 +789,47 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 - [ ] 路由默认落地页已按项目改（M3，勿留模板值）；dev proxy `target` 已指向真实后端
 - [ ] 新增实体已按 §4.21 人工核查枚举/外键渲染（**该步无脚本可代**，见 §4.21 门禁现状）；改契约/登录代码已做 dist 产物核验闭环
 
-## 八、最小可运行 Demo（端到端验证脚手架）
+## 八、最小可运行 Demo（lite 血统，**已归档移出技能**）
 
-`references/demo/`（README 见目录内 `README.md`）：
+> ★ **2026-09-13 结构收敛：本节所述 demo 已归档移出技能。** 原 `references/demo/`（28 件源码 + Mock 后端 + 工程外壳，共 38 文件）
+> 现位于**技能仓库** `.archive/cube-webapi-tdesign--demo-lite/`（同仓库、git 跟踪、随时可查）。
+> **归档理由**：它既不是资产副本、也不是任何同步目标，却在每次自检输出里产出一片 `DEMO-*` 行，
+> 把「预期差异」与「真红灯」混在一起 —— 噪声会训练人忽略红灯（与 D-17 同类风险）。
+> 归档后 `tri-diff.mjs` **默认只跑三根**（scaffold/src ↔ assets/core ↔ 工程 src）；需要时用
+> `--demo <归档>/src` 显式启用第四根。
 
-> ⚠️ **本目录不随包携带 `node_modules`**（源码级参考）。它的价值**不是**「更完整的模板」，
-> 而是 ① 演示两页 scaffold/core **完全不提供**的页面（注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue`）；
-> ② 提供一份**源码级轻量可读**的端到端样例（JS 产物 1.54MB，仅为 scaffold 同构版的 1/5）。
-> 拷贝其中的文件到业务工程前**必须先在已装依赖的工程内过一遍 `vue-tsc`**（`references/scaffold/` 须先 `npm install`——它不随包携带 `node_modules`（已清空为声明式），直接跑会找不到 `vue-tsc`）。
-> **已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。**
+> **它历史上唯一不可替代的价值**：两页 scaffold/core **完全不提供**的页面 ——
+> 注册 `src/pages/RegisterView.vue` / 找回密码 `src/pages/ForgotPasswordView.vue`（在 `tri-diff` 中报 `DEMO-ONLY`，属预期）。
+> **需要这两页时去归档里取**（技能内已不携带）；**需要登录主页时一律取 scaffold/core** ——
+> scaffold 版 342 行全特性（MFA / Challenge / OAuth / 短信邮件码 / 图形码 / 注册入口 / 忘记密码入口 / AuthCategory），
+> demo 版同名文件**仅 84 行、只实现 Challenge 一条链路**，是精简示例，**不可**当模板。
+> 另：demo 的价值**不是**「更完整的模板」，也**不随包携带 `node_modules`**；拷贝其文件到业务工程前，
+> **必须先在已装依赖的工程内过一遍 `vue-tsc`**。**已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。**
 >
-> ★ **demo 是「层次独立」而非「scaffold 的旧副本」（2026-09-13 双侧构建实证）**：demo 侧 12 件同名文件
-> 体积仅为 scaffold 的 1/3 ~ 1/8（`MenuSidebar.vue` 8.5×、`useLookups.ts` 5.9×、`FormDialog.vue` 5.1×、
-> `useEntityResource.ts` 4.6×、`ListPage.vue` 3.2×、`fieldRender.ts` 3.2×），认证架构为**上一代形态**
-> （demo 把 auth store 内联在 `api/auth.ts`，348 行；scaffold 已拆为 `api/token.ts` + `api/menuTitles.ts` + `stores/auth.ts`）。
-> 两者**各自可独立构建通过**（均已实测 exit=0）⇒ 不是同一份东西的新旧版本，`tri-diff` 将其报为
-> `DEMO-DIVERGENT`（**非漂移，无需同步**），而非 `DEMO-STALE`。
-> 若确需把 demo 升级为与 scaffold **同构**的运行实例，**20 动作迁移配方**见 `references/scripts/README.md`
-> （已实证可行，代价是 demo 失去「源码级轻量可读」属性：JS 1.54MB → **7.21MB**，**≈4.7×**；
-> scaffold 侧 2026-09-13 以 `all` 血统复测为 3953 模块 / JS 7,206.42 kB）。
-```bash
-cd references/demo
-npm install
-npm run mock   # 终端1：Mock 后端 :3001（server.mjs，实现《认证接口设计.md》契约）
-npm run dev    # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
-npm run typecheck   # vue-tsc --noEmit（须先 npm install；2026-09-13 实测 exit=0，与 vite build 一起可作 demo 侧回归基线）
-```
-登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
+> 归档内容的性质（**勿误读为「scaffold 的旧副本」**，2026-09-13 双侧构建实证）：
+> - 它是 **lite 血统的另一代工程**：与 scaffold 有 12 件同名文件，但体积仅为其 1/3 ~ 1/8
+>   （`MenuSidebar.vue` 8.5×、`useLookups.ts` 5.9×、`FormDialog.vue` 5.1×、`useEntityResource.ts` 4.6×、
+>   `ListPage.vue` 3.2×、`fieldRender.ts` 3.2×）；认证架构为**上一代形态**（auth store 内联在 `api/auth.ts`，
+>   348 行；scaffold 已拆为 `api/token.ts` + `api/menuTitles.ts` + `stores/auth.ts`）。
+> - 两者**各自可独立构建通过**（均实测 `vue-tsc --noEmit && vite build` exit=0）⇒ 不是同一份东西的新旧版本。
+> - 铁律层面一致（C1~C3 政务蓝默认 + 右下角齿轮切暗黑；H1/H2 唯一 HTTP 层 + 只发 `Authorization: Bearer`），
+>   但**实现层面停留在上一代/精简形态**，故两者从来**不是**「同源同步」关系，改一处**不必**同步另一处。
+> - **历史基线（供回溯，不构成当前验收项）**：lite 血统 3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s；
+>   若按 **20 动作迁移配方**（见 `references/scripts/README.md`）升级为与 scaffold 同构，JS 1.54MB → **7.21 ~ 8.84MB**（≈4.7 ~ 5.7×），
+>   scaffold 侧 2026-09-13 以 `all` 血统复测为 3953 模块 / JS 7,206.42 kB。
+> **如何在归档里跑它**：`cd <技能仓库>/.archive/cube-webapi-tdesign--demo-lite` → `npm install` →
+> `npm run mock`（终端1：Mock 后端 :3001，`server.mjs` 实现《认证接口设计.md》契约）/
+> `npm run dev`（终端2：Vite :5173，代理 `/api` `/Auth` `/Mfa` `/Cube` `/Content` `/cube` 到 mock）/
+> `npm run typecheck`（`vue-tsc --noEmit`，须先 `npm install`）。
+> 归档内自带 `README.md` 与 `backend/server.mjs`，用法与依赖说明都在那边，**技能侧不再重复维护**。
+> 历史演示路径（供回溯）：登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、
+> 底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
 
-demo 与 `references/scaffold/` **共享铁律、但分层不同源**：两者都已按铁律 C1~C3 落实（政务蓝默认 + 右下角齿轮可切暗黑，实测 `--td-bg-color-page` `#f3f3f3`→`#181818`），也都遵守 H1/H2（唯一 HTTP 层 `src/api/http.ts`、只发 `Authorization: Bearer`；旧 `api.ts` 已删除改名）——**铁律层面一致**；但**实现层面 demo 停留在上一代/精简形态**（见上方 `DEMO-DIVERGENT` 说明），故两者**不是**「同源同步」关系，改一处**不必**同步另一处。
 > 组件对 `src/api/*` 的引用用 `@/api/...`（已配 `@` 别名）；已下线 `ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent`（早期契约，拷贝即报错）。
 
 ## 九、以真实魔方后端替换 Mock（对接说明）
 
-`references/demo`/`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
+`references/scaffold`（以及已归档的 lite demo）的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
 1. **改代理 target**（唯一必改项）：vite proxy 的 `/api` `/Auth` `/Mfa` `/cube` `/Content` target 指向真实后端（`VITE_API_TARGET`）；勿代理 SPA 路由。
 2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的基址由 `VITE_API_BASE` / `VITE_SERVER_BASE` 控制（同源部署时留空即可，`API_BASE` 自动落到 `/api`）；跨域部署时填后端基址。**实体调用点无需改动**（只写 `/{area}/{ctrl}`，前缀由 `API_BASE` 承载）。
 3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌头（只发 `Authorization: Bearer`，勿加 `Authentication`） / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
@@ -911,13 +919,14 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
 > （`src/types/`5 件、`src/locales/`4 件、`src/config/`3 件、`src/constants/`1 件、`src/hooks/`1 件、`src/styles/*.less`5 件）。
 > 后三类**恒不在 `core` 内**，故 `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 3 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
 >
-> 第四根 `references/demo/src/`（28 件）是**精简示例层**（技能侧样例，**非下游产物**，也**不是** scaffold 的同步目标）：
-> 注册（`RegisterView.vue`）/ 找回密码（`ForgotPasswordView.vue`）两页 **只此一份**（`core` 与 scaffold 均不提供），
-> 故 `tri-diff` 对它们报 `DEMO-ONLY`——**属预期**。
-> demo 是**精简子集**，`core` 中另有 **14 件**它不收录（缺件≠漂移，`tri-diff` 单独打印该计数）；
-> 反之若 demo **有**某文件却与 `scaffold`/`core` 不同，**按白名单二分**：
+> **第四根（可选）：已归档的 lite demo** —— 原 `references/demo/src/`（28 件）已于 2026-09-13 **归档移出技能**
+> （现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。`tri-diff` **默认不再拿它当对照根**，
+> 故默认输出里不会出现任何 `DEMO-*` 行；需要时以 `--demo <归档>/src` 显式启用。**启用后**才适用下列历史判据：
+> 注册（`RegisterView.vue`）/ 找回密码（`ForgotPasswordView.vue`）两页**只此一份**（`core` 与 scaffold 均不提供）→ 报 `DEMO-ONLY`，**属预期**；
+> demo 是**精简子集**，`core` 中另有 **14 件**它不收录（缺件≠漂移，启用时 `tri-diff` 单独打印该计数）；
+> 若 demo **有**某文件却与 `scaffold`/`core` 不同，**按白名单二分**：
 >   · `DEMO-DIVERGENT` = 已知层次差异（**12 件**，demo 精简变体 / 上一代认证架构）→ **非漂移，无需同步**，默认不计入失败退出码（`--strict-demo` 才计）；
->   · `DEMO-STALE`    = 白名单**之外**的真陈旧副本 → **须同步 demo**，`--strict` 起计入失败退出码（当前实测 **0 条**）。
+>   · `DEMO-STALE`    = 白名单**之外**的真陈旧副本 → **须同步 demo**，`--strict` 起计入失败退出码（实测 **0 条**）。
 > `tri-diff` 自带白名单腐化检测 `DEMO-WL-STALE`（条目已不再分歧 → 提示从白名单移除，**永不影响退出码**）。
 > 判据、退出码矩阵与 20 动作迁移配方见 `references/scripts/README.md`。
 >
@@ -1025,12 +1034,12 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
     - 这就是 `check-all.mjs` 存在的唯一理由：**把「跑全部」变成一条命令**，从结构上消灭「挑着跑」。
   - ★ **聚合器自身也要过「假全绿自检」**：写完/改完断言类工具，注入一个人造漂移确认它**会变红**。
     实测法：在 `assets/core/` 放一个只在 core、不在 scaffold 的探针文件 → 应报 `FAIL scan-assets-refs` + `core/scaffold 差异数: 1` + `exit=1`；移除后回到全 PASS。
-  - ★ **资产的真实结构是「两镜像 + 一独立层」，不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
+  - ★ **资产的真实结构是「两镜像」（**没有第三份**），不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
     | 层 | 件数 | 角色 | 参与同步？ |
     |---|---|---|---|
     | `references/scaffold/src/` | **55** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
     | `assets/core/` | **31** | **① 的严格子集**（= 55 − 24 件骨架/上游件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
-    | `references/demo/src/` | **28** | **lite 血统的另一套工程**（含 7 件 ① 没有的资产），**不是** ① 的副本 | ❌ **默认不同步**：12 件精简变体在白名单内属预期；仅当 `tri-diff.mjs` 报 `DEMO-STALE`（白名单外的真陈旧）才动 |
+    | ~~`references/demo/src/`~~ | 28 | **已于 2026-09-13 归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。它从来不是 ① 的副本，而是 lite 血统的另一代工程（含 7 件 ① 没有的资产） | ❌ **已不参与**：`tri-diff.mjs` 默认不再拿它当对照根，需 `--demo` 显式启用 |
   - 因此：**改一个文件 ＝ 改两处**（主真相源 `references/scaffold/src/` → 派生 `assets/core/`）。
     **不要手工双写**——改完真相源直接 `node references/scripts/sync-assets.mjs` 派生，再跑聚合入口确认 `core/scaffold 差异数: 0`。
     （手工双写就是 D-17 的成因：漏写一份，且当时只跑了看得见工程的那道闸门。）

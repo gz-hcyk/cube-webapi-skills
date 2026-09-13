@@ -17,7 +17,8 @@ const WL_BASENAME = new Map([
   ['vite-env.d.ts', '全局类型声明，靠 tsconfig include 生效'],
   ['shims-vue.d.ts', '全局类型声明'],
   ['env.d.ts', '全局类型声明'],
-  ['permissions.ts', '权限模块（references/demo 内的源码级实现），可零静态引用'],
+  // 注：`permissions.ts` 条目已于 2026-09-13 移除 —— 它只存在于 lite 血统 demo 内
+  //     （`src/api/permissions.ts`），而 demo 已归档移出技能，技能内不再有此文件。
   // 注：IconPicker.vue 已于 2026-09-13 由 assets/optional/ 提升为 assets/core/，
   //     且被 core/FormDialog.vue 静态 import，不再是「零引用可选件」→ 已从白名单移除。
   // 以下两件同期随 optional 一并并入 core（**必拷**），但仍是「配方件」：
@@ -31,7 +32,7 @@ const WL_PATH_PREFIX = [
   // 'assets/optional/' 已于 2026-09-13 移除——optional 层取消，资产并入 assets/core/（单层）
   'references/scripts/',  // 独立 CLI 脚本，由 `node xxx.mjs` 直跑
   'references/scaffold/backend/', // Mock 后端入口，`node server.mjs` 直跑
-  'references/demo/backend/',     // Mock 后端入口（demo 工程），同上
+  // 'references/demo/backend/' 已于 2026-09-13 移除——demo 归档移出技能，技能内不再有该目录。
 ]
 
 /** 白名单：路径片段（任意层级的 router 入口等） */

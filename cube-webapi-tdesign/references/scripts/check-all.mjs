@@ -92,11 +92,11 @@ const GATES = [
   },
   {
     id: 'tri-diff',
-    title: '四方对照：scaffold/src vs assets/core vs demo/src vs 工程 src',
+    title: '多根对照：scaffold/src vs assets/core vs 工程 src（demo 已归档，默认不参与）',
     run: !!proj && !noTri,
     cmd: proj ? ['tri-diff.mjs', proj] : [],
     // 判据：ENG-DRIFT 与 CORE-DRIFT 必须**同时**为 0
-    //   （DEMO-DIVERGENT 是白名单层次差异、SCAFFOLD-DRIFT 是骨架件，均不算问题）
+    //   （SCAFFOLD-DRIFT 是骨架件属预期；demo 已归档移出技能，默认不再产出 DEMO-* 行）
     expect: /ENG-DRIFT\s*[=:：]\s*0[\s\S]*CORE-DRIFT\s*[=:：]\s*0|健康态[：:]?\s*ENG-DRIFT\s*[=:：]\s*0/,
     expectsProj: true,
   },

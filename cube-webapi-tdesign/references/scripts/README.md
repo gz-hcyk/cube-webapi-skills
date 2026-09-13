@@ -30,13 +30,18 @@ node references/scripts/check-assets-copied.mjs   # 第②步出口：assets/ �
 
 ## `sync-assets.mjs`：把「手工双写」降级为「单向派生」（2026-09-13 新增）
 
-**存在理由**：技能资产是「**两镜像 + 一独立层**」——
+**存在理由**：技能资产是「**两镜像**」（没有第三份）——
 
 | 层 | 件数 | 角色 | 是否同步目标 |
 |---|---|---|---|
 | `references/scaffold/src/` | **55** | **真相源**：完整可运行工程（CLI 骨架 + 全部业务资产） | ✅ 改这里 |
 | `assets/core/` | **31** | **派生镜像**：`scaffold/src` 的**严格子集**（`cp -r` 拷进工程的白名单） | ✅ 由脚本生成 |
-| `references/demo/src/` | **28** | **独立层**：lite 血统第二基线，含 7 件 scaffold 没有的文件 | ❌ **不是**同步目标 |
+| ~~`references/demo/src/`~~ | 28 | **已于 2026-09-13 归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）：lite 血统另一代工程，含 7 件 scaffold 没有的文件 | ❌ **已不参与**（`tri-diff` 需 `--demo` 显式启用） |
+
+> ★ **结构定论（2026-09-13）**：技能里**没有「三副本」**，只有**两镜像**（上表前两行）。
+> 历史上那第三个目录 `references/demo/` 既不是镜像的第 3 份、也不是同步目标，却被每次自检当成第四根并产出一片
+> `DEMO-*` 行，使「预期差异」与「真红灯」混在一起（噪声会训练人忽略红灯，与 D-17 同类风险）——
+> 故**归档移出技能**。下表及本文其他章节中凡出现 `references/demo` 者，**均为归档前的历史记录**，按记录理解即可。
 
 `scaffold/src` 那 55 件里的另外 **24 件是骨架/上游件**（`App.vue`/`main.ts`/`router`/`stores`/
 `locales`/`styles`/`types`/`config`/`hooks` + 1 个开发页），**故意不进 `assets/`**；
@@ -223,25 +228,27 @@ node check-assets-copied.mjs --manifest            # 打印映射表与黑名单
 |---|---|---|
 | ① | `references/scaffold/src/` | **主真相源**（生产级编排层，§11.1） |
 | ② | `assets/core/` | ① 的**镜像拷贝源**（供 `cp -r` 并入业务工程） |
-| ③ | `references/demo/src/` | **精简示例层**——技能侧样例（**同层，非下游**）。独占资产仅注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 |
+| ③ | ~~`references/demo/src/`~~ | **已于 2026-09-13 归档移出技能** → 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`。**默认不参与对照**，需 `--demo <归档>/src` 显式启用；历史独占资产为注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 |
 | ④ | `<工程>/src/` | **下游产物**（并入后的业务工程） |
 
+> ★ **默认只有三根**（①②④，即 `scaffold/src ↔ assets/core ↔ 工程 src`）；③ 需显式启用。
 > ★ ③ 与 ④ 角色不同：③ 是**技能侧样例**（同层），④ 是**下游**。
 > 故 ③ 陈旧 = `DEMO-STALE`（须同步）；④ 陈旧 = `ENG-DRIFT`（以技能版覆盖工程）。
-> ★ ③ **可缺席**：demo 是精简子集而非 scaffold 的完整拷贝，③ 缺某文件**不等于漂移**
-> （当前 **14 件** core 资产 demo 未收录，由脚本单独打印该计数）；只有「③ 有且与 ①② 不同」才进下述二分。
+> ★ ③ **可缺席**：它曾是精简子集而非 scaffold 的完整拷贝，③ 缺某文件**不等于漂移**
+> （归档前实测 **14 件** core 资产它未收录，由脚本单独打印该计数）；只有「③ 有且与 ①② 不同」才进下述二分。
 >
-> ★ **③ 的「不同」分两种（2026-09-13 双侧构建实证校准）**：
+> ★ **③ 的「不同」分两种（2026-09-13 双侧构建实证校准，启用第四根后适用）**：
 >   · `DEMO-DIVERGENT` = **精简变体**（白名单 **12 件**，层次差异）→ **非漂移，无需同步**，默认**不**计入失败退出码；
->   · `DEMO-STALE`    = **真陈旧副本**（白名单外）→ **须同步 demo**，`--strict` 起计入失败退出码（当前实测 **0 条**）。
+>   · `DEMO-STALE`    = **真陈旧副本**（白名单外）→ **须同步 demo**，`--strict` 起计入失败退出码（实测 **0 条**）。
 > 判据见下节《③ 为何是「层次差异」而非「陈旧」》。
 
 ```bash
-node tri-diff.mjs <工程目录>               # 四方对照（demo 存在则自动纳入）
+node tri-diff.mjs <工程目录>               # 三根对照（默认；demo 已归档，不参与）
 node tri-diff.mjs <工程目录> --json        # JSON 输出
 node tri-diff.mjs <工程目录> --out r.txt   # 落盘（Windows 终端可能吞 stdout）
-node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir> --demo <dir>   # 覆盖默认对照根
-node tri-diff.mjs <工程目录> --no-demo     # 关闭第四根，退化为旧三根行为
+node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir>   # 覆盖默认对照根
+node tri-diff.mjs <工程目录> --demo <dir>  # 启用第四根（指向归档 src 即可）
+node tri-diff.mjs <工程目录> --no-demo     # 显式关闭第四根（兼容开关，默认已是关闭态）
 node tri-diff.mjs <工程目录> --strict      # 令 DEMO-STALE 也计入失败退出码
 node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层次差异）也计入（隐含 --strict）
 ```
@@ -280,8 +287,11 @@ node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层�
 > 自测方法：`node tri-diff.mjs <工程> --demo <skill>/references/scaffold/src`（令 ④ 侧 demo 恒等于 ①，
 > 12 条白名单全部「不再分歧」→ 应报 12 条 `DEMO-WL-STALE`，exit 仍为 **0**）。
 
-⇒ 健康态（2026-09-13 scaffold 换代 `all` 后）= `ENG-DRIFT=0  CORE-DRIFT=0  DEMO-STALE=0  DEMO-WL-STALE=0  SCAFFOLD-ONLY-WL-STALE=0`，
-只剩 **24 条 `SCAFFOLD-DRIFT`** + **0 条 `ALL-DIFF`** + **12 条 `DEMO-DIVERGENT`** + **7 条 `DEMO-ONLY`**（+ N 条 `ENG-ONLY`）。
+⇒ 健康态（2026-09-13 scaffold 换代 `all` 后）：
+· **默认三根**（demo 已归档移出技能）= `ENG-DRIFT=0  CORE-DRIFT=0  SCAFFOLD-ONLY-WL-STALE=0`，
+  只剩 **24 条 `SCAFFOLD-DRIFT`** + **0 条 `ALL-DIFF`**（+ N 条 `ENG-ONLY`）——**输出里不应有任何 `DEMO-*` 行**。
+· 若另以 `--demo <归档>/src` 启用第四根，则在其上追加 `DEMO-STALE=0  DEMO-WL-STALE=0`，
+  并固定出现 **12 条 `DEMO-DIVERGENT`** + **7 条 `DEMO-ONLY`**。
 md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差异不算漂移）。
 
 ### ⑤「项目必改」归一化（2026-09-13 新增，修一类误报）

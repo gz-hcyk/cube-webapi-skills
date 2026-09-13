@@ -13,7 +13,7 @@ cp -r assets/core/.  <你的工程>/src/
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
 | `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install`。★ 2026-09-13 **`all` 血统复测**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（**3953 模块** / CSS 472.45 kB / JS 7,206.42 kB gzip ≈951.64 kB / 24.15s / dist 7.4 MB） | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
-| `references/demo/` | **不随包携带依赖**（`node_modules`/`dist` 已清空，同 scaffold）；★ 2026-09-13 **双侧构建实证**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程。**血统：`lite`**（有 `tsconfig.node.json` + `src/vite-env.d.ts`），**保留以校验存量 lite 工程**，不再是新建工程的模板 | **精简示例层**（层次独立，非同步目标）：体积约为 scaffold 同构版的 1/5，同名文件为 core 的 1/3~1/8；**登录页是极简版**（83 行纯账密，完整版在 scaffold）。独占资产仅注册/找回密码两页 |
+| ~~`references/demo/`~~ | **2026-09-13 已归档移出技能** → 现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`（同仓库、git 跟踪）。归档前实证：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程；**血统 `lite`**（有 `tsconfig.node.json` + `src/vite-env.d.ts`），曾用于校验存量 lite 工程 | **技能内已无此目录**：它不是同步目标，也不是资产副本；现由 `tri-diff.mjs` 的 `--demo` 显式启用才参与对照。历史独占资产：注册 / 找回密码两页 |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
 
@@ -27,7 +27,7 @@ cp -r assets/core/.  <你的工程>/src/
 | **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
 | **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
 | **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
-| **`references/demo/` 里的「0 错误」** | **成立，但基线独立** —— demo 同样不随包携带依赖（`node_modules`/`dist` 已清空，须先 `npm install`）；2026-09-13 实测 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），故其「0 错误」是**实测结论**。⚠️ 该基线只对 demo 自身有效，**不可**用来推断 scaffold/core 资产已验证——demo 是精简层，同名文件与 core 的差异属**已知层次差异**（`DEMO-DIVERGENT` 白名单，见 `references/scripts/README.md`）。**scaffold 的验证状态以其自身复测为准（同日 exit=0 / 3938 模块），不依赖 demo 反推** |
+| **归档的 lite demo 里的「0 错误」** | **成立，但基线独立** —— 该 demo（现已归档移出技能，见 `.archive/cube-webapi-tdesign--demo-lite/`）同样不随包携带依赖（须先 `npm install`）；2026-09-13 实测 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），故其「0 错误」是**实测结论**。⚠️ 该基线只对它自身有效，**不可**用来推断 scaffold/core 资产已验证——它是精简层，同名文件与 core 的差异属**已知层次差异**（`DEMO-DIVERGENT` 白名单，见 `references/scripts/README.md`）。**scaffold 的验证状态以其自身复测为准（同日 exit=0 / 3953 模块），不依赖它反推** |
 
 ## ★ 唯一真相源与同步铁律
 
@@ -48,11 +48,13 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 ⇒ `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 3 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
 > ⚠️ **工程外壳清单随血统不同**：`all` 的环境类型根是 `src/types/env.d.ts`（**无** `tsconfig.node.json` / **无** `src/vite-env.d.ts`）；`lite` 才是 `tsconfig.node.json` + `src/vite-env.d.ts`。
 
-第四根 `references/demo/src/`（28 件）是**精简示例层**（技能侧样例，**非** scaffold 的同步目标），
-与 `core` 的关系是**子集**（14 件 `core` 资产 demo 不收录，缺件≠漂移，脚本单独打印该计数）；
+第四根（**可选**）：原 `references/demo/src/`（28 件）是 lite 血统的**精简示例层**，已于 2026-09-13
+**归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。`tri-diff.mjs` **默认不再拿它当对照根**，
+需 `--demo <归档>/src` 显式启用；**启用后**才适用下列历史判据：
+它与 `core` 的关系是**子集**（14 件 `core` 资产它不收录，缺件≠漂移，脚本单独打印该计数）；
 其**独占资产**仅注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 → 报 `DEMO-ONLY`（属预期）。
 它**有**且与 `core` 不同的文件**按白名单二分**：命中白名单的 **12 件**报 `DEMO-DIVERGENT`
-（精简变体 / 上一代认证架构，**非漂移，无需同步**）；白名单外的报 `DEMO-STALE`（**须同步 demo**，当前 0 条）。
+（精简变体 / 上一代认证架构，**非漂移，无需同步**）；白名单外的报 `DEMO-STALE`（**须同步它**，实测 0 条）。
 判据见 `references/scripts/README.md`《③ 为何是「层次差异」而非「陈旧」》。
 
 ## 一、core/ —— 核心（**必拷，31 件一次拷全**）

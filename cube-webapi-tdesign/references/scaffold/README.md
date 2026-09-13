@@ -135,7 +135,9 @@ references/scaffold/
 > （`pages/LovDemoView.vue`）+ `all` 保留的基础设施（`types/`、`locales/`、`config/`、`constants/`、`hooks/`、`*.less`）。
 > **后三者恒不在 `core` 内**，`tri-diff` 对它们必然报 `ALL-DIFF`（外壳）或 `SCAFFOLD-DRIFT`（demo 页）
 > —— **属预期，不是漂移**。第四类（上游基础设施）同样不在 `core` 内，报 `ALL-DIFF` 亦属预期。
-> `tri-diff` 的第四根 `references/demo/src/`（**精简示例层，lite 血统**，非同步目标）：
+> `tri-diff` 的第四根（**可选**）原为 `references/demo/src/`（精简示例层，lite 血统，非同步目标）——
+> 该 demo 已于 2026-09-13 **归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`），
+> `tri-diff` **默认只跑三根**，需 `--demo <归档>/src` 显式启用第四根。启用后：
 > 仅 demo 有的报 `DEMO-ONLY`（预期，独占资产仅注册/找回密码两页）；与 `scaffold`/`core` 内容不同的
 > **按白名单二分** —— 命中白名单的报 `DEMO-DIVERGENT`（层次差异，**非漂移**），
 > 白名单外的报 `DEMO-STALE`（**须同步**）。判据见 `references/scripts/README.md`。

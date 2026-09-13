@@ -3,8 +3,9 @@
  * check-starter-align.mjs —— tdesign-starter CLI 基线对齐校验（**lite / all 双基线**）
  *
  * 用途：校验一个前端工程是否仍是 **tdesign-starter-cli 产物形态**（即铁律 C1「必须由 tdesign-starter
- *       初始化」可验证），并检出所有「未声明的偏差」。技能内两套工程副本（references/scaffold、
- *       references/demo）与真实业务工程都可拿它做体检。
+ *       初始化」可验证），并检出所有「未声明的偏差」。技能内的 `references/scaffold/`
+ *       与真实业务工程都可拿它做体检（lite 血统 demo 已于 2026-09-13 归档移出技能，
+ *       如需体检它请显式传归档目录：`<仓库>/.archive/cube-webapi-tdesign--demo-lite`）。
  *
  * 用法：
  *   node check-starter-align.mjs                      # 默认检查 references/scaffold

@@ -3,10 +3,12 @@
  * sync-assets.mjs — 把「两镜像」的同步从**手工双写**降级为**单向派生**。
  *
  * 背景（D-17 的结构性成因）：
- *   技能资产是「两镜像 + 一独立层」：
+ *   技能资产是「两镜像」，**不是三副本**：
  *     · references/scaffold/src/  ← 真相源（55 件，完整可运行 CLI 产物）
  *     · assets/core/              ← 派生镜像（31 件，是 scaffold/src 的严格子集，供 `cp -r` 用）
- *     · references/demo/src/      ← **独立层**（lite 血统第二基线，**不是**同步目标）
+ *   历史上还有第三个目录 `references/demo/src/`（lite 血统第二基线），但它**不是**同步目标，
+ *   且已于 2026-09-13 **归档移出技能**（现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`），
+ *   以免每次自检都产出与「真红灯」混在一起的 DEMO-* 噪声。
  *   以往靠「改一个文件就两处手工各改一遍」，两次踩坑（D-15/D-17：漏改 scaffold 副本，
  *   生成出来的工程编译即报 `Cannot find name 'route'`）。
  *   本脚本把这一步变成一条命令，方向固定 **scaffold/src → assets/core**。

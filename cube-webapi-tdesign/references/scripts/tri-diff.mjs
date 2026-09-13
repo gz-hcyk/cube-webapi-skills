@@ -1,41 +1,46 @@
 #!/usr/bin/env node
 /**
- * tri-diff.mjs —— 四方对照：scaffold/src  vs  assets/core  vs  demo/src  vs  <工程>/src
+ * tri-diff.mjs —— 多根对照：scaffold/src  vs  assets/core  vs  <工程>/src（+ 可选 demo 归档根）
  *
  * 与同目录脚本的分工：
  *   check-assets-copied.mjs  → 「工程是否与 assets/core 一致」（**判有无漂移，不判方向**）
  *   tri-diff.mjs             → 「各根谁是谁的超集」（**判方向：该以谁覆盖谁**）   ← 本文件
  *
- * ── 四根（2026-09-13 由三根扩为四根；文件名保留以免文档大面积改动）──
+ * ── 默认三根（2026-09-13 结构收敛：原第四根 demo 已归档移出技能）──
  *   ① `references/scaffold/src/` = **主真相源**（生产级编排层，SKILL.md §11.1）
  *   ② `assets/core/`            = ① 的**镜像拷贝源**（供 `cp -r` 并入业务工程）
- *   ③ `references/demo/src/`    = **精简示例层**（源码级样例，**不是** scaffold 的同步目标）
- *   ④ `<工程>/src/`             = 下游产物（并入后的业务工程）
+ *   ③ `<工程>/src/`             = 下游产物（并入后的业务工程）
  *
- *   ★ ③ 与 ④ 角色不同：③ 是**技能侧样例**（同层，非下游），④ 是下游。
- *     ④ 陈旧 = `ENG-DRIFT`（须修）；③ 的「不同」**分两种**（2026-09-13 实证校准）：
- *       · `DEMO-STALE`     = ③ 是**陈旧副本**（本该同步却落后）→ **须同步**
- *       · `DEMO-DIVERGENT` = ③ 是**精简变体**（白名单 12 件，层次差异）→ **非漂移，无需同步**
- *   ★ ③ 可否缺席：demo 是**精简子集**，并非 scaffold 的完整拷贝。③ 缺某文件**不等于漂移**
- *     （缺件数由本脚本实测打印），只有「③ 有且与 ①/② 不同」才进上述两种之一。
+ *   ★ 判据方向：① ↔ ② 必须逐件同 md5（差异 = 技能自身缺陷，须修）；
+ *     ③ 与 ①② 的差异分两类：
+ *       · 受豁免的「项目必改件」（如 `pages/LoginView.vue` 的 `PROJECT` 文案区段）→ 归一化后相等即健康
+ *       · 其余差异 = `ENG-DRIFT`（下游陈旧或被人为改动，**须对齐**）
  *
- * ── ③ 为何是「层次差异」而非「陈旧」（2026-09-13 双侧构建实证）──
- *   demo 侧 12 件同名文件体积仅为 scaffold 的 1/3 ~ 1/8（MenuSidebar 8.5×、useLookups 5.9×、
- *   FormDialog 5.1×、useEntityResource 4.6×、ListPage 3.2×、fieldRender 3.2×），
- *   且认证架构为**上一代形态**：demo 的 auth store 内联在 `api/auth.ts`（348 行），
- *   scaffold 已拆为 `api/token.ts` + `api/menuTitles.ts` + `stores/auth.ts`。
- *   两者**各自可独立构建通过**（demo 基线 3925 模块 / 1.54MB JS；加 20 动作迁移后 3931 模块 /
- *   8.84MB JS，两侧均 `vue-tsc --noEmit && vite build` exit=0）⇒ 不是「同一份东西的新旧版本」，
- *   故默认不再当缺陷报。若确需把 demo 升级为与 scaffold 同构的运行实例，
- *   **20 动作迁移配方**见 `references/scripts/README.md`（已实证可行，代价是 demo 失去
- *   「源码级轻量可读」属性：JS 1.54MB → 8.84MB，5.7×）。
+ * ── 可选第四根：lite 血统 demo（**已归档，默认不参与**）──
+ *   原 `references/demo/src/` 于 2026-09-13 **归档移出技能**，现位于技能仓库
+ *   `.archive/cube-webapi-tdesign--demo-lite/`（38 文件，完整可构建工程）。归档理由：
+ *   它既不是资产副本、也不是同步目标，却在每次自检里产出一片 `DEMO-*` 行 ——
+ *   噪声会训练人忽略红灯（与 D-17 同类风险）。
+ *   需要时**显式启用**：`--demo <仓库>/.archive/cube-webapi-tdesign--demo-lite/src`，
+ *   此时恢复四根对照，并仍按下列口径分类：
+ *       · `DEMO-STALE`     = 该根是**陈旧副本**（本该同步却落后）→ 须同步
+ *       · `DEMO-DIVERGENT` = 该根是**精简变体**（白名单 12 件，层次差异）→ 非漂移
+ *   ★ 其「层次差异」性质来自 2026-09-13 双侧构建实证：12 件同名文件体积仅为 scaffold 的
+ *     1/3 ~ 1/8（MenuSidebar 8.5×、useLookups 5.9×、FormDialog 5.1×、useEntityResource 4.6×、
+ *     ListPage 3.2×、fieldRender 3.2×），认证架构为上一代形态（auth store 内联在 `api/auth.ts`，
+ *     348 行；scaffold 已拆为 `api/token.ts` + `api/menuTitles.ts` + `stores/auth.ts`）。
+ *     两侧**各自可独立构建通过**（demo 基线 3925 模块 / 1.54MB JS；加 20 动作迁移后 3931 模块 /
+ *     8.84MB JS，均 `vue-tsc --noEmit && vite build` exit=0）⇒ 不是「同一份东西的新旧版本」。
+ *     若确需把它升级为与 scaffold 同构的运行实例，**20 动作迁移配方**见
+ *     `references/scripts/README.md`（已实证可行，代价是失去「源码级轻量可读」：JS 1.54MB → 8.84MB）。
  *
  * 用法：
  *   node tri-diff.mjs <工程目录>
  *   node tri-diff.mjs <工程目录> --json          # CI 用
  *   node tri-diff.mjs <工程目录> --out r.txt     # 报告落盘（Windows 终端吞 stdout 时用）
- *   node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir> --demo <dir>   # 覆盖默认对照根
- *   node tri-diff.mjs <工程目录> --no-demo       # 关闭第四根（退化为旧三根行为）
+ *   node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir>   # 覆盖默认对照根
+ *   node tri-diff.mjs <工程目录> --demo <dir>    # 启用第四根（demo 已归档，**默认关闭**）
+ *   node tri-diff.mjs <工程目录> --no-demo       # 显式关闭第四根（兼容开关，默认已是关闭态）
  *   node tri-diff.mjs <工程目录> --strict        # 令 DEMO-STALE 也计入失败退出码
  *   node tri-diff.mjs <工程目录> --strict-demo   # 连 DEMO-DIVERGENT（已知层次差异）也计入
  *   SKILL_DIR=/path/to/skill node tri-diff.mjs <工程目录>        # 换技能目录
@@ -67,11 +72,12 @@
  *   会把「技能两侧都缺、仅工程有」的业务页（`pages/admin/*Page.vue` 等）误报成 ENG-DRIFT，
  *   照提示「以技能版覆盖工程」就会删掉业务页。
  *
- * ★ 期望的「健康态」= ENG-DRIFT=0 · CORE-DRIFT=0 · DEMO-STALE=0 · DEMO-WL-STALE=0 ·
- *   SCAFFOLD-ONLY-WL-STALE=0，只剩 24 条 SCAFFOLD-DRIFT + 12 条 DEMO-DIVERGENT + 7 条 DEMO-ONLY。
+ * ★ 期望的「健康态」（**默认三根**）= ENG-DRIFT=0 · CORE-DRIFT=0，只剩 24 条 SCAFFOLD-DRIFT。
+ *   若另以 `--demo` 启用第四根，则在其上再要求：DEMO-STALE=0 · DEMO-WL-STALE=0 ·
+ *   SCAFFOLD-ONLY-WL-STALE=0，并固定出现 12 条 DEMO-DIVERGENT + 7 条 DEMO-ONLY。
  *   （2026-09-13 scaffold 换代 `-temp all` 后：SCAFFOLD-DRIFT 由 1 → 24，ALL-DIFF 由 4 → 0，
  *     DEMO-ONLY 由 6 → 7。）
- *   若出现其他条数，说明四根真的分叉了。
+ *   若出现其他条数，说明各根真的分叉了。
  *
  * ── 各根构成（勿把「预期」读成「漂移」）──
  *   references/scaffold/src/（**55 件**，`-temp all` 血统）
@@ -82,8 +88,9 @@
  *                                 + 上游基础设施 20 件（types/5 · locales/4 · config/3 · constants/1 ·
  *                                   hooks/1 · stores/index.ts · styles/*.less 5；**恒不在 core 内**）
  *                                   ⇒ 共 24 件 scaffold 独有，全在 SCAFFOLD_ONLY_EXPECTED 内
- *   references/demo/src/（28 件，**lite 血统**）= 精简示例工程，含 7 件 scaffold 没有的资产
- *                                    （注册 / 找回密码 / 主视图 / 主题展示 / vite-env.d.ts 等）
+ *   （原 `references/demo/src/`，28 件，**lite 血统** —— 已于 2026-09-13 **归档移出技能**，
+ *     现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`；它含 7 件 scaffold 没有的资产
+ *     （注册 / 找回密码 / 主视图 / 主题展示 / vite-env.d.ts 等）。需 `--demo` 显式启用第四根才参与对照。）
  */
 
 import fs from 'node:fs';
@@ -95,6 +102,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_ROOT = process.env.SKILL_DIR || path.resolve(HERE, '..', '..');
 
 /* ── ③ demo 的「已知层次差异」白名单（2026-09-13 双侧构建实证）──────────────
+ * ⚠️ **本表仅在以 `--demo` 显式启用第四根时生效** —— demo 已于 2026-09-13 归档移出技能，
+ *    默认三根对照下不会出现任何 DEMO-* 行（也就不会打这些白名单）。
  * demo 是**精简示例层**（源码级样例，不随包携带依赖；2026-09-13 双侧构建实证：装齐依赖后
  * `vue-tsc --noEmit && vite build` exit=0，可独立构建通过），**不是** scaffold 的同步目标。
  * 下列 12 件在 demo 侧为精简变体（体积为 scaffold 的 1/3 ~ 1/8），
@@ -172,8 +181,9 @@ if (opt.help || !opt.eng) {
     '                                       [--no-demo] [--strict] [--strict-demo] [--json] [--out <file>]\n' +
     '  默认 <core>       = <skill>/assets/core\n' +
     '  默认 <scaffold>   = <skill>/references/scaffold/src\n' +
-    '  默认 <demo>       = <skill>/references/demo/src（不存在则自动关闭第四根）\n' +
-    '  --no-demo         关闭第四根，退化为旧三根行为\n' +
+    '  <demo>            **默认关闭**（lite 血统 demo 已于 2026-09-13 归档移出技能）；\n' +
+    '                    需要时显式给：--demo <仓库>/.archive/cube-webapi-tdesign--demo-lite/src\n' +
+    '  --no-demo         显式关闭第四根（兼容开关，默认已是关闭态）\n' +
     '  --strict          令 DEMO-STALE 也计入失败退出码\n' +
     '  --strict-demo     连 DEMO-DIVERGENT（已知层次差异）也计入（隐含 --strict）\n' +
     '  <工程目录> 可为工程根（自动取 /src）或直接给 src 目录'
@@ -183,7 +193,13 @@ if (opt.help || !opt.eng) {
 
 const SCAFFOLD_SRC = opt.scaffold || path.join(SKILL_ROOT, 'references/scaffold/src');
 const CORE_DIR = opt.core || path.join(SKILL_ROOT, 'assets/core');
-const DEMO_SRC = opt.noDemo ? null : (opt.demo || path.join(SKILL_ROOT, 'references/demo/src'));
+// ★ 2026-09-13 结构收敛：lite 血统 demo 已**归档移出技能**（现位于技能仓库
+//   `.archive/cube-webapi-tdesign--demo-lite/`）。因此第四根**不再是默认对照根**——
+//   只有显式传 `--demo <dir>` 才启用（例如指向归档：
+//   `--demo <仓库>/.archive/cube-webapi-tdesign--demo-lite/src`）；`--no-demo` 保留为兼容开关。
+//   理由：它既不是资产副本、也不是同步目标，却在每次自检输出里产出一片 DEMO-* 行，
+//   使「真红灯」与「预期差异」混在一起（噪声会训练人忽略红灯，与 D-17 同类风险）。
+const DEMO_SRC = opt.demo && !opt.noDemo ? opt.demo : null;
 // 工程目录可直接给 `src/`，也可给工程根（自动补 `src`）
 const ENG_SRC = path.basename(opt.eng) === 'src' ? opt.eng : path.join(opt.eng, 'src');
 
@@ -301,7 +317,12 @@ for (const f of files) {
 }
 
 // 白名单腐化检测：条目若已不在 DEMO-DIVERGENT 组里（已同步 / 已删除 / 已改名），应清理
-const wlRot = [...DEMO_DIVERGENT.keys()].filter((f) => !GROUPS['DEMO-DIVERGENT'].includes(f));
+// ★ 第四根关闭时（demo 已归档，默认态）本白名单处于**停用态** —— 此时它「没有分歧」是必然的，
+//   不能当作腐化证据：否则默认三根对照下会**恒报** `DEMO-WL-STALE（12）` 的假警报
+//   （2026-09-13 归档时实测踩到）。只有 demo 真参与对照时才做腐化检测。
+const wlRot = DEMO_SRC
+  ? [...DEMO_DIVERGENT.keys()].filter((f) => !GROUPS['DEMO-DIVERGENT'].includes(f))
+  : [];
 
 // 同类腐化检测（SCAFFOLD_ONLY_EXPECTED）：条目若已不再「scaffold 独有」，说明 core 收编了它或它被删了
 // —— 两种都不该继续留在表里，否则会把真分叉（CORE-DRIFT）静默吞掉。
@@ -319,7 +340,7 @@ const FIX_HINT = {
   'CORE-DRIFT': '以 scaffold/工程 覆盖 assets/core',
   'SCAFFOLD-DRIFT': '预期：工程外壳 / DEV 验证页 / `all` 保留的上游基础设施（共 24 件，恒不在 core 内）',
   'ALL-DIFF': '预期：工程外壳 4 件，不归本脚本判',
-  'DEMO-STALE': 'demo **陈旧副本**（不在已知差异白名单内）—— 须同步 references/demo/src',
+  'DEMO-STALE': 'demo **陈旧副本**（不在已知差异白名单内）—— 须同步该 demo 根（原 references/demo/src，现归档在 <仓库>/.archive/cube-webapi-tdesign--demo-lite/src）',
   'DEMO-DIVERGENT': '预期：demo **精简变体**（层次差异，非漂移）—— 无需同步；如需同构见 scripts/README 的 20 动作迁移配方',
   'DEMO-ONLY': '预期：注册 / 找回密码页只此一份，scaffold/core 本就不提供',
 };
@@ -337,10 +358,10 @@ if (opt.json) {
 } else {
   const L = [];
   L.push(DEMO_SRC ? `四方对照：scaffold/src  vs  assets/core  vs  demo/src  vs  工程 src`
-                  : `三根对照（--no-demo）：scaffold/src  vs  assets/core  vs  工程 src`);
+                  : `三根对照（默认，demo 已归档）：scaffold/src  vs  assets/core  vs  工程 src`);
   L.push(`  scaffold = ${SCAFFOLD_SRC}`);
   L.push(`  core     = ${CORE_DIR}`);
-  L.push(`  demo     = ${DEMO_SRC || '（已关闭，--no-demo）'}`);
+  L.push(`  demo     = ${DEMO_SRC || '（未启用：已归档移出技能，需 --demo <dir> 显式指定）'}`);
   L.push(`  eng      = ${ENG_SRC}`);
   L.push('');
   L.push(`共 ${files.length} 文件（${roots.length} 根并集）`);
