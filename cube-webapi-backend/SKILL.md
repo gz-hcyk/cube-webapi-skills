@@ -213,6 +213,36 @@ app.UseManagerProvider();
 > ⚠️ 连接串里的 `..\Data\` 相对路径基于**进程当前工作目录（CWD）**，不是 ContentRoot。`dotnet run`（CWD=工程目录）与直接运行 `bin/Debug/net8.0/*.dll`（CWD=输出目录）会解析到不同 Data 目录，导致"建了表却查不到""冒烟打到旧库"。调试时固定一种启动方式。
 > 生产环境**必须**配置强 `JwtSecret`，否则令牌可伪造。
 
+### 1.3 配置分属两套体系：`Config/*.config` 必须落到**运行目录**
+
+魔方的配置**不是单一来源**，写错地方会**静默无效**（2026-09-13 从零新建 `CubeAdmin.WebApi` 实测）：
+
+| 配置项 | 归属体系 | 实际读取位置 | 写在 `appsettings.json` 里有效吗 |
+|---|---|---|---|
+| 连接串 / `Logging` / `AllowedHosts` | ASP.NET Core | `appsettings*.json` | ✅ 有效 |
+| `SysConfig`（系统名 `DisplayName` / 公司 / 版本） | NewLife `Config<T>` | 运行目录 **`Config/Sys.config`** | ❌ **无效**（缺失时回落到**程序集名**） |
+| `CubeSetting`（版权 / 登录页提示 / 跨域 / `JwtSecret` / 主题） | NewLife `Config<T>` | 运行目录 **`Config/Cube.config`** | ❌ **无效** |
+
+**「运行目录」= `bin/Debug/net8.0/`（或 publish 输出目录），不是你的工程目录**。因此把
+`Config/Sys.config`、`Config/Cube.config` 放在工程根下**不会生效**——表现为：系统名变成程序集名、
+`JwtSecret` 每次启动都随机、跨域设置不生效。
+
+两种落地方式：
+
+1. **推荐（可复现、`dotnet run` 与 `dotnet publish` 都自动带上）**：在 csproj 加拷贝项
+   ```xml
+   <ItemGroup>
+     <None Update="Config\**" CopyToOutputDirectory="PreserveNewest" />
+   </ItemGroup>
+   ```
+2. 手工把 config 拷进 `bin/**/Config/` —— 清 `bin`/换机器即丢失，**不要**作为常规做法。
+
+> ⚠️ **`JwtSecret` 必须是 `HS256:xxx` 两段格式**（冒号分两段）。`CubeSetting.OnLoaded` 对不合规值会
+> **静默**替换为 `HS256:` + 16 位随机串 ⇒ 每次重启令牌全部失效，表现为「昨天还好好的，今天全员 401」。
+> 裸密钥串写在 `appsettings.json` 里同样无效。正确落点：`Config/Cube.config` 的 `<JwtSecret>`。
+> 一个可用的最小骨架：`Sys.config`（Name/DisplayName/Company/Develop）+ `Cube.config`
+> （CorsOrigins / Copyright / LoginTip / JwtSecret）。
+
 ---
 
 ## 二、路由约定（必须理解）
