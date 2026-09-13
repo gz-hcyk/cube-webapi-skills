@@ -55,9 +55,8 @@ references/scaffold/
 > `main.ts`/`App.vue`/`router/`/`vite-env.d.ts`，以及 DEV 验证页 `LovDemoView.vue`）。
 > `assets/` 只是"并入既有工程"用的、按目标路径镜像的拷贝源；分类依据与同步铁律见 `assets/README.md`。
 >
-> 早前放在本目录的 `api/menuTree.ts`、`utils/permissions.ts` 已**移出**（主链路零引用的历史残留，
-> 职责与 `MenuSidebar`+`BasicLayout` 的内联归一化、`DashboardView` 的内联权限位判定重叠）→
-> 现存放于 `assets/archive/`，原因见 `assets/archive/README.md`。
+> 早前放在本目录的 `api/menuTree.ts`、`utils/permissions.ts` 已**删除**（主链路零引用的历史残留，
+> 职责与 `MenuSidebar`+`BasicLayout` 的内联归一化、`DashboardView` 的内联权限位判定重叠）。
 
 > **未随脚手架附带的**（按需从 `assets/optional/` 取）：
 >

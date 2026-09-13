@@ -20,7 +20,6 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | ConfigController<T> 单表单 | `references/config-controller.md` + `assets/core/components/cube/ConfigView.vue` |
 | 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
 | LIST 型值集弹窗（LovListField）行为/FR/验证清单 | `references/lov-list-field.md` |
-| 演示工程（**源码级**，未装依赖/未编译；完整形态页面参考） | `references/demo/`（README 见 `references/demo/README.md`） |
 | 生产级编排层脚手架（**唯一真相源**；历史在完整依赖环境下 `vue-tsc`+`vite build`+CDP 实测 0 错误，**复现须先 `npm install`**） | `references/scaffold/` |
 | 全量可拷贝代码模板 | `assets/*`（组件 `.vue` + `api/*.ts`） |
 | 新增实体验收清单 | 本文件 §4.21（枚举 LOV / 外键渲染人工核查） |
@@ -101,11 +100,11 @@ Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计
 |---|---|---|---|
 | 1 脚手架 | `td-starter init`（Vue3+TS+Vite+Pinia） | — | 结构：`api/ store/ pages/ layouts/ router/`；新工程一律走此 CLI，禁止从零手搭（§九） |
 | 2 请求层 | `assets/core/api/http.ts` → `src/api/http.ts`；`assets/core/api/token.ts` → `src/api/token.ts` | `assets/core/utils/camel.ts` → `src/utils/` | **全项目唯一 HTTP 层**，导出**双实例**（铁律 H1）：`http`（`baseURL=API_BASE`，**已含 `/api`**，实体接口只写 `/{area}/{ctrl}`）+ `rawHttp`（`baseURL=SERVER_BASE`，非实体端点/菜单树自带 `/api`）——方向相反勿混（H2）。头只发 `Authorization: Bearer`+`X-Tenant`/`X-Tenant-Id`；响应判 `code`+401 跳登录（带 refresh 重放一次）；**无全局 camelize**（键归一在 `useEntityResource.normalizeRows`）。`/api` 由后端 `CubeSetting.ApiPrefixes` 决定，前端经 `VITE_API_BASE`/`VITE_SERVER_BASE` 对齐 |
-| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts`；`permissions.ts` | `references/demo/src/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
+| 3 鉴权 | `assets/core/stores/auth.ts` → `src/store/auth.ts` | `assets/core/` | 契约要点见下「登录契约」；按钮显隐真源是 `GetPage.setting`（§4.10） |
 | 4 资源/渲染器 | `useEntityResource.ts`/`fieldRender.ts`/`useLookups.ts`/`useLov.ts` → `src/api/` | 同上 | 见 §4.4/§4.8/§4.20 |
 | 5 基类组件 | `ListPage`/`FormDialog`/`DetailDrawer` → `src/components/cube/`（**自包含**，搜索栏/工具条/分页已内联；`ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent` 已下线，勿找） | `assets/` | 见 §4.5 |
 | 6 实体页 | `<ListPage area controller title />` | — | 见 §4.6 |
-| 7 外壳 | `menuTitles.ts`/`BasicLayout`/`tokens.css`/`SettingPanel` 等 | `assets/` + `references/scaffold/src/**` | 见 §4.12/§4.14-16/§4.18（菜单树归一化**无独立模块**：已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`；旧 `menuTree.ts` 已归档于 `assets/archive/`，勿用） |
+| 7 外壳 | `menuTitles.ts`/`BasicLayout`/`tokens.css`/`SettingPanel` 等 | `assets/` + `references/scaffold/src/**` | 见 §4.12/§4.14-16/§4.18（菜单树归一化**无独立模块**：已内联于 `MenuSidebar` 取数 + `BasicLayout.onNavigate()`） |
 | 8 验收 | checklist（§六）+ §4.21 枚举/外键渲染核查 | — | 编译 0 错误铁律 |
 
 **登录契约（当前版本 AuthController，SPA 用，实测）**：端点 `POST /Auth/Login` + `GET /Auth/LoginConfig` + `/Auth/Challenge` + `/Auth/Refresh` + `/Mfa/*`（**均不带 `/api` 前缀**；`/Admin/User/Login` 只留 MVC/SSO）。请求体 `{ username, password, category(枚举整数: Password=0/Mobile=1/Mail=2/OAuth=3，禁字符串), remember, challengeId, captchaId, captchaCode }`。响应令牌键名实测 **snake_case**（`access_token`/`refresh_token`/`expire_in`），`auth.ts` 的 `normToken` 三向兜底（snake/camel/Pascal），统一读 camelCase。`challengeRequired===true` 才走 RSA-OAEP Challenge；其余开关同理 `===true` 才启用。`LoginConfig` 的 `oAuth` 键名实测**大写 A**（文档写小写），`getLoginConfig` 双向归一、页面读 `config.oAuth`。详见 troubleshooting G1/G7。
@@ -130,7 +129,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 ### 4.3 落地鉴权与权限
 
 - `auth.ts`：`loginWithPassword`（含 Challenge-Response 门控）/`loginWithCode`（category 传 Mobile/Mail 枚举整数）/`sendCode`（channel 大小写 `Sms`/`Mail`）/`verifyMfa`（`message` 以 `mfa_required:` 开头时进二步）/`refresh`（令牌轮换）/`resetPassword`/`registerUser`/`loadMenu`/`setTenant`。MFA 可用性以 `LoginConfig.security.mfaAvailable===true` 为准。
-- 按钮/操作显隐真源：`GetPage.setting`（§4.10）+ 菜单树 + `/Auth/Info`（权限位）。`permissions.ts` 仅作位语义参考。
+- 按钮/操作显隐真源：`GetPage.setting`（§4.10）+ 菜单树 + `/Auth/Info`（权限位）。
 - **`Message` 是组件，函数式调用必须 `MessagePlugin.success/error/...`**（误用 `Message.success` 会 `is not a function`，登录成功不跳转）。
 
 ### 4.4 落地实体资源与渲染器
@@ -297,7 +296,6 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - **url → 路由归一化 = `assets/core/layouts/BasicLayout.vue` 的 `onNavigate()`**：剥 `~` / 前导斜杠 / `api` 前缀后取前两段 → `/entity/{Area}/{Ctrl}`。后端 url 双格式（业务区相对 `~/Sync`、系统区绝对 `/Admin/User`）在此一并抹平。
 - ★ **节点 `permissions` 是权限位字典**（`{"1":"查看","2":"添加","4":"修改","8":"删除"}`，业务动作叠加 16/32/64/128…），除驱动按钮级权限外，可作**控制器类别的启发式**：含 2/4/8 大概率为实体控制器（有 `Index`/`GetPage`），否则大概率为动作控制器（`Mobile`/`Import`/`Report`/`Widget` 等，取数必然 404）。⚠️ **该启发式有反例**（`Log` 权限位仅 `[1]` 但实为含 `Index`+`GetPage` 的只读实体控制器），**权威判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为准**（见 §4.12.2）。仪表盘/统计页据此跳过非实体节点，避免刷屏 404（实测 3 条 → 0 条）。判别式与实测数据见 §4.8 附近「实体 vs 动作控制器判别」。
 - ⚠️ **真实端点是 `/api/Admin/Index/GetMenuTree`**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
-- 🗄️ **已归档 `assets/archive/api/menuTree.ts`**：早期「独立归一化模块 + `CUSTOM_PATHS`（前端专属路由）+ `EXCLUDED`（非实体控制器隐藏）+ Element→TDesign 图标映射」方案。主链路零引用，且上述能力已被 `MenuSidebar` + `BasicLayout` 内联实现取代 → **两套并存必然打架**。若确需 `EXCLUDED` 那类"隐藏非实体菜单"能力，按 `assets/archive/README.md` 的复活说明**合并为一处**，不要两份都留。
 
 ### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
 
@@ -498,13 +496,13 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 ## 七、推荐检查项（验收 checklist）
 
-- [ ] `src/api/`（api/http/camel/permissions/auth/useEntityResource/fieldRender/useLookups）与三个基类组件已落地 `src/components/cube/`
+- [ ] `src/api/`（`api/http` + `api/token` + `utils/camel` + `fieldRender` + `useEntityResource` + `useLookups` + `useLov` + `menuTitles` + `stores/auth`）与三个基类组件已落地 `src/components/cube/`
 - [ ] 实体页仅传 `area`+`controller` 复用基类，未重复手写表格/表单
 - [ ] 含 `ParentID` 实体自动 treeTable + 表单树形下拉；列表 `xxxID` 显名非原始 ID；详情经 `labelOf` 回显（遍历原始 DataField[]）
 - [ ] 实体/动作控制器判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为权威（非权限位 `{2,4,8}` 启发式；`Log` 权限位仅 `[1]` 却是只读实体控制器，已白名单放行；见 §4.12.2）
 - [ ] 选型由元数据驱动（selectListComponent/selectFormControl），未硬编码控件类型
 - [ ] 新增/编辑/删除按钮按 `GetPage.setting` 与菜单树显隐
-- [ ] 令牌双头 `Authentication`+`Authorization`；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
+- [ ] 令牌只发 `Authorization: Bearer`（附 `X-Tenant`/`X-Tenant-Id`；**无** `Authentication` 头）；登录 `POST /Auth/Login`、`username`、令牌 `normToken` 三向归一、`oAuth` 键名双向归一
 - [ ] 登录页按 `LoginConfig` 动态组装（系统名/Logo/背景/login 开关/注册/oAuth/版权/备案），静态资源走 `/Content`
 - [ ] 侧栏菜单 = `MenuSidebar` + `/api/Admin/Index/GetMenuTree`，按设计系统落地（图标/激活态/手风琴），submenu `:value` 唯一
 - [ ] 搜索栏由 `GetPage.search` 驱动（字符串入 Q、数值/枚举/布尔/日期走字段参数、日期范围 dtStart/dtEnd），`Index.stat` 已展示
@@ -524,32 +522,27 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 - [ ] **C2** 默认品牌色 = 政务蓝 `#0f4c9e`，且 `tokens.css` / `setting.ts` 的 `DEFAULT_BRAND` / `tokens.ts` 三处同源
 - [ ] **C3** 暗黑可切：`theme-dark.css` 已 import + `setting.load()` 已调 + `BasicLayout` 已挂 `SettingPanel`（右下角有齿轮；点「暗色」后 `<html>` 带 `t-theme-dark`）
 
-## 八、最小可运行 Demo（端到端验证脚手架）
+## 八、端到端验证（脚手架）
 
-`references/demo/`（README 见目录内 `README.md`）：
+`references/scaffold/` 自带 Mock 后端，可端到端跑通「登录 → 实体列表/表单 → 值集弹窗」，也就是新增实体的最小闭环验证入口：
 
-> ⚠️ **本目录当前未装 `node_modules`、未构建**（源码级参考）。它的价值是展示
-> **完整形态**页面（登录含 MFA/注册/找回密码、令牌板、权限编辑等），
-> 拷贝其中的文件到业务工程前**必须先在已装依赖的工程内过一遍 `vue-tsc`**（`references/scaffold/` 须先 `npm install`——它不随包携带 `node_modules`（已清空为声明式），直接跑会找不到 `vue-tsc`）。
-> 已编译验证的资产一律以 `references/scaffold/src/` + `assets/` 为准。
 ```bash
-cd references/demo
+cd references/scaffold
 npm install
-npm run mock   # 终端1：Mock 后端 :3001（server.mjs，实现《认证接口设计.md》契约）
-npm run dev    # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
-npm run typecheck   # vue-tsc --noEmit（⚠️ demo 无 node_modules、从未编译；须先 npm install，实测结论以 scaffold 为准）
+npm run mock       # 终端1：Mock 后端 :3001（backend/server.mjs，实现《认证接口设计.md》契约）
+npm run dev        # 终端2：Vite :5173，代理 /api /Auth /Mfa /Cube /Content /cube 到 mock
+npm run typecheck  # vue-tsc --noEmit
 ```
-登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
+登录（任意账号+密码；用户名含 `mfa` 触发二步）→ 设备列表为树形表、`StatusID`/`CategoryID` 列显名、底部 stat 行；新增/编辑含树形下拉与映射下拉；详情回显名称。**改 `backend/server.mjs` 后必须重启 Node 进程**（无热更新，命中旧契约）。
 
-demo 与 `references/scaffold/` **同源**：已按铁律 C1~C3 落实（政务蓝默认 + 右下角齿轮可切暗黑，实测 `--td-bg-color-page` `#f3f3f3`→`#181818`），并遵守 H1/H2（唯一 HTTP 层 `src/api/http.ts`、只发 `Authorization: Bearer`；旧 `api.ts` 已删除改名）。
-> 组件对 `src/api/*` 的引用用 `@/api/...`（已配 `@` 别名）；已下线 `ListNavbar/ListSearchBar/ListToolbar/ListFooter/DetailContent`（早期契约，拷贝即报错）。
+> `references/scaffold/` 是**唯一真相源**（已按铁律 C1~C3 落实，政务蓝默认 + 右下角齿轮可切暗黑，并遵守 H1/H2；旧 `api.ts` 已删除改名）。Mock 只是契约替身，换真实后端见 §九。
 
 ## 九、以真实魔方后端替换 Mock（对接说明）
 
-`references/demo`/`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
+`references/scaffold` 的 Mock 只是契约替身。换真实后端：**前端资产无需改动**，只做：
 1. **改代理 target**（唯一必改项）：vite proxy 的 `/api` `/Auth` `/Mfa` `/cube` `/Content` target 指向真实后端（`VITE_API_TARGET`）；勿代理 SPA 路由。
 2. 生产同源/已配 CORS：删 dev proxy，`src/api/http.ts` 的基址由 `VITE_API_BASE` / `VITE_SERVER_BASE` 控制（同源部署时留空即可，`API_BASE` 自动落到 `/api`）；跨域部署时填后端基址。**实体调用点无需改动**（只写 `/{area}/{ctrl}`，前缀由 `API_BASE` 承载）。
-3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌双头 / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
+3. 契约差异清单（若你的魔方版本与默认不同，只改 `src/api/*.ts` 对应一处）：令牌头（只发 `Authorization: Bearer`，勿加 `Authentication`） / 分页 `pageIndex/pageSize`+`page.totalCount` / 排序 `?sort=&desc=` / 信封 `code/message/data/page/stat` / 日期 `YYYY-MM-DD HH:mm:ss` / Int64 字符串 / 权限 `GetPage.setting`+菜单树 / 修改 `PUT {base}`、删除 `DELETE {base}?id=`。
 
 ## 十、生成生产部署包（前端构建与同步）
 
@@ -582,7 +575,7 @@ td-starter init <项目名> -type vue3 -bt vite -temp lite   # 必须显式 -typ
 
 > **最省事的方式**：直接把 `references/scaffold/` 整个目录当作新工程（它已是完整可运行工程，三条约定 C1~C3 均已落实、自带 Mock 后端可端到端跑；「编译 0 错误」是**在完整依赖环境下的历史结论**，随包 `node_modules`/`dist` 已清空为声明式，用前先 `npm install`），只改 `vite.config.ts` 的代理 target。下表用于「并入既有工程」的对照拷贝。
 
-`assets/` **按「核心 / 可选 / 已归档」三分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
+`assets/` **按「核心 / 可选」二分，且路径镜像目标工程的 `src/`**，因此可以整目录拷：
 
 ```bash
 cp -r assets/core/.                     <工程>/src/        # 必拷（27 文件，见 assets/README.md）
@@ -603,9 +596,8 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 | **optional** | `assets/optional/components/cube/RoleMenuEditor.vue` | 角色权限设置（§4.12.1）✅ 已随 scaffold 验证 |
 | **optional** | `assets/optional/components/cube/PriceYuanInput.vue` | 金额（分/元）换算输入（§4.13）✅ 已随 scaffold 验证 |
 | **optional** | `assets/optional/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 |
-| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 无副本、仅 demo 有源码实现，**取用前须先过 `vue-tsc`** |
+| **optional** | `assets/optional/components/cube/IconPicker.vue` | 图标选择（`itemType=icon`）；⚠️ scaffold 内无副本（模板仅此一份），**取用前须先在已装依赖工程过 `vue-tsc`** |
 | — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
-| **archive** | `assets/archive/*`（**勿拷**） | `api/menuTree.ts` / `api/permissions.ts`——主链路零引用的历史残留，归档原因见 `assets/archive/README.md` |
 
 > **已删除 `CodeEditor.vue`**（原 `assets/optional/components/cube/`；2026-09 资产清理）：零引用 +
 > 从未编译验证（依赖 `@codemirror/*` 未装），且**当前 `fieldRender` 根本不产出
@@ -626,7 +618,7 @@ cp -r assets/optional/components/cube/RoleMenuEditor.vue <工程>/src/components
 后端 `AddCube()` 即内置标准后台，前端**必须完整接入**（通用 EntityPage 零新增页）。**模块清单以 `GetMenuTree` 为唯一权威来源**（固定清单会漏 Lov/地区/附件/定时作业等节点）。实测模块：业务区（如 WeCom 17 项：同步中心/班级/教职工/...）、系统管理 18 项（`Admin`：User/Role/Department/Lov/Menu/Tenant/Log/Parameter/OAuthConfig/...）、魔方管理 7 项（`Cube`：Area/App/Attachment/指令/定时作业/...）。代表性路由：`/Admin/User` `/Admin/Role` `/Admin/Menu` `/Admin/Department` `/Admin/Lov` `/Admin/Log` `/Admin/Tenant` `/Cube/Area` `/Cube/App` `/Cube/Attachment`。
 - Cube 6.x：日志统一 `Log`、字典/配置统一 `Parameter`（旧 `Dic/Config/UserLog` 等不存在，404 勿接入）。
 - 导航用动态菜单树 + 仪表盘（统计卡并发 `GET /{area}/{ctrl}?pageSize=1` 取 `env.page.totalCount`），不写静态菜单。
-- 纯 MVC 非实体页（File/Db/Core/Index/Sys/XCode/Cube 等）GetPage 404：**后端本就不会把它们挂进业务菜单**（框架自带节点不含）；若确有残留节点，由 `BasicLayout.onNavigate()` 归一化后落到泛型页，再由 `ListPage.loadSchema` 的 404 探针渲染「需自定义界面」占位，不空白（不要在前端硬造 `EXCLUDED` 隐藏表——归档的 `assets/archive/api/menuTree.ts` 就是这么做的，已废弃）。
+- 纯 MVC 非实体页（File/Db/Core/Index/Sys/XCode/Cube 等）GetPage 404：**后端本就不会把它们挂进业务菜单**（框架自带节点不含）；若确有残留节点，由 `BasicLayout.onNavigate()` 归一化后落到泛型页，再由 `ListPage.loadSchema` 的 404 探针渲染「需自定义界面」占位，不空白（菜单显隐应由后端菜单树决定，不要在前端硬造 `EXCLUDED` 之类的隐藏表）。
 
 ### 11.3 侧边栏布局（Starter 最佳实践）
 

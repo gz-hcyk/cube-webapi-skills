@@ -3,7 +3,7 @@
 > 本文件是 `cube-webapi-tdesign` 的权威契约参考。后端实现细节见 `cube-webapi-backend` 技能（第四节、第五节）。
 > 所有响应经 `ApiFilter` 统一序列化：**Int64 以字符串传输**（避免 JS 精度丢失）。
 >
-> ⚠️ **字段命名大小写（易错，务必注意）**：本技能早期版本曾称「统一 CamelCase 命名」，**与真实 NewLife.Cube WebApi 不符**——实测真实后端字段名是 **PascalCase**（`ID`/`ParentID`/`Name`/`CreateTime`/`CreateUserID`），仅 `references/demo` 的 Mock 后端为 camelCase 演示方便。前端**必须**在取数处用 `useEntityResource.normalizeRows` 把行 key 归一到 camelCase（`camel('ID')→id`、`camel('ParentID')→parentID`，纯大写缩写 `ID/URL/IP` 整词小写），否则 `row-key`、列回显、`buildTree` 父子链接、外键字典全部错位（详见 SKILL.md §七「后端字段命名是 PascalCase」陷阱）。渲染器对大小写做兜底，但**不要假设后端一定 camelCase**。
+> ⚠️ **字段命名大小写（易错，务必注意）**：本技能早期版本曾称「统一 CamelCase 命名」，**与真实 NewLife.Cube WebApi 不符**——实测真实后端字段名是 **PascalCase**（`ID`/`ParentID`/`Name`/`CreateTime`/`CreateUserID`），仅 `references/scaffold/backend/server.mjs` 的 Mock 后端为 camelCase 演示方便。前端**必须**在取数处用 `useEntityResource.normalizeRows` 把行 key 归一到 camelCase（`camel('ID')→id`、`camel('ParentID')→parentID`，纯大写缩写 `ID/URL/IP` 整词小写），否则 `row-key`、列回显、`buildTree` 父子链接、外键字典全部错位（详见 SKILL.md §七「后端字段命名是 PascalCase」陷阱）。渲染器对大小写做兜底，但**不要假设后端一定 camelCase**。
 
 ## 1. 统一响应信封
 
@@ -158,7 +158,7 @@ GET  /api/Admin/Index/GetMenuTree   → { code:0, data:[ 菜单树，仅含当�
 - `setting.enableAdd !== false && !setting.isReadOnly` ⇒ 显示“新增”；
 - `!setting.isReadOnly` ⇒ 显示“编辑/删除”；
 - 自定义业务权限位（16/32…）由后端 `[EntityAuthorize]` 在动作级拦截，前端如需按位隐藏某按钮，权限位数据须由后端在 `GetPage` 扩展字段或菜单树动作中下发。
-`PermissionFlags` 位语义（仅供后端对照）：1=查看(Detail) / 2=新增(Insert) / 4=修改(Update) / 8=删除(Delete) / 16、32…=自定义业务权限 / `All`=0xFFFFFFFF。详见 `permissions.ts`。
+`PermissionFlags` 位语义（仅供后端对照）：1=查看(Detail) / 2=新增(Insert) / 4=修改(Update) / 8=删除(Delete) / 16、32…=自定义业务权限 / `All`=0xFFFFFFFF。
 
 ## 7. 多租户
 
