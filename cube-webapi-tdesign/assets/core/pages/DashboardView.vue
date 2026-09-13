@@ -51,7 +51,7 @@ function kindOf(node: any): 'entity' | 'action' {
 }
 
 async function loadMenu() {
-  const env: any = await getRaw<any[]>('/api/Admin/Index/GetMenuTree')
+  const env: any = await getRaw<any[]>('/Admin/Index/GetMenuTree')
   const roots = Array.isArray(env?.data) ? env.data : []
   const out: Group[] = []
   for (const r of roots) {

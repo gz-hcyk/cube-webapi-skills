@@ -18,7 +18,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV
   : []
 
 // 路由表（铁律 M1/M3）
-// 业务菜单的唯一权威是后端 GET /api/Admin/Index/GetMenuTree：这里只注册「壳 + 泛型实体页」，
+// 业务菜单的唯一权威是后端 GET /Admin/Index/GetMenuTree（**无 /api 前缀**）：这里只注册「壳 + 泛型实体页」，
 // 业务菜单绝不硬编码；登录后默认落地 /dashboard（品牌点击亦回 /dashboard）。
 // history 用 createWebHistory（生产需 Nginx `try_files $uri $uri/ /index.html` 回退）；
 // 若部署环境不支持，可换 createWebHashHistory，其余代码无需改动。

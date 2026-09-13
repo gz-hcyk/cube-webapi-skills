@@ -4,7 +4,7 @@
     v-if="orientation === 'vertical'"
     :value="active"
     :expanded="expanded"
-    :accordion="true"
+    :expand-mutex="true"
     :collapsed="collapsed"
     :theme="theme"
     :class="['cube-menu', themeClass]"
@@ -188,12 +188,17 @@ function iconOf(n: any): string {
 }
 
 onMounted(async () => {
-  // 真实后端所有接口统一在 /api 下；只返回当前用户有权限的菜单。
+  // 菜单树走 /Admin/Index/GetMenuTree —— 该端点是 Admin 区域 IndexController 的**属性路由**
+  // （[area]/[controller]/[action]），**不带 /api 前缀**；写成 /api/Admin/Index/GetMenuTree 会 404
+  // （2026-09-13 实测：无 /api → 200，带 /api → 404）。实体接口才走 /api/{area}/{controller}。
+  // ⚠️ 同时 vite dev 代理必须显式覆盖 `^/Admin/Index/`，否则请求落到 SPA 兜底、返回 index.html，
+  //    axios 解析失败 → 菜单**静默为空**（无报错、无 401、无 404），排障成本极高。详见 SKILL.md H3。
+  // 只返回当前用户有权限的菜单。
   // 必须 try/catch：未登录/令牌失效时该请求 401，Axios 拒绝若无接收方会冒泡成
   // Uncaught AxiosError 红错并打断渲染链；api.ts 拦截器已统一处理 401（清 token + 跳 /login），
   // 此处 401 静默忽略即可，其余异常仅告警，绝不 throw。
   try {
-    const r = await getRaw<any[]>('/api/Admin/Index/GetMenuTree');
+    const r = await getRaw<any[]>('/Admin/Index/GetMenuTree');
     if (r.code === 0 && Array.isArray(r.data)) {
       menus.value = r.data;
       // 把后端 displayName 登记为页面标题权威源（页面标题/面包屑据此显示中文）
@@ -205,7 +210,7 @@ onMounted(async () => {
   }
 });
 
-/** 根据当前路由，默认只高亮 + 展开对应的父菜单（手风琴，一次仅一个） */
+/** 根据当前路由，默认只高亮 + 展开对应的父菜单（同层互斥，一次仅一个） */
 function syncActiveByRoute() {
   const hash = location.hash.replace(/^#\/?/, '');
   const segs = hash.split('/').filter(Boolean).slice(0, 2).join('/').toLowerCase();
@@ -233,7 +238,9 @@ function onChange(val: any) {
   active.value = val;
 }
 function onExpand(vals: string[]) {
-  // 受控展开：配合 accordion 保证手风琴（一次仅一个）
+  // 受控展开：配合 :expand-mutex="true" 保证同层互斥（同一父节点下同时仅一个展开）。
+  // 注意：TDesign 1.20.7 的 Menu 无 accordion prop，互斥只认 expand-mutex
+  //（源码 es/menu/utils/v-menu.mjs → VMenu.expand() 按 sameParentNodes 删除同级已展开项）。
   expanded.value = vals;
 }
 </script>

@@ -39,7 +39,7 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 
 > ⚠️ **修改/删除契约（高频坑，实测 405）**：第三代 WebApi 的修改/删除打**主路由**——`PUT /{area}/{controller}`（主键在 body）、`DELETE /{area}/{controller}?id=xxx`（id 在 query）。写成 `PUT|DELETE /{a}/{c}/{id}`（id 在 URL path）后端无此路由 → 405（详见 SKILL.md §七「编辑保存/删除 405」）。
 
-> `Auth`、`Cube`、`Sso` 等服务控制器**不带** `/api` 前缀（如登录 `/Admin/User/Login`、菜单 `/Admin/Index/GetMenuTree`）——但实测真实部署下这两个也在 `/api` 下（`POST /api/Admin/User/Login`、`GET /api/Admin/Index/GetMenuTree`），落地时用 curl 探一遍。
+> ⚠️ **非实体系统端点一律不带 `/api` 前缀（2026-09-13 对 localhost:7116 实测）**：登录 `/Auth/Login`、`/Admin/User/Login`，菜单 `/Admin/Index/GetMenuTree`，字典 `/Cube/Lookup`、`/Cube/Apis` —— 全部**根路径**，加 `/api` 一律 **404**。实体接口才走 `/api/{area}/{controller}`。详见 SKILL.md 铁律 H2/H3。
 
 ## 3. GetPage —— 前端引导页的核心（一次性取齐 schema）
 
@@ -142,17 +142,20 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 ## 6. 鉴权接口
 
 ```http
-POST /api/Admin/User/Login     body: { userName, password }   → { code:0, data:{ access_token:"jwt", token_type, expire_in, refresh_token, scope } }
-GET  /api/Admin/Index/GetMenuTree   → { code:0, data:[ 菜单树，仅含当前用户有权限的节点 ] }
+POST /Auth/Login              body: { username, password }   → 200 { code:0, data:{ access_token:"jwt", token_type:null, expire_in, refresh_token, scope:null } }
+POST /Admin/User/Login        body: { username, password }   → 200 同上（两路由均注册，任选其一）
+GET  /Admin/Index/GetMenuTree → 200 { code:0, data:[ 菜单树，仅含当前用户有权限的节点 ] }
 ```
 
-> **与旧版文档的重要更正**：官方魔方 WebApi **没有** `/Auth/Login`、也没有 `/Auth/Info` 这种“返回权限位”的接口。
-> 登录路径为 `/Admin/User/Login`；权限位不通过独立接口下发，而是体现在 `GetPage.setting`（enableAdd/isReadOnly…）与菜单树中。
-> 登录/菜单的 `/api` 前缀：官方文档写不带 `/api`，**但实测真实部署（如 localhost:7116）在 `/api` 下**（`POST /api/Admin/User/Login` 返回 `data.access_token`）——前端 auth.ts 已按 `/api` 前缀 + `access_token` 对齐，落地时用 curl 探一遍。
+> **与旧版文档的重要更正**：官方魔方 WebApi **没有** `/Auth/Info` 这种“返回权限位”的接口。
+> 登录路径实测有**两条**：`/Auth/Login`（**推荐**，框架根级属性路由）与 `/Admin/User/Login`。入参键大小写**不敏感**（`username` 与 `userName` 均 200，实测）。
+> 权限位不通过独立接口下发，而是体现在 `GetPage.setting`（enableAdd/isReadOnly…）与菜单树中。
+> ⚠️ **前缀铁律（2026-09-13 实测）**：`/api/Auth/Login` → 404、`/api/Admin/User/Login` → 404、`/api/Admin/Index/GetMenuTree` → 404。
+> 非实体控制器**一律挂在根路径**，前端 auth.ts / MenuSidebar 必须用 `getRaw`/`postRaw`（`rawHttp`）走全路径，勿加 `/api`。
 
 **令牌传递方式（实测：只发 `Authorization: Bearer <jwt>`，勿加 `Authentication`）**：
 后端可接受的形态有 `Authentication: <jwt>`（官方文档推荐）／ **`Authorization: Bearer <jwt>`（本项目多次实测的**唯一**可用头——单发 `Authentication: Bearer` → 401；只带 Cookie `.Cube.Session` → 401）** ／ `Cookie`（后端 Set-Cookie）／ Query `?token=xxx`。
-因此技能 `http.ts` 请求拦截**只注入 `Authorization: Bearer ${token}` 一个头**（外加 `X-Tenant` / `X-Tenant-Id`），避免多头发送带来的歧义；后端根级非实体端点（`/Auth/*`、`/Mfa/*`）以及挂 `/api` 下的菜单树（`/api/Admin/Index/GetMenuTree`）均走 `rawHttp`（`getRaw`/`postRaw`），实体接口走 `http`（`baseURL` 已含 `/api`）。
+因此技能 `http.ts` 请求拦截**只注入 `Authorization: Bearer ${token}` 一个头**（外加 `X-Tenant` / `X-Tenant-Id`），避免多头发送带来的歧义；**所有非实体端点**（`/Auth/*`、`/Mfa/*`、菜单 `/Admin/Index/GetMenuTree`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`）均走 `rawHttp`（`getRaw`/`postRaw`，路径**不带 `/api`**），实体接口走 `http`（`baseURL` 已含 `/api`）。
 
 **前端权限判定（以 GetPage.setting 为准，而非独立权限位接口）**：
 - `setting.enableAdd !== false && !setting.isReadOnly` ⇒ 显示“新增”；
@@ -166,6 +169,8 @@ GET  /api/Admin/Index/GetMenuTree   → { code:0, data:[ 菜单树，仅含当�
 - 请求头 `X-Tenant-Id: <tenantId>`（推荐，前端在 axios 拦截器统一注入）；
 - 或用户当前租户由登录态决定，前端提供租户切换器，切换后更新该请求头并刷新数据。
 未处于有效租户上下文的请求，后端 fail-closed 返回 403。
+
+⚠️ **租户不在登录页 / 注册页选（铁律 L4）**：登录响应头 `X-Tenant` 是租户上下文的**唯一来源**——前端在响应拦截器捕获后持久化（`cube_tenant_code`），请求拦截器统一注入 `X-Tenant`（主）/ `X-Tenant-Id`（legacy）。**登录页与注册页均不得渲染「租户编码」输入框、租户下拉或租户 Tab**，两张表单也不得有 `tenant` 字段，注册页更不得自行写 `cube_tenant_code`。需切换租户时，只在**登录后的顶栏切换器**做；新注册用户的租户归属由后端按邀请 / 域名映射 / 默认租户分配。
 
 ## 8. 数据范围（行级权限）
 

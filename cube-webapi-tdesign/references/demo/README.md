@@ -35,7 +35,7 @@ npm run build       # vite build
 
 要点速记：
 - **令牌头只认 `Authorization: Bearer <jwt>`**（实测；发 `Authentication` 或只带 Cookie 均 401）；令牌键 `localStorage['assets_token']`。
-- 登录 `POST /Auth/Login`（snake_case 令牌键，走 `normToken` 三向兜底）；菜单 `GET /api/Admin/Index/GetMenuTree`。
+- 登录 `POST /Auth/Login`（snake_case 令牌键，走 `normToken` 三向兜底）；菜单 `GET /Admin/Index/GetMenuTree`（**无 `/api` 前缀**）。
 - 实体页零代码：菜单每多一个 `{area}/{ctrl}`，前端只加一行 `<ListPage :area :controller />`。
 - 外键 `xxxID` 自动按「同名同 area 关联控制器 Index」拉取。
 

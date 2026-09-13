@@ -4,7 +4,7 @@
     v-if="orientation === 'vertical'"
     :value="active"
     :expanded="expanded"
-    :accordion="true"
+    :expand-mutex="true"
     :collapsed="collapsed"
     :theme="theme"
     :class="['cube-menu', themeClass]"
@@ -193,7 +193,7 @@ onMounted(async () => {
   // Uncaught AxiosError 红错并打断渲染链；api.ts 拦截器已统一处理 401（清 token + 跳 /login），
   // 此处 401 静默忽略即可，其余异常仅告警，绝不 throw。
   try {
-    const r = await getRaw<any[]>('/api/Admin/Index/GetMenuTree');
+    const r = await getRaw<any[]>('/Admin/Index/GetMenuTree');
     if (r.code === 0 && Array.isArray(r.data)) {
       menus.value = r.data;
       // 把后端 displayName 登记为页面标题权威源（页面标题/面包屑据此显示中文）
@@ -205,7 +205,7 @@ onMounted(async () => {
   }
 });
 
-/** 根据当前路由，默认只高亮 + 展开对应的父菜单（手风琴，一次仅一个） */
+/** 根据当前路由，默认只高亮 + 展开对应的父菜单（同层互斥，一次仅一个） */
 function syncActiveByRoute() {
   const hash = location.hash.replace(/^#\/?/, '');
   const segs = hash.split('/').filter(Boolean).slice(0, 2).join('/').toLowerCase();
@@ -233,7 +233,9 @@ function onChange(val: any) {
   active.value = val;
 }
 function onExpand(vals: string[]) {
-  // 受控展开：配合 accordion 保证手风琴（一次仅一个）
+  // 受控展开：配合 :expand-mutex="true" 保证同层互斥（同一父节点下同时仅一个展开）。
+  // 注意：TDesign 1.20.7 的 Menu 无 accordion prop，互斥只认 expand-mutex
+  //（源码 es/menu/utils/v-menu.mjs → VMenu.expand() 按 sameParentNodes 删除同级已展开项）。
   expanded.value = vals;
 }
 </script>

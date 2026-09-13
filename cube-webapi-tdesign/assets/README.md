@@ -77,7 +77,7 @@ scaffold 为演示而附带，业务工程按需拷）。
 | `layouts/BasicLayout.vue` → `src/layouts/` | 侧栏 + 顶栏 + 内容区 + SettingPanel 挂载位 | router |
 | `pages/EntityPage.vue` → `src/pages/` | 泛型实体页（按 `specialControllers` 分发，否则 ListPage） | router |
 | `pages/DashboardView.vue` → `src/pages/` | 仪表盘（菜单树驱动，按 permissions 位 2/4/8 判实体） | router |
-| `pages/LoginView.vue` → `src/pages/` | 登录门禁（系统名读 `/Auth/LoginConfig`） | router |
+| `pages/LoginView.vue` → `src/pages/` | 登录门禁（系统名读 `/Auth/LoginConfig`；**铁律 L1~L4**：左栏 `PROJECT` 文案按项目生成、账号密码不预填、页面无实现细节文案、**无租户选择**；注册页同理见 L4） | router |
 | `specialControllers.ts` → `src/` | 非实体控制器显式注册表 | EntityPage |
 
 > `ConfigView` / `DbView` 之所以在 **core**（而非 optional）：它们被 core 的

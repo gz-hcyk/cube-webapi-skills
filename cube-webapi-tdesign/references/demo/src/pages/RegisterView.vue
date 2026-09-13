@@ -17,9 +17,6 @@
         <t-form-item name="confirmPassword">
           <t-input v-model="form.confirmPassword" type="password" placeholder="确认密码" size="large" clearable />
         </t-form-item>
-        <t-form-item name="tenant">
-          <t-input v-model="form.tenant" placeholder="租户编码（可选，多租户）" size="large" clearable />
-        </t-form-item>
         <t-button theme="primary" block size="large" :loading="loading" @click="onRegister">注 册</t-button>
       </t-form>
 
@@ -37,14 +34,12 @@ import { useAuthStore } from '../api/auth';
 const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
-const form = reactive({ username: '', email: '', password: '', confirmPassword: '', tenant: '' });
+// ★ L4：注册页同样不得让用户选租户——租户是账号的属性（后端按邀请 / 默认规则分配），
+//   不是注册选项；禁止在此新增 tenant / tenantCode 字段或输入框。
+const form = reactive({ username: '', email: '', password: '', confirmPassword: '' });
 
 async function onRegister() {
   if (form.password !== form.confirmPassword) return MessagePlugin.warning('两次密码不一致');
-  if (form.tenant) {
-    localStorage.setItem('cube_tenant_code', form.tenant);
-    auth.setTenant(form.tenant);
-  }
   loading.value = true;
   try {
     await auth.registerUser({

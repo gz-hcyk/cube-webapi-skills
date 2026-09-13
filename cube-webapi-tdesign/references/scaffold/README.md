@@ -35,6 +35,7 @@ references/scaffold/
                                + onNavigate()：后端菜单 url → /entity/{area}/{controller}
     pages/
       LoginView.vue            登录门禁（左品牌渐变区 + 右表单区，系统名读 /Auth/LoginConfig）
+                               ★ L1~L4：左栏 PROJECT 文案按项目生成 / 账号密码不预填 / 页面无实现细节文案 / 登录页与注册页均无租户选择
       EntityPage.vue           泛型实体页：按 SPECIAL_CONTROLLERS 分发专用页 / 标准 ListPage
       DashboardView.vue        仪表盘首页（菜单树驱动，按 permissions 位 2/4/8 过滤实体）
       LovDemoView.vue          【DEV 验证页】LovListField 值集弹窗（单选直连 / 多选代理 / 跨页）
@@ -104,7 +105,7 @@ npm run typecheck                                     # 仅类型检查
 - 登录 `POST /Auth/Login`，body `{ username, password }`（**不是 `userName`**），令牌键名 snake_case，
   统一走 `token.ts` 的 `normToken` 三向兜底。
 - 请求头只认 **`Authorization: Bearer <jwt>`**（发 `Authentication` 或只带 Cookie 均 401）。
-- 实体接口 `/api/{area}/{controller}/{action}`；菜单 `/api/Admin/Index/GetMenuTree`。
+- 实体接口 `/api/{area}/{controller}/{action}`；**菜单 `/Admin/Index/GetMenuTree`（无 `/api` 前缀，带前缀 → 404）**；字典 `/Cube/Lookup`、签名清单 `/Cube/Apis` 同样无前缀。
 - 枚举字典由后端下发在字段描述符 **`dataSource`**（不是 `mapField`）；外键走 `mapField` 映射列。
 - ★ Cube 序列化 `DataField` 时**省略取值为 false 的布尔键** → 推必填只能 `f.nullable !== true`
   （写 `=== false` 会全体失效）。

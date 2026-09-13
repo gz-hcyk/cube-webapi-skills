@@ -6,8 +6,12 @@ import { useAuthStore } from '../api/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const username = ref('admin')
-const password = ref('admin')
+// ★ L2：账号/密码一律不预填（禁止默认 admin/admin）
+// ★ L3：页面不渲染任何契约/实现细节文案（接口路径、加密方式、challengeRequired 等）
+// ★ L4：登录页不选租户——租户由后端登录响应头 X-Tenant 下发（http.ts 自动捕获持久化），
+//        故此处没有 tenant 输入框；完整版模板同样遵守，勿照抄旧版「租户编码（可选，多租户）」输入
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
 
 async function onSubmit() {
@@ -31,6 +35,7 @@ async function onSubmit() {
 <template>
   <div class="login-wrap">
     <div class="login-card">
+      <!-- ★ L1：品牌名/副标题按当前项目生成（此处示例为「企业微信通讯录管理系统」），不要照抄模板 -->
       <div class="login-brand">企业微信通讯录管理系统</div>
       <div class="login-sub">WeCom Address Book</div>
       <form class="login-form" @submit.prevent="onSubmit">
@@ -38,7 +43,6 @@ async function onSubmit() {
         <t-input v-model="password" type="password" placeholder="密码" size="large" @enter="onSubmit" />
         <t-button theme="primary" size="large" block :loading="loading" @click="onSubmit">登录</t-button>
       </form>
-      <div class="login-tip">默认账号 admin / admin</div>
     </div>
   </div>
 </template>
@@ -75,11 +79,5 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-.login-tip {
-  margin-top: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: #9aa4b2;
 }
 </style>

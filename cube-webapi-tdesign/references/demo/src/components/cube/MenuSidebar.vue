@@ -35,9 +35,9 @@ function nodeKey(n: any): string {
 }
 
 onMounted(async () => {
-  // 官方菜单接口：真实魔方后端为 /api/Admin/Index/GetMenuTree（带 /api 前缀），
-  // 且必须带 Authorization: Bearer 头；mock 后端同时支持该路径。
-  const r = await getRaw<any[]>('/api/Admin/Index/GetMenuTree');
+  // 官方菜单接口：/Admin/Index/GetMenuTree（**不带 /api 前缀**，Area 内属性路由），
+  // 且必须带 Authorization: Bearer 头；mock 后端同时支持裸路径与带 /api 的路径。
+  const r = await getRaw<any[]>('/Admin/Index/GetMenuTree');
   if (r.code === 0 && Array.isArray(r.data)) menus.value = r.data;
 });
 

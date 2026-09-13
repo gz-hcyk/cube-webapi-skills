@@ -275,7 +275,9 @@ export async function deleteApi<T>(url: string): Promise<ApiEnvelope<T>> {
 /* ----------------------------- 便捷方法（非 /api，如登录/菜单） -----------------------------
  * rawHttp baseURL = 后端根地址：
  *  - 框架端点写 `/Auth/Login`、`/Mfa/Verify`；
- *  - 系统端点写**全路径** `/api/Admin/Index/GetMenuTree`（该端点自身就带 /api，勿省）。
+ *  - 系统端点（菜单树/值集字典）写**不带 `/api` 的全路径**：`/Admin/Index/GetMenuTree`、
+ *    `/Cube/Lookup`、`/Cube/Apis`。这些是 Area 内属性路由或根级控制器，**没有 `/api` 前缀**，
+ *    写成 `/api/Admin/Index/GetMenuTree` 会 **404**（2026-09-13 实测；详见 SKILL.md 铁律 H2/H3）。
  */
 export async function getRaw<T>(url: string, params?: Record<string, unknown>): Promise<ApiEnvelope<T>> {
   const r = await rawHttp.get<ApiEnvelope<T>>(url, { params })
