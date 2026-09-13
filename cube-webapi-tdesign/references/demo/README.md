@@ -23,18 +23,33 @@ npm run build       # vue-tsc --noEmit && vite build
 - **已补 CLI 缺口**：`public/favicon.ico`、`tsconfig.node.json`、`index.html` 的 `<link rel="icon">`、`build` 加 `vue-tsc` 类型检查、`vue-router`/`pinia`/`axios`；`scripts.prepare`（CLI 致命脚本）未携带。
 - **未携带 `.gitignore`**（CLI 不生成）——演示目录不入 git，无需。
 
-> ⚠️ **本目录未随包携带依赖、从未编译**（无 `node_modules`、无 `dist`）。上方命令须**先 `npm install`** 才能执行；本 README 中出现的「0 错误」均为**预期目标**而非实测结论。实测结论一律以 `references/scaffold/` 为准，且须在其 `npm install` 之后再复现。完整口径见 `assets/README.md` §「验证结论的适用范围」。
+> ⚠️ **本目录不随包携带依赖**（无 `node_modules`、无 `dist`）。上方命令须**先 `npm install`** 才能执行。
+> ★ **2026-09-13 双侧构建实证（口径已更新）**：装上依赖后本目录 **可独立构建通过** ——
+> `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / CSS 464.86 kB / JS 1,544.92 kB / 19.69s）。
+> 故本 README 中的「0 错误」是**实测结论**，不再是「预期目标」；但**本仓库不带依赖、CI 默认不编**，
+> 复现仍须先 `npm install`。生产级编排层结论一律以 `references/scaffold/` 为准。
 
-浏览器打开 http://localhost:5173（若被占用 Vite 自动顺延）。**登录页即演示《认证接口设计.md》完整契约**：密码/短信/邮箱 Tab（由 `LoginConfig.login` 开关驱动）、OAuth 按钮、忘记密码 / 注册入口、用户名含 `mfa` 触发 MFA 二步验证；登录（任意账号 + 任意密码）后进入主界面，点左侧菜单切换实体页。
+浏览器打开 http://localhost:5173（若被占用 Vite 自动顺延）。⚠️ **登录页是极简版，不是完整契约演示**（2026-09-13 实测校准）：
+本目录的 `src/pages/LoginView.vue` 仅 83 行 —— **纯账密表单**（用户名 + 密码 + 提交），
+**不**拉取 `LoginConfig`，**没有**密码/短信/邮箱 Tab、OAuth、图形码、忘记密码/注册入口、MFA 二步验证。
+《认证接口设计.md》的**完整契约演示在 `references/scaffold/src/pages/LoginView.vue`（342 行）**，需要完整登录页时**取 scaffold/core**。
+本目录的独占价值只有两页：注册 `src/pages/RegisterView.vue` + 找回密码 `src/pages/ForgotPasswordView.vue`。
+登录（任意账号 + 任意密码）后进入主界面，点左侧菜单切换实体页。
 
 - **设备列表（IoTHub/Device）**：树形表（含 `ParentID`）、`StatusID` 显「在线/离线/故障」、`CategoryID` 经 `lookups` 显分类名、底部 `stat` 统计行；新增/编辑弹窗中 `ParentID` 为树形下拉、`StatusID`/`CategoryID` 为映射源下拉；详情抽屉回显名称。
 - **设备分类（IoTHub/Category）**：完整 CRUD 演示实体，表单含 `Type` 枚举下拉、`ParentID` 自引用树形下拉、`Enable` 开关、`Sort` 数字输入。
 
-## 三条约定的落实（与 `references/scaffold/` 同源）
+## 三条约定的落实（**铁律层面**与 `references/scaffold/` 一致；**实现层面分层不同源**）
 
-| # | 约定 | demo 落点 | 验证状态（demo 自身未编译；结论引自 scaffold 实测） |
+> ★ 本目录是**精简示例层**（源码级轻量样例，JS 产物仅 1.54 MB），**不是** scaffold 的同步目标：
+> 12 件同名文件为精简变体（体积 1/3 ~ 1/8），认证架构停留在上一代形态（store 内联在 `api/auth.ts`，
+> scaffold 已拆为 `api/token.ts` + `api/menuTitles.ts` + `stores/auth.ts`）。
+> `tri-diff.mjs` 将它们报为 `DEMO-DIVERGENT`（**非漂移，无需同步**）。
+> ⇒ 改 scaffold 一处**不必**同步本目录；反之亦然。判据见 `references/scripts/README.md`。
+
+| # | 约定 | demo 落点 | 验证状态（2026-09-13 双侧构建实证：本目录已实测编译） |
 |---|---|---|---|
-| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`），配 `@` 别名 + `paths` | `node ../scripts/check-starter-align.mjs .` **0 FAIL**（已机检）；⚠️ **本目录未编译**（无依赖、无 `dist`）——须 `npm install` 后自行跑 `vue-tsc --noEmit` / `vite build` |
+| C1 | 由官方脚手架生成 | Vue3 + Vite + Pinia 工程形态（`vite.config.ts` / `tsconfig.json` / `tsconfig.node.json` / `index.html` / `public/favicon.ico`），配 `@` 别名 + `paths` | `node ../scripts/check-starter-align.mjs .` **0 FAIL**（已机检）；`npm install` 后 `vue-tsc --noEmit && vite build` **exit=0**（实测，3925 模块 / JS 1.54 MB） |
 | C2 | 默认品牌色 = 政务蓝 `#0f4c9e` | `src/styles/tokens.css` + `src/stores/setting.ts` 的 `DEFAULT_BRAND` + `src/theme/tokens.ts` | 登录页/主界面 `--td-brand-color` 均为 `#0f4c9e`；设置面板品牌色预设政务蓝置首 |
 | C3 | 支持切换暗黑模式 | `theme-dark.css`（main.ts 引入）+ `setting.load()`（main.ts 调用）+ `<SettingPanel />`（MainView 挂载） | 右下角齿轮 → 选「暗色」→ `<html class="t-theme-dark">`、`--td-bg-color-page` 由 `#f3f3f3` → `#181818`、偏好持久化到 `localStorage['cube-personalization']` |
 

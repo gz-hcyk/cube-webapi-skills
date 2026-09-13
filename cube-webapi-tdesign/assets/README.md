@@ -13,7 +13,7 @@ cp -r assets/core/.  <你的工程>/src/
 | 工程 | 依赖/构建状态 | 定位 |
 |---|---|---|
 | `references/scaffold/` | **已清空为纯声明式**（**无 `node_modules`、无 `dist`**；仅留 `package.json` + `package-lock.json` 等源文件）——用前一律 `npm install` | **唯一真相源**：资产改动必须先编译 0 错误再同步回 `assets/` |
-| `references/demo/` | **无 `node_modules`、无 `dist`**（从未编译，源码级演示） | 零依赖演示工程：展示登录/MFA/令牌板等**完整形态**页面，**不保证可直接编译**，拷贝前须自行过 `vue-tsc` |
+| `references/demo/` | **不随包携带依赖**（`node_modules`/`dist` 已清空，同 scaffold）；★ 2026-09-13 **双侧构建实证**：装齐依赖后 `vue-tsc --noEmit && vite build` **exit=0**（3925 模块 / JS 1.54 MB），是**可独立构建通过**的精简示例工程 | **精简示例层**（层次独立，非同步目标）：体积约为 scaffold 同构版的 1/5，同名文件为 core 的 1/3~1/8；**登录页是极简版**（83 行纯账密，完整版在 scaffold）。独占资产仅注册/找回密码两页 |
 
 > 因此：**「在 scaffold 内有副本」是资产被验证过的标志**。下表「验证状态」列据此标注。
 
@@ -27,7 +27,7 @@ cp -r assets/core/.  <你的工程>/src/
 | **能否在技能目录内直接复现** | **不能**。依赖不随包携带（`node_modules` 已清空，仅留 `package.json`/`package-lock.json`），直接跑 `npm run typecheck` / `npm run build` 会报找不到命令 |
 | **怎样复现** | `cd references/scaffold && npm install && npm run typecheck && npm run build`（**先装依赖，再谈 0 错误**） |
 | **要验证待用资产怎么办** | 放进**已装全依赖的工程副本**（scaffold 执行过 `npm install`，或你自己的业务工程）里跑 `vue-tsc`；**不要**假设技能目录本身可编译 |
-| **`references/demo/` 里的「0 错误」** | **不适用** —— demo 无 `node_modules`、无 `dist`、从未编译；其文档中的「0 错误」是**预期目标**，非实测结论 |
+| **`references/demo/` 里的「0 错误」** | **成立，但基线独立** —— demo 同样不随包携带依赖（`node_modules`/`dist` 已清空，须先 `npm install`）；2026-09-13 实测 `vue-tsc --noEmit && vite build` **exit=0**，故其「0 错误」是**实测结论**。⚠️ 该基线只对 demo 自身有效，**不可**用来推断 scaffold/core 资产已验证——demo 是精简层，同名文件与 core 的差异属**已知层次差异**（`DEMO-DIVERGENT` 白名单，见 `references/scripts/README.md`） |
 
 ## ★ 唯一真相源与同步铁律
 
@@ -45,6 +45,13 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 「工程外壳」4 件（`main.ts` / `App.vue` / `router/index.ts` / `vite-env.d.ts`，
 由 `tdesign-starter-cli` 生成）+ DEV 验证页 `pages/LovDemoView.vue`（`/lov-demo` 路由用，生产构建不注册）。
 ⇒ `tri-diff` 对它们必然报 `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）——**属预期，不是漂移**。
+
+第四根 `references/demo/src/`（28 件）是**精简示例层**（技能侧样例，**非** scaffold 的同步目标），
+与 `core` 的关系是**子集**（14 件 `core` 资产 demo 不收录，缺件≠漂移，脚本单独打印该计数）；
+其**独占资产**仅注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 → 报 `DEMO-ONLY`（属预期）。
+它**有**且与 `core` 不同的文件**按白名单二分**：命中白名单的 **12 件**报 `DEMO-DIVERGENT`
+（精简变体 / 上一代认证架构，**非漂移，无需同步**）；白名单外的报 `DEMO-STALE`（**须同步 demo**，当前 0 条）。
+判据见 `references/scripts/README.md`《③ 为何是「层次差异」而非「陈旧」》。
 
 ## 一、core/ —— 核心（**必拷，31 件一次拷全**）
 

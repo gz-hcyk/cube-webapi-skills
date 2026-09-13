@@ -111,7 +111,7 @@ for (const f of files) {
 lines.push(`  core/scaffold 差异数: ${diffCnt}`)
 lines.push(`  scaffold 独有（预期 5 件：工程外壳 4 + DEV 页 1）: ${scaffoldOnly}`)
 if (scaffoldOnly !== 5) {
-  lines.push(`  ! scaffold 独有件数非 5 —— 用 tri-diff.mjs 复查三根构成`)
+  lines.push(`  ! scaffold 独有件数非 5 —— 用 tri-diff.mjs 复查四根构成`)
 }
 
 const exitCode = missing.size || diffCnt ? 1 : 0

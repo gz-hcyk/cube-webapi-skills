@@ -6,7 +6,7 @@
 # ── 技能自身维护（改 assets/ 或 references/scaffold/ 之后跑）──
 node references/scripts/scan-assets-dead.mjs      # 零引用源码文件（含入口白名单判断提示）
 node references/scripts/scan-assets-refs.mjs      # ① 文档悬空引用 ② assets ↔ scaffold 副本一致性
-node references/scripts/tri-diff.mjs <工程目录>     # 三根 md5 对照，判「谁该向谁对齐」（方向判定）
+node references/scripts/tri-diff.mjs <工程目录>     # 四方 md5 对照，判「谁该向谁对齐」（方向判定）
 
 # ── 目标工程验收（「三条主线」的机器出口）──
 node references/scripts/check-starter-align.mjs   # 第①步出口：工程是否仍是 tdesign-starter CLI 产物形态
@@ -107,41 +107,187 @@ node check-assets-copied.mjs --manifest            # 打印映射表与黑名单
 > （缺 `menuTitles` 面包屑取名、缺 `SettingPanel` 挂载说明、缺 `$patch` 类型安全改写、品牌色仍是 TDesign 默认 `#0052D9`）
 > ⇒ 按 **§11.1 以技能版为准覆盖**处理，**不是**从工程回灌。
 
-> 判方向的方法：`references/scripts/tri-diff.mjs` 做 `scaffold / assets/core / 工程 src` 三方 md5（CRLF 归一）对照，
+> 判方向的方法：`references/scripts/tri-diff.mjs` 做 `scaffold / assets/core / demo / 工程 src` **四方** md5（CRLF 归一）对照，
 > 输出 `ALL-SAME` / `ENG-ONLY`（工程独有，如业务新增页）/ `ENG-DRIFT`（core==scaffold，工程分叉或缺件）/
-> `CORE-DRIFT`（scaffold==工程，core 是异类）/ `SCAFFOLD-DRIFT`（scaffold 独有）/ `ALL-DIFF`（工程外壳，不归本脚本判）。
+> `CORE-DRIFT`（scaffold==工程，core 是异类）/ `SCAFFOLD-DRIFT`（scaffold 独有）/ `ALL-DIFF`（工程外壳，不归本脚本判）/
+> `DEMO-STALE`（demo **真陈旧副本**，须同步）/ `DEMO-DIVERGENT`（demo **精简变体**，已知层次差异，非漂移）/ `DEMO-ONLY`（仅 demo 有，注册/找回密码两页）。
 > **`ENG-DRIFT` 与 `CORE-DRIFT` 的修复方向相反**，勿一律 `cp`。用法与 flag 全表见本文档下方专节。
 
 > `references/scaffold` 恒为 PASS 是设计使然（唯一真相源 = `references/scaffold/src/`，`assets/` 是它的镜像拷贝源），真正有价值的是对**目标工程**跑。
 
 ## `tri-diff.mjs` 用法（判「谁该向谁对齐」）
 
-`check-assets-copied.mjs` 只回答「工程与 `assets/core` 是否一致」，**不回答方向**。本脚本补方向判定：
+`check-assets-copied.mjs` 只回答「工程与 `assets/core` 是否一致」，**不回答方向**。本脚本补方向判定。
+
+### 四根（2026-09-13 由三根扩为四根；文件名保留「tri-」以免文档大面积改动）
+
+| # | 根 | 角色 |
+|---|---|---|
+| ① | `references/scaffold/src/` | **主真相源**（生产级编排层，§11.1） |
+| ② | `assets/core/` | ① 的**镜像拷贝源**（供 `cp -r` 并入业务工程） |
+| ③ | `references/demo/src/` | **精简示例层**——技能侧样例（**同层，非下游**）。独占资产仅注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 |
+| ④ | `<工程>/src/` | **下游产物**（并入后的业务工程） |
+
+> ★ ③ 与 ④ 角色不同：③ 是**技能侧样例**（同层），④ 是**下游**。
+> 故 ③ 陈旧 = `DEMO-STALE`（须同步）；④ 陈旧 = `ENG-DRIFT`（以技能版覆盖工程）。
+> ★ ③ **可缺席**：demo 是精简子集而非 scaffold 的完整拷贝，③ 缺某文件**不等于漂移**
+> （当前 **14 件** core 资产 demo 未收录，由脚本单独打印该计数）；只有「③ 有且与 ①② 不同」才进下述二分。
+>
+> ★ **③ 的「不同」分两种（2026-09-13 双侧构建实证校准）**：
+>   · `DEMO-DIVERGENT` = **精简变体**（白名单 **12 件**，层次差异）→ **非漂移，无需同步**，默认**不**计入失败退出码；
+>   · `DEMO-STALE`    = **真陈旧副本**（白名单外）→ **须同步 demo**，`--strict` 起计入失败退出码（当前实测 **0 条**）。
+> 判据见下节《③ 为何是「层次差异」而非「陈旧」》。
 
 ```bash
-node tri-diff.mjs <工程目录>               # 对照 <skill>/references/scaffold/src 与 <skill>/assets/core
+node tri-diff.mjs <工程目录>               # 四方对照（demo 存在则自动纳入）
 node tri-diff.mjs <工程目录> --json        # JSON 输出
 node tri-diff.mjs <工程目录> --out r.txt   # 落盘（Windows 终端可能吞 stdout）
-node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir>   # 覆盖默认对照根
+node tri-diff.mjs <工程目录> --core <dir> --scaffold <dir> --demo <dir>   # 覆盖默认对照根
+node tri-diff.mjs <工程目录> --no-demo     # 关闭第四根，退化为旧三根行为
+node tri-diff.mjs <工程目录> --strict      # 令 DEMO-STALE 也计入失败退出码
+node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层次差异）也计入（隐含 --strict）
 ```
 
 | flag | 含义 | 修复方向 |
 |---|---|---|
-| `ALL-SAME` | 三根一致 | 无需动作 |
-| `ENG-ONLY` | 技能两侧都没有，**仅工程有** | **工程独有**（业务新增页 `pages/admin/*Page.vue`、本地专有适配），无需动作 |
+| `ALL-SAME` | ①②④ 三根一致（③ 同或缺） | 无需动作 |
+| `ENG-ONLY` | 技能侧都没有，**仅工程有** | **工程独有**（业务新增页 `pages/admin/*Page.vue`、本地专有适配），无需动作 |
 | `ENG-DRIFT` | `scaffold == core`，**工程分叉或缺件** | **以技能版覆盖工程**（§11.1）；**不是**从工程回灌 |
 | `CORE-DRIFT` | `scaffold == 工程`，`core` 是异类 | **以 scaffold/工程覆盖 `core`** |
 | `SCAFFOLD-DRIFT` | `scaffold` 独有（`core`/工程均缺） | 属预期：DEV 验证页 `pages/LovDemoView.vue` |
-| `ALL-DIFF` | 三者互不相同 | 工程外壳 4 件（`App.vue`/`main.ts`/`router/index.ts`/`vite-env.d.ts`），不归本脚本判 |
+| `ALL-DIFF` | ① 有 · ② 缺 · ③④ 各不同 | 工程外壳 4 件（`App.vue`/`main.ts`/`router/index.ts`/`vite-env.d.ts`），不归本脚本判 |
+| `DEMO-STALE` | `scaffold == core == 工程`，**唯 `demo` 不同**且**不在白名单** | **同步 `references/demo/src`**（真陈旧副本） |
+| `DEMO-DIVERGENT` | 同上，但**命中白名单**（12 件） | 属预期：demo 精简变体（层次差异），**无需同步** |
+| `DEMO-ONLY` | **仅 `demo` 有**（①② 均缺） | 属预期：注册 / 找回密码两页只此一份 |
 
 > ★ **存在性优先于 md5**：缺失文件的 md5 是占位串 `----------`。若不先判存在性，
 > 「技能两侧都缺、仅工程有」的业务页会被 `ha === hb`（两个占位串相等）误判成 `ENG-DRIFT`，
 > 照提示「以技能版覆盖工程」就会**删掉业务页**。脚本已按「存在性 → md5」次序判定并单列 `ENG-ONLY`。
 
-**退出码**：0 = 无 `ENG-DRIFT` / `CORE-DRIFT`；1 = 存在需修分叉；2 = 用法错误。
+**退出码**：
 
-⇒ 健康态 = `ENG-DRIFT=0  CORE-DRIFT=0`，只剩 1 条 `SCAFFOLD-DRIFT` + 4 条 `ALL-DIFF`（+ N 条 `ENG-ONLY`）。
+| 调用 | 计入失败的条件 | 实测退出码 |
+|---|---|---|
+| 默认 | `ENG-DRIFT + CORE-DRIFT > 0` | **0** |
+| `--strict` | 上式 **+ `DEMO-STALE`** | **0**（STALE=0） |
+| `--strict-demo` | 上式 **+ `DEMO-DIVERGENT`**（隐含 `--strict`） | **1** |
+| `--no-demo` | 退化为旧三根行为（`ENG-DRIFT + CORE-DRIFT`） | **0** |
+| `--no-demo --strict` | 同 `--no-demo` | **0** |
+| 无参数 | 用法错误 | **2** |
+
+> ★ **白名单腐化 `DEMO-WL-STALE`**：若某白名单条目**已不再分歧**（被同步 / 被删除 / 已改名），
+> 脚本会提示「应从 `DEMO_DIVERGENT` 表中移除」——**该项永不影响退出码**，只作清理提示。
+> 自测方法：`node tri-diff.mjs <工程> --demo <skill>/references/scaffold/src`（令 ④ 侧 demo 恒等于 ①，
+> 12 条白名单全部「不再分歧」→ 应报 12 条 `DEMO-WL-STALE`，exit 仍为 **0**）。
+
+⇒ 健康态 = `ENG-DRIFT=0  CORE-DRIFT=0  DEMO-STALE=0  DEMO-WL-STALE=0`，只剩 1 条 `SCAFFOLD-DRIFT`
++ 4 条 `ALL-DIFF` + **12 条 `DEMO-DIVERGENT`** + 6 条 `DEMO-ONLY`（+ N 条 `ENG-ONLY`）。
 md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差异不算漂移）。
+
+### ③ 为何是「层次差异」而非「陈旧」（2026-09-13 双侧构建实证）
+
+原判定为「12 条 `DEMO-STALE` = demo 陈旧副本，须同步」，**已被实证推翻**。取证过程：
+
+**（1）双侧各自可独立构建通过（各装一份依赖，`vue-tsc --noEmit && vite build`）**
+
+| 侧 | `vue-tsc` | `vite build` | 模块数 | CSS | JS | 耗时 |
+|---|---|---|---|---|---|---|
+| `references/demo`（基线，未迁移） | exit=0 | **exit=0** | 3925 | 464.86 kB | **1,544.92 kB**（gzip 414） | 19.69s |
+| `references/demo`（20 动作迁移后） | exit=0 | **exit=0** | 3931 | 473.32 kB | **8,844.10 kB**（gzip 969） | 40.70s |
+
+⇒ demo **不是**「装不起来的死样板」，也不是「同一份东西的新旧版本」——两者各自是**完整可运行**的工程，
+只是**层次不同**。这一条直接否掉了「陈旧副本」定性（陈旧副本的典型特征是编译不过或行为不一致）。
+
+**（2）层次量化：demo 同名文件体积仅为 scaffold 的 1/3 ~ 1/8**
+
+| 文件 | demo | scaffold（= core） | 倍率 |
+|---|---|---|---|
+| `components/cube/MenuSidebar.vue` | 1815 B | 15349 B | **8.5×** |
+| `api/useLookups.ts` | 1810 B | 10704 B | **5.9×** |
+| `components/cube/FormDialog.vue` | 6273 B | 32176 B | **5.1×** |
+| `api/useEntityResource.ts` | 4602 B | 21193 B | **4.6×** |
+| `components/cube/ListPage.vue` | 9205 B | 29645 B | **3.2×** |
+| `api/fieldRender.ts` | 16057 B（406 行） | 51940 B（1077 行） | **3.2×** |
+| `pages/LoginView.vue` | 2625 B（83 行） | 15512 B（342 行） | **5.9×** |
+| `utils/camel.ts` | 879 B | 2306 B | 2.6× |
+| `api/http.ts` | 9105 B | 14427 B | 1.6× |
+| `theme/tokens.ts` | 结构相同，仅十六进制大小写 + demo 多 3 行注释 | — | ~1× |
+
+**（3）认证架构是「上一代形态」（这才是「层」的实质）**
+
+| 能力 | demo（上一代） | scaffold / core（现行） |
+|---|---|---|
+| auth store 位置 | 内联在 `api/auth.ts`（347 行） | 独立 `stores/auth.ts` |
+| 令牌读写 | 混在 `api/auth.ts` | 独立 `api/token.ts` |
+| 面包屑取名 | 无 | `api/menuTitles.ts`（`registerMenuTitles` 调用 3 处） |
+| demo 是否有 `api/token.ts` | **无** | 有 |
+
+**（4）登录页功能矩阵（推翻 SKILL.md L56 旧断言）**
+
+| | `assets/core` = `scaffold` | `references/demo` |
+|---|---|---|
+| 行数 | 342 | **83** |
+| MFA | ✓（5 处） | ✗ |
+| Challenge | ✓ | ✓（**唯一实现的链路**） |
+| OAuth | ✓（9 处） | ✗ |
+| 图形码 captcha | ✓（28 处） | ✗ |
+| 短信/邮件码 `sendCode` | ✓（4 处） | ✗ |
+| AuthCategory 门控 | ✓（5 处） | ✗ |
+| 注册 / 找回密码页 | **不提供**（仅入口） | ✓ `RegisterView.vue` / `ForgotPasswordView.vue` |
+
+⇒ **scaffold/core 才是「完整版」**，demo 是「精简版」。旧文档写的「完整版见 demo」方向**完全反了**，已修正
+（`SKILL.md` L23/L56/§八/§11.1 + `troubleshooting.md` 5 处）。
+
+**（5）结论与裁决**
+
+- 12 件 `DEMO-STALE` 重分类为 `DEMO-DIVERGENT`（**已知代际/层次差异白名单**），默认**不当缺陷报**。
+- 用户裁决（2026-09-13）：**保留 demo 层次独立 + 修文档**——**不动 demo 源码**，靠文档与机检口径修正消除噪声。
+- ⚠️ 但它们**并非「不可覆盖」**：实证表明 12 件**全量覆盖可行**，只是**不可单独覆盖**——否则断 3 处 import。
+  配方见下节（**仅在确需把 demo 升级为与 scaffold 同构的运行实例时**才执行）。
+
+### 配方向：把 demo 升级为「与 scaffold 同构」（20 动作，已实证）
+
+> 前提：这**不是**默认维护动作，也**不是**修 bug。默认策略是「保留层次独立」。
+> 仅在明确需要「demo 与 scaffold 行为完全一致」时才执行；代价是 demo 失去「源码级轻量可读」属性。
+
+**动作清单（16 覆盖 + 3 新增 + 1 删除）**
+
+| # | 动作 | 对象 |
+|---|---|---|
+| 1–12 | **覆盖** | `api/fieldRender.ts`、`api/http.ts`、`api/useEntityResource.ts`、`api/useLookups.ts`、`api/useLov.ts`、`components/cube/DetailDrawer.vue`、`components/cube/FormDialog.vue`、`components/cube/ListPage.vue`、`components/cube/MenuSidebar.vue`、`pages/LoginView.vue`、`theme/tokens.ts`、`utils/camel.ts`（← 均取 `assets/core/` 同名文件） |
+| 13–15 | **新增** | `api/token.ts`、`api/menuTitles.ts`、`stores/auth.ts`（← `assets/core/`，demo 原本**没有**这三件） |
+| 16 | **删除** | `api/auth.ts`（demo 的上一代内联 auth store，被 13/14/15 取代） |
+
+**★ 4 处 import 改写（漏掉必然编译失败）**
+
+| 文件 | 原 | 改为 |
+|---|---|---|
+| `pages/ForgotPasswordView.vue` | `'../api/auth'` | `'../stores/auth'` |
+| `pages/MainView.vue` | `'../api/auth'` | `'../stores/auth'` |
+| `pages/RegisterView.vue` | `'../api/auth'` | `'../stores/auth'` |
+| `router/index.ts` | `'../api/auth'` | `'../stores/auth'` |
+
+**三处断裂根因（覆盖后若不改 import / 不补新增件，必断）**
+
+1. `api/http.ts` 新版 `import ... from './token'` → demo 无 `api/token.ts`；
+2. `components/cube/MenuSidebar.vue` 新版 `import ... from '@/api/menuTitles'` → demo 无该文件；
+3. `pages/LoginView.vue` 新版 `import ... from '@/stores/auth'` → demo 的 auth store 还在 `api/auth.ts`。
+
+**验证**：迁移后 `vue-tsc --noEmit && vite build` **exit=0**（3931 模块 / JS 8,844.10 kB）。
+**代价**：JS 1.54 MB → 8.84 MB（**5.7×**），demo 不再是「源码级轻量可读」样例。
+
+### 首次四方实测（2026-09-13，目标工程 `cube-webapi-frontend`，`tri-diff.mjs` 新口径）
+
+```
+共 49 文件（4 根并集）
+ALL-SAME=19  ENG-ONLY=7  ENG-DRIFT=0  CORE-DRIFT=0  SCAFFOLD-DRIFT=1  ALL-DIFF=4  DEMO-STALE=0  DEMO-DIVERGENT=12  DEMO-ONLY=6
+demo 未收录的 ①② 资产：14 件（③ 是精简子集，缺件≠漂移）
+exit=0
+```
+
+- **12 条 `DEMO-DIVERGENT`**：`api/{fieldRender,http,useEntityResource,useLookups,useLov}.ts`、`components/cube/{DetailDrawer,FormDialog,ListPage,MenuSidebar}.vue`、`pages/LoginView.vue`、`theme/tokens.ts`、`utils/camel.ts` —— 全部命中白名单，**非漂移**。
+- **6 条 `DEMO-ONLY`**：`api/auth.ts`、`api/permissions.ts`、`pages/{ForgotPasswordView,MainView,RegisterView,ThemeShowcase}.vue` —— 属预期；其中 `RegisterView`/`ForgotPasswordView` 是 demo 的**唯一独占价值**。
+- **回归**：`--no-demo` 输出与扩展前三根结果**逐项一致**（`ALL-SAME=31  ENG-ONLY=10  SCAFFOLD-DRIFT=1  ALL-DIFF=4`），旧 flag 语义未变。
 
 ## 读结果的三个坑（重要）
 
@@ -164,7 +310,10 @@ md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差
   `assets/api.ts`（已删除的反面教材）改叙述避免误报。
 - 死引用 1 处已修：SKILL.md 仍把已下线的 `ListNavbar/ListSearchBar/ListToolbar/ListFooter`
   列为「基类组件」。
-- 新增标注：`references/demo/` **未装依赖、未编译**（源码级参考）。
+- 新增标注：`references/demo/` **不随包携带依赖**（源码级参考）。★ 2026-09-13 双侧构建实证已补齐：
+  装齐依赖后它**可独立构建通过**（`vue-tsc --noEmit && vite build` exit=0，3925 模块 / JS 1.54 MB），
+  故「未编译」应理解为「本仓库不带依赖、CI 默认不编」，而**不是**「编译不过」。详见本文档
+  《③ 为何是「层次差异」而非「陈旧」》。
 - **`IconPicker.vue` 已从 `assets/optional/` 提升为 `assets/core/`（2026-09）**，**其后 `optional/` 整层被取消**（2026-09-13，3 件配方件一并入 `core`）——
   `core/components/cube/FormDialog.vue` 有**静态** `import IconPicker from './IconPicker.vue'`
   （`control === 'icon'` 分支），只拷 core 而漏它即 `vue-tsc` 报 `Cannot find module`。
@@ -182,4 +331,4 @@ md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差
   其职责已分别由 `MenuSidebar`+`BasicLayout` 的内联归一化、`DashboardView` 的内联权限位判定取代。
 - 白名单随之收敛：`scan-assets-dead.mjs` 移除 `assets/archive/` 前缀豁免。
   `permissions.ts`（basename）与 `references/demo/backend/`（前缀）两项**保留**——
-  `references/demo/` 是源码级演示工程（未删），其 `src/api/permissions.ts` 零 import 属正常。
+  `references/demo/` 是**精简示例工程**（未删，层次独立），其 `src/api/permissions.ts` 零 import 属正常。

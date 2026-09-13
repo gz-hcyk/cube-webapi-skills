@@ -73,6 +73,10 @@ references/scaffold/
 > （`main.ts`/`App.vue`/`router/index.ts`/`vite-env.d.ts`，`td-starter` 生成）+ DEV 验证页 1 件
 > （`pages/LovDemoView.vue`）。**后 5 件恒不在 `core` 内**，`tri-diff` 对它们必然报
 > `ALL-DIFF`（外壳 4 件）或 `SCAFFOLD-DRIFT`（demo 页）—— **属预期，不是漂移**。
+> `tri-diff` 的第四根 `references/demo/src/`（**精简示例层**，非同步目标）同理：
+> 仅 demo 有的报 `DEMO-ONLY`（预期，独占资产仅注册/找回密码两页）；与 `scaffold`/`core` 内容不同的
+> **按白名单二分** —— 命中白名单的 12 件报 `DEMO-DIVERGENT`（层次差异，**非漂移**），
+> 白名单外的报 `DEMO-STALE`（**须同步**，当前 0 条）。判据见 `references/scripts/README.md`。
 > `assets/` 只是"并入既有工程"用的、按目标路径镜像的拷贝源；同步铁律见 `assets/README.md`。
 >
 > 早前放在本目录的 `api/menuTree.ts`、`utils/permissions.ts` 已**删除**（主链路零引用的历史残留，
