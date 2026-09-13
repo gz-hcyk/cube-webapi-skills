@@ -1001,6 +1001,9 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
 
 §七 是**完整**验收清单（按三步分组、每步首条即退出条件），此处**只留硬门与入口，不重复逐条**。
 
+> **一条命令跑完全部闸门**：`node references/scripts/check-all.mjs <工程目录>`（退出码 0 = 全绿）。
+> 别挑着跑单个脚本 —— 判据正交，挑着跑必得「假全绿」（D-17 就是这么发生的）。
+
 | 步 | 硬门（机器判，不过即不交付） | 判不了的部分（人工 / 运行期） |
 |---|---|---|
 | ① 骨架 | `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 0** | 工程仍是 CLI 产物形态（未手工重排 `package.json`/`tsconfig`/`index.html`） |
@@ -1008,9 +1011,26 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，�
 | ③ 个性化 | `vue-tsc --noEmit`（或 `npm run build`）**0 错误**（编译清零铁律） | §4.21 枚举/外键渲染核查；登录 → 跳 `/dashboard`；菜单与权限来自 `GetMenuTree` |
 
 - 全量陷阱排障走 `references/troubleshooting.md`（正文只留结论，不内联过程）。
-- **技能自身维护**（改 `assets/` 或 `references/scaffold/` 之后）：跑 `scan-assets-dead.mjs` + `scan-assets-refs.mjs`，并确认正文新增引用路径（`assets/`、`references/`）均存在。
-  - ⚠️ **这三个闸门判据正交，不能互相替代**（D-17 实测踩坑）：
-    - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部副本之间的漂移；
-    - `scan-assets-refs.mjs` = 「`assets/core/` ↔ `references/scaffold/src/` 内部三副本」→ **看不见**目标工程；
+- **技能自身维护**（改 `assets/` 或 `references/scaffold/` 之后）：**跑聚合入口，不要挑着跑**——
+  ```bash
+  node references/scripts/check-all.mjs <工程目录>   # 6 个闸门一次跑完（有工程时，收尾自检用这个）
+  node references/scripts/check-all.mjs             # 4 个技能自身维护闸门（无工程时）
+  ```
+  它会一并跑 `sync-assets --check` + `scan-assets-dead` + `scan-assets-refs` + `check-starter-align` + `check-assets-copied` + `tri-diff`，并确认正文新增引用路径（`assets/`、`references/`）均存在。
+  - ★ **修漂移也是一条命令**：`node references/scripts/sync-assets.mjs`（把主真相源 `references/scaffold/src/` 单向覆盖到 `assets/core/`）。默认 `--check` 只报不改，避免误覆盖。
+  - ⚠️ **这些闸门判据正交，不能互相替代，也不允许只跑其中一个**（D-17 实测踩坑）：
+    - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部两镜像之间的漂移；
+    - `scan-assets-refs.mjs` = 「`assets/core/`（31 件） ↔ `references/scaffold/src/`（55 件）」判 `② ⊂ ①` 且逐件同 md5 → **看不见**目标工程；
     - 反面案例：D-15 回补时 `MenuSidebar.vue` 只写了 `assets/core/` 一份，`references/scaffold/src/` 那份漏了 `const route = useRoute();`（但仍在用 `route.path`）→ 脚手架生成出来**编译即失败**；当时只因跑了 `check-assets-copied`（全绿）就以为收工，漂移潜伏了整轮。
-  - **改一个文件就三处一起改**（工程实测态 → 主真相源 `references/scaffold/src/` → 派生 `assets/core/`），不要只补一份。
+    - 这就是 `check-all.mjs` 存在的唯一理由：**把「跑全部」变成一条命令**，从结构上消灭「挑着跑」。
+  - ★ **聚合器自身也要过「假全绿自检」**：写完/改完断言类工具，注入一个人造漂移确认它**会变红**。
+    实测法：在 `assets/core/` 放一个只在 core、不在 scaffold 的探针文件 → 应报 `FAIL scan-assets-refs` + `core/scaffold 差异数: 1` + `exit=1`；移除后回到全 PASS。
+  - ★ **资产的真实结构是「两镜像 + 一独立层」，不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
+    | 层 | 件数 | 角色 | 参与同步？ |
+    |---|---|---|---|
+    | `references/scaffold/src/` | **55** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
+    | `assets/core/` | **31** | **① 的严格子集**（= 55 − 24 件骨架/上游件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
+    | `references/demo/src/` | **28** | **lite 血统的另一套工程**（含 7 件 ① 没有的资产），**不是** ① 的副本 | ❌ **默认不同步**：12 件精简变体在白名单内属预期；仅当 `tri-diff.mjs` 报 `DEMO-STALE`（白名单外的真陈旧）才动 |
+  - 因此：**改一个文件 ＝ 改两处**（主真相源 `references/scaffold/src/` → 派生 `assets/core/`）。
+    **不要手工双写**——改完真相源直接 `node references/scripts/sync-assets.mjs` 派生，再跑聚合入口确认 `core/scaffold 差异数: 0`。
+    （手工双写就是 D-17 的成因：漏写一份，且当时只跑了看得见工程的那道闸门。）

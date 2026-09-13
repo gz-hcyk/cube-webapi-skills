@@ -603,12 +603,12 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 - ★★★ **症状**：从技能脚手架**新生成**的工程，编译直接报 `Cannot find name 'route'`（无法运行）。
   而**同一份代码在当前实测工程里是好的** —— 典型的「技能资产与实测工程漂移」。
 
-- ★★★ **根因**：技能里的同类文件有**三份副本**，改一处必须同步三处：
-  | 副本 | 角色 | 谁消费 |
-  |---|---|---|
-  | `assets/core/**` | 技能资产（STEP② 复制用） | `check-assets-copied.mjs` 比对工程 `src/` |
-  | `references/scaffold/src/**` | **主真相源**，生产级编排层 | 脚手架生成器 |
-  | `references/demo/src/**` | 精简示例层 | 演示/阅读，**非同步目标** |
+- ★★★ **根因**：技能里的业务资产有**两处镜像**（另有一层独立 demo），改一处必须同步另一处：
+  | 层 | 件数 | 角色 | 谁消费 |
+  |---|---|---|---|
+  | `references/scaffold/src/**` | 55 | **主真相源**：完整可运行工程（CLI 骨架 + 全部资产） | `check-starter-align.mjs` 默认校验目标；`vue-tsc` 验证场地 |
+  | `assets/core/**` | 31 | **① 的严格子集**（= 55 − 24 骨架/上游件），**唯一拷贝源** | `cp -r assets/core/. src/`；`check-assets-copied.mjs` 比对工程 `src/` |
+  | `references/demo/src/**` | 28 | **lite 血统的另一套工程**（含 7 件 ① 没有的资产）→ **不是副本** | 演示/阅读 + lite 基线；**默认不同步**（12 件精简变体在白名单内属预期） |
 
   D-15 修复 `MenuSidebar.syncActiveByRoute` 时**只写了 `assets/core/` 一份**，
   `references/scaffold/src/` 里那份 `MenuSidebar.vue` 就缺了 `const route = useRoute();` 这一行
@@ -617,8 +617,8 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 - ★★★ **更关键的教训：跑错了闸门 —— 两个闸门判据正交，不能互相替代**：
   | 闸门 | 判据方向 | 能发现什么 | 发现不了什么 |
   |---|---|---|---|
-  | `check-assets-copied.mjs` | 工程 `src/` ↔ 技能 `assets/` | 工程与资产漂移 | **技能内部三副本之间**的漂移 |
-  | `scan-assets-refs.mjs` | 技能内部 `assets/` ↔ `scaffold/` ↔ `demo/` | 技能内部副本漂移 | 工程侧改动 |
+  | `check-assets-copied.mjs` | 工程 `src/` ↔ 技能 `assets/` | 工程与资产漂移 | **技能内部两镜像之间**的漂移 |
+  | `scan-assets-refs.mjs` | 技能内部 `assets/core/`(31) ↔ `scaffold/src/`(55) | 两镜像漂移、`② ⊂ ①` 被破坏 | 工程侧改动；demo 层（另判） |
   D-15 回补后**只跑了第一个**，它当然全绿（工程和 `assets/` 是一致的），
   于是漏掉了第二个。改用 `scan-assets-refs.mjs` 实测立刻报 **`core/scaffold 差异数: 1`**，修复后为 **0**。
 
@@ -628,7 +628,8 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
   路径要用 **Windows 风格**（`C:/a/b/c`）；传 Git-Bash 风格 `/c/a/b/c` 会被解析成相对路径并拼成 `C:\c\a\b\c` 再次失败。
 
 - **硬规则（写进 SKILL.md 收尾自检）**：
-  1. **改一个文件就三处一起改**（`assets/core/` + `references/scaffold/src/`，`demo/` 按需）；
+  1. **改一个文件就两处一起改**（主真相源 `references/scaffold/src/` → 派生 `assets/core/`）；
+     `references/demo/src/` **默认不动**——它是 lite 血统的另一套工程，只有 `tri-diff.mjs` 报 `DEMO-STALE` 才同步；
   2. 回补后**两个闸门都要跑**，任一非绿不算完；
   3. 「工程能跑」**不能**作为技能资产正确的证据 —— 工程跑的是它自己的 `src/`。
 

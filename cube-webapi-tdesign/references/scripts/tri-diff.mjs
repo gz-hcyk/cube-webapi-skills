@@ -195,7 +195,38 @@ for (const [label, dir] of REQUIRED) {
 
 /* ── 工具 ───────────────────────────────────────────────── */
 const norm = (s) => s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-const md5 = (p) => crypto.createHash('md5').update(norm(fs.readFileSync(p, 'utf8')), 'utf8').digest('hex').slice(0, 10).toUpperCase();
+
+/**
+ * ★ 按项目「必改」文件的比对归一化（2026-09-13 新增，修 D-20）
+ *
+ * 背景：技能铁律**要求**某些文件按项目改写（最典型是登录页 `PROJECT` 文案，铁律 L1）。
+ * 这些文件的正确工程态**本就与模板不同**，若照搬「MD5 一致才算通过」，会把
+ * 「已按铁律正确填写」误报成 `ENG-DRIFT`，并给出
+ * 「以技能版覆盖工程」的建议 —— **该建议与铁律直接冲突，照做即抹掉项目业务文案**。
+ *
+ * 同一张表、同一套 normalize 已在 `check-assets-copied.mjs` 落地（修 D7 时加的）；
+ * 本脚本当时漏了，导致两个闸门对同一个文件给出**相反结论**（一个通过、一个报漂移）。
+ * 两边判据必须同源 —— 改这里请同步改那边。
+ *
+ * 归一化后一致 → 记入「项目必改」区段（预期，不计漂移）；归一化后仍不一致 → 照旧报 ENG-DRIFT。
+ */
+const PROJECT_EDITABLE = [
+  {
+    rel: 'pages/LoginView.vue',
+    why: '登录页 PROJECT 文案（铁律 L1 要求按项目业务改写，必然与模板不同）',
+    normalize: (t) => t.replace(/const PROJECT = \{[\s\S]*?\n\};/, 'const PROJECT = {/*PROJECT*/};'),
+  },
+];
+const projectNorm = new Map(PROJECT_EDITABLE.map((e) => [e.rel, e.normalize]));
+const projectCustom = [];   // 命中归一化豁免的文件（预期，单独打印）
+
+const rawMd5 = (p) => crypto.createHash('md5').update(norm(fs.readFileSync(p, 'utf8')), 'utf8').digest('hex').slice(0, 10).toUpperCase();
+const md5 = (p, rel) => {
+  let t = norm(fs.readFileSync(p, 'utf8'));
+  const nz = rel ? projectNorm.get(rel) : null;
+  if (nz) t = nz(t);
+  return crypto.createHash('md5').update(t, 'utf8').digest('hex').slice(0, 10).toUpperCase();
+};
 const size = (p, e) => (e ? fs.statSync(p).size : 0);
 function walk(root, rel = '', out = []) {
   for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
@@ -220,10 +251,17 @@ for (const f of files) {
   const pd = DEMO_SRC ? path.join(DEMO_SRC, f) : null, pc = path.join(ENG_SRC, f);
   const ea = fs.existsSync(pa), eb = fs.existsSync(pb), ec = fs.existsSync(pc);
   const ed = pd ? fs.existsSync(pd) : false;
-  const ha = ea ? md5(pa) : null;
-  const hb = eb ? md5(pb) : null;
-  const hd = ed ? md5(pd) : null;
-  const hc = ec ? md5(pc) : null;
+  const ha = ea ? md5(pa, f) : null;
+  const hb = eb ? md5(pb, f) : null;
+  const hd = ed ? md5(pd, f) : null;
+  const hc = ec ? md5(pc, f) : null;
+
+  // ★ 项目必改（PROJECT 文案等）：工程侧裸哈希与归一化哈希不同 ⇒ 该项目确实改写过这一段。
+  //   归一化后仍与技能侧不同的话，下面的 ENG-DRIFT 分支照常会报出来（不会被这里吞掉）。
+  if (ec && projectNorm.has(f) && rawMd5(pc) !== hc &&
+      ((ha !== null && ha === hc) || (hb !== null && hb === hc))) {
+    projectCustom.push(f);
+  }
 
   if (ea && !ed) demoMissing++;
 
@@ -292,6 +330,7 @@ if (opt.json) {
     roots: { scaffold: SCAFFOLD_SRC, core: CORE_DIR, demo: DEMO_SRC, eng: ENG_SRC },
     counts: Object.fromEntries(ALL_FLAGS.map((k) => [k, GROUPS[k].length])),
     demoMissingFromCore: DEMO_SRC ? demoMissing : null,
+    projectCustomEditable: projectCustom,
     divergentWhitelistRot: wlRot,
     exitCode, strict: opt.strict, strictDemo: opt.strictDemo, files: detail,
   }, null, 2) + '\n';
@@ -312,6 +351,14 @@ if (opt.json) {
          `DEMO-ONLY=${GROUPS['DEMO-ONLY'].length}`);
   if (DEMO_SRC) {
     L.push(`demo 未收录的 ①② 资产：${demoMissing} 件（③ 是精简子集，**缺件≠漂移**）`);
+  }
+  if (projectCustom.length) {
+    L.push('');
+    L.push(`── 项目必改（${projectCustom.length}）· 预期：按铁律 L1 改写的项目自填区段，已归一化后比对，**不计漂移** ──`);
+    for (const f of projectCustom) {
+      L.push(`  ${f}`);
+      L.push(`      ${(PROJECT_EDITABLE.find((e) => e.rel === f) || {}).why || ''}`);
+    }
   }
   L.push('');
   const ORDER = ['ENG-DRIFT', 'CORE-DRIFT', 'DEMO-STALE', 'ENG-ONLY', 'SCAFFOLD-DRIFT', 'DEMO-DIVERGENT', 'DEMO-ONLY', 'ALL-DIFF'];

@@ -1,19 +1,110 @@
 # 资产体检脚本
 
-五个零依赖脚本（Node ≥ 18，无 npm 依赖）：
+七个零依赖脚本（Node ≥ 18，无 npm 依赖）：
+
+> ★ **收尾自检请直接用聚合入口**，不要挑着跑单个脚本 —— 各闸门判据**正交**，挑着跑会
+> 得到「假全绿」（真实案例见 `troubleshooting.md` G15 / D-17）：
+>
+> ```bash
+> node references/scripts/check-all.mjs <工程目录>     # 一次跑完全部 6 个闸门（推荐）
+> node references/scripts/check-all.mjs               # 无工程时跑技能自身维护类（4 个）
+> ```
+>
+> **路径口径**：`<工程目录>` 传**含 `src/` 的 frontend 那一层**且用 **Windows 风格**
+> （正确 `C:/proj/frontend`；错误 `/c/proj/frontend` 会被 Git-Bash 拼成 `C:\c\proj\frontend`）。
 
 ```bash
-# ── 技能自身维护（改 assets/ 或 references/scaffold/ 之后跑）──
+# 技能自身维护（改 assets/ 或 references/scaffold/ 之后跑）
+node references/scripts/sync-assets.mjs           # ★ 两镜像同步（scaffold/src → assets/core，可写）
+node references/scripts/sync-assets.mjs --check   #   只报告不写入，有漂移 exit=1
 node references/scripts/scan-assets-dead.mjs      # 零引用源码文件（含入口白名单判断提示）
 node references/scripts/scan-assets-refs.mjs      # ① 文档悬空引用 ② assets ↔ scaffold 副本一致性
 node references/scripts/tri-diff.mjs <工程目录>     # 四方 md5 对照，判「谁该向谁对齐」（方向判定）
 
-# ── 目标工程验收（「三条主线」的机器出口）──
+# 目标工程验收（「三条主线」的机器出口）
 node references/scripts/check-starter-align.mjs   # 第①步出口：工程是否仍是 tdesign-starter CLI 产物形态
 node references/scripts/check-assets-copied.mjs   # 第②步出口：assets/ 是否确实并入工程 src/ 且未漂移
 
 # 换技能目录：SKILL_DIR=/path/to/skill node ... ；两个 check-* 均支持 --out <file> 落盘
 ```
+
+## `sync-assets.mjs`：把「手工双写」降级为「单向派生」（2026-09-13 新增）
+
+**存在理由**：技能资产是「**两镜像 + 一独立层**」——
+
+| 层 | 件数 | 角色 | 是否同步目标 |
+|---|---|---|---|
+| `references/scaffold/src/` | **55** | **真相源**：完整可运行工程（CLI 骨架 + 全部业务资产） | ✅ 改这里 |
+| `assets/core/` | **31** | **派生镜像**：`scaffold/src` 的**严格子集**（`cp -r` 拷进工程的白名单） | ✅ 由脚本生成 |
+| `references/demo/src/` | **28** | **独立层**：lite 血统第二基线，含 7 件 scaffold 没有的文件 | ❌ **不是**同步目标 |
+
+`scaffold/src` 那 55 件里的另外 **24 件是骨架/上游件**（`App.vue`/`main.ts`/`router`/`stores`/
+`locales`/`styles`/`types`/`config`/`hooks` + 1 个开发页），**故意不进 `assets/`**；
+同目录下业务件与骨架件是混排的，所以**不能用目录级通配去猜白名单** ——
+`assets/core` 自己那棵树**就是**白名单。
+
+以往靠「改一个文件就两处手工各改一遍」，两次踩坑（D-15 / D-17：漏改 `scaffold` 副本，
+生成出来的工程编译即报 `Cannot find name 'route'`）。本脚本把方向固定为
+**`scaffold/src` → `assets/core`**，一条命令同步，幂等。
+
+```bash
+node references/scripts/sync-assets.mjs           # 写入模式
+node references/scripts/sync-assets.mjs --check   # 只报告；有漂移则 exit=1（聚合器用的就是它）
+node references/scripts/sync-assets.mjs --verbose # 逐件打印
+```
+
+**推荐的资产改动闭环**（三步，全绿才算收工）：
+
+```bash
+node sync-assets.mjs <...>            # ① 红了先修：scaffold → assets 单向派生
+node scan-assets-refs.mjs             # ② 复核：② ⊆ ① 且逐件同 md5、无悬空引用
+node check-all.mjs <工程目录>          # ③ 总闸：全部闸门一次跑完
+```
+
+**判据与 `scan-assets-refs.mjs` 是互补而非替代**：本脚本 = 「怎么修」（单向 copy），
+`scan-assets-refs` = 「查出来」（含文档悬空引用）。两者都会在聚合器里出现。
+
+**它会打印的两条信息**（不阻塞，供人工裁决）：
+- **孤儿件**：`assets` 有、`scaffold` 无 → 真相源可能已删/改名，需人工确认是否一并删；
+- **白名单外件数**：`scaffold/src` 共 55 件 = 白名单 31 + 骨架/上游 24，数字对不上时说明有新件待归类。
+
+## `check-all.mjs` 用法（**技能自检的单一入口**，2026-09-13 新增）
+
+把 6 个闸门串成一条命令，**存在理由就是 D-17**：技能有多个判据正交的闸门却没有聚合入口，
+于是「只跑了 `check-assets-copied`（绿）」被当成了「资产全对」，漏跑的
+`scan-assets-refs`（红，`core/scaffold 差异数: 1`）里那个缺 `useRoute()` 的
+`MenuSidebar.vue` 就这样流进了主真相源，生成的新工程**编译即失败**。
+
+```bash
+node check-all.mjs                       # 技能自身维护类 4 个闸门（无需工程）
+node check-all.mjs <工程目录>             # 全部 6 个（收尾自检用这个）
+node check-all.mjs <工程目录> --json      # 机器可读汇总（CI 用）
+node check-all.mjs <工程目录> --no-tridiff  # 跳过耗时的四方对照
+```
+
+| 闸门 | 判据（命中即 PASS） | 缺工程时 |
+|---|---|---|
+| `sync-assets` | `--check` 无 `需同步` | 照跑 |
+| `scan-assets-refs` | 差异数 = 0 | 照跑 |
+| `scan-assets-dead` | 无 FAIL | 照跑 |
+| `check-starter-align` | `0 FAIL` | 照跑（目标默认 `references/scaffold`） |
+| `check-assets-copied` | `漂移/残留 0` | SKIP |
+| `tri-diff` | `ENG-DRIFT=0` **且** `CORE-DRIFT=0` | SKIP |
+
+退出码：`0` = 全部 PASS；`1` = 任一 FAIL；`2` = 用法错误。
+
+**两个已修的自身缺陷（写下来当反面教材）**：
+
+1. 早期写成 `join(HERE, ...argv)` —— 把**工程路径也拼进了脚本路径**
+   （`.../check-assets-copied.mjs/C:/proj/frontend` → `Cannot find module`），
+   表现为「聚合器把 3 个本来全绿的闸门报成 FAIL」。**聚合器自己不校验就会变成噪音源。**
+2. 判据正则只认冒号，而 `tri-diff` 打的是 `ENG-DRIFT=0`（**等号**）→ 绿灯被判成红灯。
+   分隔符一律写 `[=:：]`。**各脚本输出风格不统一，聚合器必须比它们宽容。**
+
+**假全绿自检（写完任何聚合/断言工具后必做）**：注入一个人造漂移，确认它**会变红**。
+本脚本已用此法规过 —— 在 `assets/core/` 放一个 `__selfcheck_probe.ts`（只在 core、不在 scaffold）：
+`check-all.mjs` 正确报 `FAIL scan-assets-refs` + `core/scaffold 差异数: 1` + `exit=1`，
+移除后回到 `6 个闸门全部 PASS`。
 
 ## `scan-assets-refs.mjs` 判据（2026-09-13 修订）
 
@@ -192,6 +283,38 @@ node tri-diff.mjs <工程目录> --strict-demo # 连 DEMO-DIVERGENT（已知层�
 ⇒ 健康态（2026-09-13 scaffold 换代 `all` 后）= `ENG-DRIFT=0  CORE-DRIFT=0  DEMO-STALE=0  DEMO-WL-STALE=0  SCAFFOLD-ONLY-WL-STALE=0`，
 只剩 **24 条 `SCAFFOLD-DRIFT`** + **0 条 `ALL-DIFF`** + **12 条 `DEMO-DIVERGENT`** + **7 条 `DEMO-ONLY`**（+ N 条 `ENG-ONLY`）。
 md5 比对前统一 CRLF→LF（技能仓库 `core.autocrlf=true`，纯换行差异不算漂移）。
+
+### ⑤「项目必改」归一化（2026-09-13 新增，修一类误报）
+
+**问题**：技能里有些文件**设计上就该被工程改写**（铁律 L1「按项目改写」），典型是
+`pages/LoginView.vue` 的 `const PROJECT = { ... }` 区段（系统名 / 版权 / Logo / ICP 等）。
+这类文件在工程里**天然与技能版逐字节不同**，于是旧版 `tri-diff` 报 `ENG-DRIFT`，
+而修复方向写着「**以技能版覆盖工程**」——照做会把该项目的名称/版权**改回技能默认值**，是**反向破坏**。
+同时 `check-assets-copied.mjs` 早就有豁免名单（第 150 行，修 D7 时加的），**两个脚本口径不一致**：
+同一份工程，一个报漂移、一个报通过 → 无法判断谁对。
+
+**修法**：`tri-diff.mjs` 补上与 `check-assets-copied.mjs` 一致的**归一化名单**，
+比对前把工程的「项目自填区段」剥掉再算 md5，并单列信息区段：
+
+```
+── 项目必改（1）· 预期：按铁律 L1 改写的项目自填区段，已归一化后比对，**不计漂移** ──
+     pages/LoginView.vue    （裸 md5 不同，归一化后一致 = 正确改写，非漂移）
+```
+
+判定口径：
+
+| 情形 | 判据 | 定性 |
+|---|---|---|
+| 裸 md5 相同 | — | `ALL-SAME`，无需动作 |
+| **裸 md5 不同，归一化后一致** | 只在「项目必改」名单内 | **正确改写**（铁律 L1），列入信息区段，**不计漂移、不影响退出码** |
+| 裸 md5 不同，归一化后仍不同 | — | 真漂移，按原 ①②④ 方向判定 |
+
+实测效果（目标工程 `CubeSkillLab/frontend`）：`ENG-DRIFT` **1 → 0**、
+`DEMO-WL-STALE`（该条白名单因误判而"不再分歧"）消失、
+`DEMO-DIVERGENT` **11 → 12**（登录页正确归位到"demo 精简变体"），**exit 0**。
+
+> ⚠️ 新增「项目必改」文件时，**两个脚本的名单要一起加**（`check-assets-copied.mjs` 与 `tri-diff.mjs`），
+> 否则又会回到"一个说漂移、一个说通过"的分裂口径。
 
 ### ③ 为何是「层次差异」而非「陈旧」（2026-09-13 双侧构建实证）
 
