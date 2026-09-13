@@ -145,8 +145,10 @@ async function loadLogs() {
 }
 
 function go(area: string, controller: string) {
-  // 本工程路由形态为 /:area/:controller（见 router/index.ts 的 authed 子路由），非 /entity/...
-  router.push(`/${area}/${controller}`)
+  // ⚠️ 路由表注册的是 entity/:area/:controller（带 entity 前缀，见 router/index.ts）。
+  // 此处若漏 /entity/ 前缀会落到 catch-all 重定向回 /dashboard，观感＝「进入链接点了没反应」。
+  // 与 BasicLayout.onNavigate 保持同一形态。
+  router.push(`/entity/${area}/${controller}`)
 }
 
 const logColumns = [

@@ -559,3 +559,11 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
   `→ 点击品牌 logo → 断言 === '/dashboard'`。
   纯渲染断言（菜单有数据、列表有行）发现不了这个 bug——**导航必须实测跳转**。
 
+- ★★★ **同源缺陷 D-16（dashboard 卡片「进入 →」链接点击无反应）**：与根因 1 同一机制，
+  只是触发点不在菜单 `onNavigate`，而在 `DashboardView.go(area, controller)`。
+  原代码 `router.push(\`/${area}/${controller}\`)` 同样漏 `/entity/` 前缀 ⇒ 点「进入 →」卡片也回 /dashboard。
+  - 修复：`go()` 改为 `router.push(\`/entity/${area}/${controller}\`)`（与 `onNavigate` 保持同一形态）。
+  - ⚠️ **凡是把后端菜单 url 转成前端路由的地方，都必须拼 `/entity/` 前缀**：
+    目前已知两处——`BasicLayout.onNavigate` 与 `DashboardView.go`。新增任何「点 URL 跳路由」代码都要对齐。
+  - 验收：`cdp-dash-test.mjs`（CDP 点 dashboard 卡片）5/5 全绿：进入卡片→/entity/Lab/LabLog、业务实体卡片→/entity/Lab/LabCategory、品牌→/dashboard。
+
