@@ -1,6 +1,6 @@
 ﻿---
 name: cube-webapi-backend
-description: 使用 NewLife.Cube（魔方）第三代 WebApi 快速开放框架开发前后端分离的后台 REST API 时使用。适用场景：基于 EntityController/ReadOnlyEntityController/EntityTreeApiController/ControllerBaseX 暴露 /api 标准 CRUD 接口；用 GetFields/GetPage 字段元数据驱动动态列表/表单；配置 AddCube/UseCube 启动、数据层预热（EntityFactory.InitAll/InitConnection）、登录与 JWT（Auth/Login、Bearer/X-Token）；设计自定义权限体系（PermissionFlags 权限位、Menu 菜单、EntityAuthorize 鉴权、401/403）；实现数据范围权限（Role.DataScopes、IDataScope/DataScopeInterceptor、DataPermission 表达式、IFieldScope 脱敏）；多租户隔离、自定义业务权限（审批/下发指令等）、导出。触发词：魔方 WebApi、NewLife.Cube、Cube API、EntityController、GetFields、元数据驱动接口、权限位、数据权限、前后端分离后台、数据库预热、InitConnection。挂链开号场景触发词：给业务人员开登录账号、魔方建 User、初始密码、首登强制改密、批量补开账号。不适用于 MVC 服务器渲染后台（用 cube-mvc-backend）与前端页面生成（用 cube-webapi-tdesign）。触发词：生成部署包、生产部署包、发布部署包、上线部署、Linux+Nginx+systemd 反向代理、SQLite 部署、dotnet publish 跨平台、appsettings.Production、Nginx 反向代理模板、冒烟验证、新增实体验收、枚举 LOV 值集（SetLov）、外键映射字段、实体验收核查。
+description: 使用 NewLife.Cube（魔方）第三代 WebApi 快速开放框架开发前后端分离的后台 REST API 时使用。适用场景：基于 EntityController/ReadOnlyEntityController/EntityTreeApiController/ControllerBaseX 暴露 /api 标准 CRUD 接口；用 GetFields/GetPage 字段元数据驱动动态列表/表单；配置 AddCube/UseCube 启动、数据层预热（EntityFactory.InitAll/InitConnection）、登录与 JWT（Auth/Login、Bearer/X-Token）；设计自定义权限体系（PermissionFlags 权限位、Menu 菜单、EntityAuthorize 鉴权、401/403）；实现数据范围权限（Role.DataScopes、IDataScope/DataScopeInterceptor、DataPermission 表达式、IFieldScope 脱敏）；多租户隔离、自定义业务权限（审批/下发指令等）、导出。触发词：魔方 WebApi、NewLife.Cube、Cube API、EntityController、GetFields、元数据驱动接口、权限位、数据权限、前后端分离后台、数据库预热、InitConnection。挂链开号场景触发词：给业务人员开登录账号、魔方建 User、初始密码、首登强制改密、批量补开账号。不适用于 MVC 服务器渲染后台（用 cube-mvc-backend）与前端页面生成（用 cube-webapi-tdesign）。触发词：生成部署包、生产部署包、发布部署包、上线部署、Linux+Nginx+systemd 反向代理、SQLite 部署、dotnet publish 跨平台、appsettings.Production、Nginx 反向代理模板、冒烟验证、新增实体验收、枚举 LOV 值集（SetLov）、外键映射字段、实体验收核查、魔方定时作业（CronJob/CubeJobBase，周期任务替代启动钩子）。
 agent_created: true
 argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控制器基类选型（CRUD/只读/树形/自定义）、定制字段元数据（GetFields/GetPage）、添加鉴权 Action 与自定义权限位、接入登录与 JWT、配置多租户与数据范围权限，还是排查 401/403/FieldErrors/路由 404 问题。
 ---
@@ -530,6 +530,69 @@ public class StudentController : EntityController<Student, StudentModel> { }
   - 管理后台：含 `Admin` **或** 未声明任何模式（默认仅后台）可见；
   - 反例：纯 `Admin` 菜单租户不可访问，纯 `Tenant` 菜单后台不可访问。
 
+#### 6.3.1 隐藏菜单的三个坑（实测确认，改菜单可见性前必读）
+
+想让某个控制器**不进后台菜单**（但保留路由与权限项），有三个容易连环踩的坑：
+
+**坑 1：不写 `[Menu]` ≠ 不进菜单——反而会按默认 `visible=true` 被收录。**
+Cube 扫描器对**未标 `[Menu]`** 的控制器按默认可见收录。因此「不要菜单就不写 `[Menu]`」是**错的**。
+✅ 正确做法：显式写 `[Menu(0, false)]`。
+
+```csharp
+[DisplayName("产品版本文件")]
+[Menu(0, false, Icon = "fa-file-archive")]   // 必须显式 false；不写反而会显示
+[ProductArea]
+public class ProductFileController : EntityController<ProductFile> { }
+```
+
+**坑 2：已有 `Menu` 记录的 `Visible`/`Sort`/`Icon` 不会因控制器特性改动而更新。**
+扫描器只在**首次插入**时写入这些字段；库中已存在的记录会被跳过（判据：该记录 `UpdateTime` 长期不变）。
+所以改完控制器特性后重启，菜单**看起来毫无变化**——不是没生效，是根本没被覆盖。
+✅ 正确做法：在**区域类**上抬高 `LastUpdate`，强制用代码定义覆盖库中设置（官方 XML：
+`最后更新时间。小于该更新时间的菜单设置将被覆盖。` / `一般应用于区域类`）。
+
+```csharp
+[DisplayName("产品管理")]
+[Menu(0, true, LastUpdate = "2026-09-14")]   // 每次改本区菜单结构都要抬高此日期
+public class ProductArea : AreaBase
+{
+    public ProductArea() : base(nameof(ProductArea).TrimEnd("Area")) { }
+}
+```
+
+> ⚠️ **区域自身的 `Visible` 必须为 `true`**。写成 `[Menu(0, false, LastUpdate = ...)]`
+> 会让**整个区域分组**（连同其下所有正常菜单）从侧边栏消失。`LastUpdate` 只用于触发重建，
+> 不要顺手把区域可见性也关掉。
+
+**坑 3：`GetMenuTree` 返回全量节点（含 `visible=false`），不做服务端过滤——前端必须自己消费 `visible`。**
+这是最隐蔽的一环：后端标了 `[Menu(0,false)]`、库记录 `Visible=0`，接口返回的 JSON 里那条记录
+**依然在 `children` 数组里**，只是带了个 `"visible": false` 字段。若前端菜单消费层不读这个字段，
+就会被渲染成菜单项——**后端声明完全空转**。
+
+✅ 前端须在映射菜单树时显式过滤（参考实现）：
+
+```ts
+interface RawMenuNode { id: number; name: string; url?: string; visible?: boolean; children?: RawMenuNode[] }
+
+function mapChildren(nodes: RawMenuNode[]): MenuNode[] {
+  const out: MenuNode[] = []
+  for (const n of nodes || []) {
+    if (n.visible === false) continue        // 用 !== false 而非 === true：对老接口/缺字段保持宽容
+    // ... url 归一化等
+  }
+  return out
+}
+// 区域根节点同样要判断：if (root.visible === false) continue
+```
+
+**结论：隐藏菜单是「后端声明 + 前端消费」两环，缺一不可。**
+只改后端 = 菜单照旧显示（坑 3）；只改前端 = 服务器换了库记录又冒出来（坑 2）。
+排查口诀：**先看接口 JSON 里 `visible` 是什么，再看前端有没有读它。**
+
+> 实战收益参考：某存量项目补上前端 `visible` 消费后，菜单从 **40 条降到 23 条**，
+> 一次清掉 14 个框架内部页（字典参数/访问规则/OAuth 配置/短信配置/应用日志等）
+> 长期挂在侧边栏的污染——它们此前一直存在，因前端不读 `visible` 而无人察觉。
+
 ### 6.4 自定义权限位（CRUD 之外的业务权限）
 
 `PermissionFlags` 是 UInt32 `[Flags]`，除标准 4 位外，可用更高位 `(PermissionFlags)16`、`(PermissionFlags)32` 等作为**自定义业务权限位**：
@@ -776,6 +839,42 @@ public class OrderSettingController : ConfigController<OrderSetting> { }
 
 自动提供 Get（读取 `Config<T>.Current`）与 Update（线程安全 `Copy + Save`）。
 
+### 9.1 定时作业（CronJob + CubeJobBase）——周期任务的标准落地方式
+
+凡「周期性 / 需后台手动补跑 / 需执行记录」的后台逻辑，**建魔方定时作业，不要写成启动钩子**（`IHostedService` / `PreheatHostedService` 启动调用）。启动钩子的问题：只在启动跑一次、多进程重复执行同一写逻辑、无法手动补跑、无执行留痕。
+
+```csharp
+using System.ComponentModel;
+using NewLife.Cube.Jobs;
+
+/// <summary>作业参数（后台以 JSON 配置，表单按属性 + [DisplayName] 生成）</summary>
+public class PlaceCodeMigrateArgument
+{
+    [DisplayName("产品编码")] public String ProductCode { get; set; }
+    [DisplayName("仅预览")]   public Boolean DryRun { get; set; }
+}
+
+[DisplayName("场地编码对齐")]
+[Description("按门锁编码确保场地树节点存在并绑定设备位置，幂等可重复执行")]
+[CronJob("PlaceCodeMigrateJob", "0 0 * * * ? *", Enable = false)]
+public class PlaceCodeMigrateJob : CubeJobBase<PlaceCodeMigrateArgument>
+{
+    protected override Task<String> OnExecute(PlaceCodeMigrateArgument argument)
+    {
+        var result = PlaceCodeMigrateService.Run(argument?.ProductCode, argument?.DryRun ?? false);
+        return Task.FromResult(result.ToString());   // 返回值即后台「执行结果」，写清计数与原因
+    }
+}
+```
+
+- **命名空间** `NewLife.Cube.Jobs`（`CubeJobBase` / `[CronJob]`）；类随程序集**自动扫描注册**（`CronJob.Meta.Count` 可核），无需手工登记。
+- **cron 为 Quartz 风格 7 段**（秒 分 时 日 月 周 年），如每小时 = `0 0 * * * ? *`、每天 8:30 = `0 30 8 * * ? *`。
+- **`Enable = false` 是项目惯例**：默认不启用，上线由运维在后台「定时作业」页启用/停用/改 cron/手动「立即执行」/配参数，避免部署即自动跑写操作。
+- `OnExecute` **必须自吞异常**（内部 try-catch 后返回摘要串），单作业失败不得影响其它作业；返回值会被记录为执行结果，**写清关键计数与跳过原因**（如「扫描1294 修正3 跳过1291」）。
+- **服务方法设计配套**：被作业调用的 `Run(...)` 建议 ①幂等可重入 ②返回结构化结果对象 ③带 `dryRun` 仅预览开关（上线前先预览再执行）④异常在内部吞掉并记日志。
+- **入口唯一化**：抽成作业后**删掉原有启动钩子**（Web 预热 + 其它进程 `IHostedService`），否则多进程并发执行同一写逻辑（本例 `PlaceCodeMigrateJob` 即删了 Web `PreheatHostedService` 调用与 IoT.Server 启动宿主两处）。
+- 参考实现：`Web/Jobs/BatteryPredictJob.cs`（业务扫描）、`Web/Jobs/AlertPushJob.cs`（外部通道推送 + 参数回退）。
+
 ---
 
 ## 十、数据范围权限（行级 / 数据权限）
@@ -949,6 +1048,17 @@ GET /api/School/Student/ExportFile?format=xml
 8. **`[Map]` 派生（仅显示）属性被收进新增/编辑表单 → Insert 静默 `code:-2 添加失败`**（不抛异常，极难排查）：表单字段须 RemoveField 裁剪；**重写 `Valid` 做唯一性/业务校验时 Delete 也要排除自身**（否则删除被吞成「删除失败！」）。
 9. **`PermissionFlags` 必须 > None，自定义位用更高位**（1/2/4/8 已被 CRUD 占用）；权限项由框架扫描 Action 自动生成（`ScanActionMenu`），勿手写权限项。
 10. **`EnableFieldValidation` 默认关闭**：需字段级错误（`fieldErrors`）时子类 `override EnableFieldValidation => true`（§3.4 校验）。
+11. ★ **发邮件不要用 `System.Net.Mail.SmtpClient`**：它**不支持 465 隐式 SSL**（`EnableSsl` 实为 STARTTLS，先明文再升级），而 QQ/163/126 的 SMTP 端口正是 465 —— 用它在**连接阶段**就失败，症状是「邮件静默没发出、发件方『已发送』里也没有」（根本没投递）。该类型也已被微软标记 Obsolete。**用 MailKit**（`MailKit 4.8.0` + MimeKit + BouncyCastle）：
+    ```csharp
+    var opt = cfg.Port switch { 465 => SecureSocketOptions.SslOnConnect,   // 隐式 SSL
+                                587 => SecureSocketOptions.StartTls,       // STARTTLS
+                                25  => SecureSocketOptions.StartTlsWhenAvailable,
+                                _   => SecureSocketOptions.Auto };
+    await client.ConnectAsync(cfg.Server, cfg.Port, opt);
+    ```
+    配套：魔方 `MailConfig.Password` 要填**SMTP 授权码**而非登录密码（否则 535 认证失败）；云厂商常封 25 端口。
+12. ★ **魔方邮件有两道静默前置开关**：`Parameter` 键 **`EnableMail`** 必须为 `'true'`，**且** `MailConfig` 至少一条 `Enable=1`（Server/UserName 非空）。任一不满足则邮件被**静默跳过**（不报错、不投递）。排查这类「客户收不到邮件」时不要靠真实业务盲测——加一个**自检 Action**（逐步报告开关值 → 配置条数 → 命中配置 → SSL 模式 → 可选实发测试邮件），一次拿到真实阻断点。
+13. **同名类型歧义**：引入 `MailKit`/`MimeKit` 后，`Parameter` 会与 `XCode.Membership.Parameter` 撞名（CS0104）。魔方侧必须写全限定 `XCode.Membership.Parameter`。
 
 > 更多索引：路由前缀/区域缺失（新 Area 须标 `[XxxArea]`）、Swagger 双重 `IsDevelopment()`、实体列名撞 SQL 保留字（Order/Group/User…）、启动并发写锁致 Menu.Permission 回填失败、`FindAll` order 用真实数据库列名、字段默认值勿用 SQLite 非法 `DefaultValue`、swagger/`GetFields` 匿名访问边界 → **`references/troubleshooting.md`**。
 
