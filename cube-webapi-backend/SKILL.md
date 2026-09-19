@@ -1059,6 +1059,8 @@ GET /api/School/Student/ExportFile?format=xml
     配套：魔方 `MailConfig.Password` 要填**SMTP 授权码**而非登录密码（否则 535 认证失败）；云厂商常封 25 端口。
 12. ★ **魔方邮件有两道静默前置开关**：`Parameter` 键 **`EnableMail`** 必须为 `'true'`，**且** `MailConfig` 至少一条 `Enable=1`（Server/UserName 非空）。任一不满足则邮件被**静默跳过**（不报错、不投递）。排查这类「客户收不到邮件」时不要靠真实业务盲测——加一个**自检 Action**（逐步报告开关值 → 配置条数 → 命中配置 → SSL 模式 → 可选实发测试邮件），一次拿到真实阻断点。
 13. **同名类型歧义**：引入 `MailKit`/`MimeKit` 后，`Parameter` 会与 `XCode.Membership.Parameter` 撞名（CS0104）。魔方侧必须写全限定 `XCode.Membership.Parameter`。
+14. ★ **项目 `<Nullable>enable</Nullable>` 时，实体 `String` 属性在模型绑定期被隐式 `[Required]`**（NRT 隐式必填，2026-09-19 实测）：WebApi 插入报 `The XX field is required`（fieldErrors），报错发生在**实体 `Valid` 之前**——改 `Valid`/拦截器 `AllowEmpty` 全部无效。诊断特征：请求体**没提供**的字符串字段全报必填、**提供了**的不报，与 XCode `DataObjectField` 可空性无关。修复：`services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)`；审计字段（CreateUser/CreateIP 等）自动填充用「`Valid(DataMethod)` 前置 `IEntity` 索引器预填助手」，前端表单渲染与提交载荷同步剔除这 8 个系统字段。
+15. ★ **`POST /Auth/Refresh` 契约**：请求体**必须带 `userName`**（缺则 `FindByName(null)` → NRE 500）；响应 `data` 键为 `token/refreshToken/expireIn`（**`new { Token }` 经 camelCase 序列化成全小写 `token`**，不是 `accessToken`；登录响应反而是 snake_case `access_token`）——前端刷新逻辑必须三向兜底，否则「刷新 200 但被判失败 → 整页弹回登录页」。
 
 > 更多索引：路由前缀/区域缺失（新 Area 须标 `[XxxArea]`）、Swagger 双重 `IsDevelopment()`、实体列名撞 SQL 保留字（Order/Group/User…）、启动并发写锁致 Menu.Permission 回填失败、`FindAll` order 用真实数据库列名、字段默认值勿用 SQLite 非法 `DefaultValue`、swagger/`GetFields` 匿名访问边界 → **`references/troubleshooting.md`**。
 
