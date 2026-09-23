@@ -24,6 +24,7 @@ node references/scripts/tri-diff.mjs <工程目录>     # 四方 md5 对照，�
 # 目标工程验收（「三条主线」的机器出口）
 node references/scripts/check-starter-align.mjs   # 第①步出口：工程是否仍是 tdesign-starter CLI 产物形态
 node references/scripts/check-assets-copied.mjs   # 第②步出口：assets/ 是否确实并入工程 src/ 且未漂移
+node references/scripts/check-ui-classes.mjs <工程目录>  # UI「悬空形态类」：类名用了但没规则
 
 # 换技能目录：SKILL_DIR=/path/to/skill node ... ；两个 check-* 均支持 --out <file> 落盘
 ```
@@ -82,7 +83,7 @@ node check-all.mjs <工程目录>          # ③ 总闸：全部闸门一次跑�
 
 ```bash
 node check-all.mjs                       # 技能自身维护类 4 个闸门（无需工程）
-node check-all.mjs <工程目录>             # 全部 6 个（收尾自检用这个）
+node check-all.mjs <工程目录>             # 全部 7 个（收尾自检用这个）
 node check-all.mjs <工程目录> --json      # 机器可读汇总（CI 用）
 node check-all.mjs <工程目录> --no-tridiff  # 跳过耗时的四方对照
 ```
@@ -94,7 +95,8 @@ node check-all.mjs <工程目录> --no-tridiff  # 跳过耗时的四方对照
 | `scan-assets-dead` | 无 FAIL | 照跑 |
 | `check-starter-align` | `0 FAIL` | 照跑（目标默认 `references/scaffold`） |
 | `check-assets-copied` | `漂移/残留 0` | SKIP |
-| `tri-diff` | `ENG-DRIFT=0` **且** `CORE-DRIFT=0` | SKIP |
+| `tri-diff` | `ENG-DRIFT=0` **且** `CORE-DRIFT=0`（`ENG-FORKED` 属预期，另见 §「工程派生件」） | SKIP |
+| `check-ui-classes` | 结论行含 `无悬空形态类` | SKIP |
 
 退出码：`0` = 全部 PASS；`1` = 任一 FAIL；`2` = 用法错误。
 
@@ -172,6 +174,52 @@ node check-starter-align.mjs --manifest            # 打印**两套**基线清�
 | `references/scaffold` | `all` | **0** | 0 | 完整对齐；tsconfig 与 `all` 基线逐字一致；R4/R5 修复后 `vue-tsc` 0 错误 |
 | `references/demo` | `lite` | **0** | 1 | WARN = tsconfig 编译策略偏离，已在 `demo/README.md` §「已声明偏差」声明 |
 | `(真实工程) cube-webapi-frontend` | `lite` | **0** | 2 | 已补 `public/favicon.ico` / `index.html` favicon / `build` 加 `vue-tsc` / 补 `vue-tsc` devDep |
+
+## `check-ui-classes.mjs` 用法（工程侧：UI「悬空形态类」闸门，2026-09-23 新增）
+
+**存在理由（真实事故）**：一个门户工程里同时踩到三处「模板引用了类名、但工程内没有任何对应规则」：
+
+| 位置 | 写成的类名 | 本该是 | 表现 |
+|---|---|---|---|
+| `layouts/PortalLayout.vue` | `portal-container` | `.cube-portal-container`（漏 `cube-` 前缀） | 正文**无内边距、无最大宽度**，窄屏挤边、宽屏铺满 |
+| `pages/PortalView.vue` | `pv-grid pv-grid--lg` | `.cube-portal-grid--lg` | 「最近使用 / 常用应用」的卡片被当成 block **撑满整行**，4 列网格消失 |
+| `pages/PortalView.vue` | `pv-section__title` | `.cube-portal-section__title` | 区块标题退化成浏览器默认 `h3`，与「全部应用」标题不一致 |
+
+三处的共同点：**编译通过、`vue-tsc` 通过、TDesign 组件不报错、单元测试测不出**——
+只表现为「样式莫名不对」，上一轮**全靠逐页看截图**才逮到。而它本质是纯静态可判的：**类名用了，规则不在**。
+
+```bash
+node check-ui-classes.mjs <工程目录>            # 检查任意工程
+node check-ui-classes.mjs <工程目录> --out r.txt # 报告落盘
+node check-ui-classes.mjs <工程目录> --list-hooks # 只打印「已知良性根类」白名单
+```
+
+**判据**：扫描 `<工程>/src/**/*.vue` 的 `<template>` 中出现在 `class="…"` / `:class="…"` 里的字符串字面量，
+取出**含 `-` 且非 TDesign 类（`t-*`）、非状态类（`is-/has-/js-/el-/v-`）** 的 token，
+逐个到「所有 `.less/.css/.scss` + 所有 `.vue` 的 `<style>`」里找 `.token` 规则；
+找不到即**悬空类** → exit=1。
+
+| 分类 | 判据 | 结论 |
+|---|---|---|
+| **悬空形态类** | 用了但全工程无规则 | **FAIL**，须补规则或删掉类名 |
+| **已知良性根类** | 命中 `PROJECT_ROOT_HOOKS` 白名单（7 条，每条给理由） | 不计失败，仅列出 |
+| `HOOKS-STALE` | 白名单条目**已有规则**了 | 提示从白名单移除（**永不影响退出码**） |
+
+> ⚠️ **本闸门判不了「样式写错了」**（`.pv-grid{display:flex}` 一样是错的），只判「有没有」。
+> 它把「本该有样式的类名漏了规则」这种低级但隐蔽的错误变成红灯，仅此而已——视觉仍是人看的活。
+
+> ⚠️ **反向自检时挖出的自身缺陷（重要，别重犯）**：本脚本第一版的模板提取写成
+> `/<template>([\s\S]*?)<\/template>/`（非贪婪），在**第一个嵌套 `<template v-if>` 处提前收尾**，
+> 后面的区块**静默漏检** —— 注入一个悬空类后依然 `exit=0`。
+> **修法 = 按标签配对取块**（`templateOf()`），不依赖贪婪/非贪婪的运气。
+> 教训：豁免类 / 断言类工具，「注入人造缺陷应转红」这一步**必须真做**，做了才知道它是不是恒真。
+
+**当前基线**（两侧实测，2026-09-23）：
+
+| 目标 | 悬空类 | 已知良性根类 | 退出码 |
+|---|---|---|---|
+| `(真实工程) CubeSSO.Web`（魔方 WebApi SSO：门户与后台同属一个 SPA） | **0** | 7 | 0 |
+| `references/scaffold` | **0** | 7 | 0 |
 
 ## `check-assets-copied.mjs` 用法（「三条主线」第②步的机检入口）
 

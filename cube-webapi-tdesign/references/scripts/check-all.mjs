@@ -100,6 +100,18 @@ const GATES = [
     expect: /ENG-DRIFT\s*[=:：]\s*0[\s\S]*CORE-DRIFT\s*[=:：]\s*0|健康态[：:]?\s*ENG-DRIFT\s*[=:：]\s*0/,
     expectsProj: true,
   },
+  {
+    id: 'check-ui-classes',
+    title: '工程侧：UI「悬空形态类」（模板引用了、但没有任何样式定义）',
+    run: !!proj,
+    cmd: proj ? ['check-ui-classes.mjs', proj] : [],
+    // 判据：结论行必须是「无悬空形态类」。
+    // ★ 生成理由（2026-09-23 实测）：一个门户工程的 `pv-grid` / `pv-section__title` / `portal-container`
+    //   三个类名都是「引用了但没规则」——编译过、类型检查过、TDesign 不报错，
+    //   只表现为「卡片撑满整行 / 标题没样式 / 正文无内边距且不居中」，靠逐页看截图才逮到。
+    expect: /无悬空形态类/,
+    expectsProj: true,
+  },
 ]
 
 /** 没传工程时给出显式提醒，避免「以为跑了全部、其实只跑了一半」 */

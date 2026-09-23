@@ -1242,15 +1242,16 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 |---|---|---|
 | ① 骨架 | `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 0** | 工程仍是 CLI 产物形态（未手工重排 `package.json`/`tsconfig`/`index.html`） |
 | ② 资产 | `node references/scripts/check-assets-copied.mjs <工程目录>` **0 FAIL**；WARN 须逐条确认。**两类「按项目定制」走豁免表不算 WARN**（文案级 → `PROJECT_EDITABLE`，结构级 → `PROJECT_FORKED` / `ENG-FORKED`，见 §11.1），其余有意偏离写进工程 README「已声明偏差」段 | `assets/` 更新后**重新拷贝**，而不是就地改目标工程（否则下次同步即漂移）。豁免表登记后须做反向自检（破坏一条锚点应转红） |
+| ② 资产 | `node references/scripts/check-ui-classes.mjs <工程目录>` **退出码 0**（无「悬空形态类」）；报告里的「已知良性根类」白名单须逐条给理由 | 闸门只判「类名有没有规则」，**判不了「样式写错没」**（`.pv-grid{display:flex}` 一样是错的）——视觉仍是人看的活 |
 | ③ 个性化 | `vue-tsc --noEmit`（或 `npm run build`）**0 错误**（编译清零铁律） | §4.21 枚举/外键渲染核查；登录 → 跳 `/dashboard`；菜单与权限来自 `GetMenuTree` |
 
 - 全量陷阱排障走 `references/troubleshooting.md`（正文只留结论，不内联过程）。
 - **技能自身维护**（改 `assets/` 或 `references/scaffold/` 之后）：**跑聚合入口，不要挑着跑**——
   ```bash
-  node references/scripts/check-all.mjs <工程目录>   # 6 个闸门一次跑完（有工程时，收尾自检用这个）
+  node references/scripts/check-all.mjs <工程目录>   # 7 个闸门一次跑完（有工程时，收尾自检用这个）
   node references/scripts/check-all.mjs             # 4 个技能自身维护闸门（无工程时）
   ```
-  它会一并跑 `sync-assets --check` + `scan-assets-dead` + `scan-assets-refs` + `check-starter-align` + `check-assets-copied` + `tri-diff`，并确认正文新增引用路径（`assets/`、`references/`）均存在。
+  它会一并跑 `sync-assets --check` + `scan-assets-dead` + `scan-assets-refs` + `check-starter-align` + `check-assets-copied` + `tri-diff` + `check-ui-classes`，并确认正文新增引用路径（`assets/`、`references/`）均存在。
   - ★ **修漂移也是一条命令**：`node references/scripts/sync-assets.mjs`（把主真相源 `references/scaffold/src/` 单向覆盖到 `assets/core/`）。默认 `--check` 只报不改，避免误覆盖。
   - ⚠️ **这些闸门判据正交，不能互相替代，也不允许只跑其中一个**（D-17 实测踩坑）：
     - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部两镜像之间的漂移；
@@ -1258,6 +1259,16 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
     - 反面案例：D-15 回补时 `MenuSidebar.vue` 只写了 `assets/core/` 一份，`references/scaffold/src/` 那份漏了 `const route = useRoute();`（但仍在用 `route.path`）→ 脚手架生成出来**编译即失败**；当时只因跑了 `check-assets-copied`（全绿）就以为收工，漂移潜伏了整轮。
     - 这就是 `check-all.mjs` 存在的唯一理由：**把「跑全部」变成一条命令**，从结构上消灭「挑着跑」。
   - ★ **聚合器自身也要过「假全绿自检」**：写完/改完断言类工具，注入一个人造漂移确认它**会变红**。
+  - ★ **UI 形态类纪律：模板里写的每一个类名，都必须有对应规则**（`check-ui-classes.mjs` 守这条）。
+    为什么单列一条：`class="pv-grid"` 而 `.pv-grid` 从未定义 —— **编译通过、`vue-tsc` 通过、TDesign 不报错**，
+    只表现为「卡片撑满整行 / 标题没样式 / 正文无内边距且不居中」。2026-09-23 在一个门户工程里
+    一次性踩到三处（`pv-grid`、`pv-section__title`、`portal-container`，最后一个是漏了 `cube-` 前缀的笔误），
+    全靠逐页看截图才逮到。三点经验：
+    ① 把「容器/网格/区块」这类**跨页复用**的形态类收进全局 `styles/*.less`，别让页面各写一份；
+      页面级样式用统一前缀（如 `pv-`），好让闸门和你自己都能一眼看出归属；
+    ② 写新页时**先写规则再挂类名**，或挂完立刻跑一次闸门；留着「看起来有样式的空壳类」比不写更坏；
+    ③ 反向自检时注意：这类脚本的**模板提取必须按标签配对**（不能非贪婪匹配 `</template>`）——
+      本闸门第一版就因为嵌套 `<template v-if>` 被提前截断而**静默漏检**，是反向测试把它抓出来的。
     实测法：在 `assets/core/` 放一个只在 core、不在 scaffold 的探针文件 → 应报 `FAIL scan-assets-refs` + `core/scaffold 差异数: 1` + `exit=1`；移除后回到全 PASS。
   - ★ **资产的真实结构是「两镜像」（**没有第三份**），不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
     | 层 | 件数 | 角色 | 参与同步？ |
