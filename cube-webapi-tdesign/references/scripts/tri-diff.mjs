@@ -59,6 +59,8 @@
  *   ALL-SAME        ① ② ④ 三根 md5 全同（③ 同或缺）          → 无需动作
  *   ENG-ONLY        技能侧都没有，仅工程有                    → **工程独有**（业务页 / 本地专有适配），无需动作
  *   ENG-DRIFT       ① == ②，工程不同或缺件                    → **以技能版覆盖工程**（§11.1）
+ *   ENG-FORKED      ① == ②，工程不同但**骨架锚点两侧全命中**    → 属预期：工程派生件（技能骨架 +
+ *                                                               业务结构性扩展），无需动作
  *   CORE-DRIFT      ① == 工程，② 是异类                      → **以 scaffold/工程 覆盖 core**
  *   SCAFFOLD-DRIFT  ① 独有（② ③ ④ 均缺），或命中 SCAFFOLD_ONLY_EXPECTED 且 ② 缺
  *                                                             → 属预期：DEV 验证页 / 工程外壳 /
@@ -72,7 +74,8 @@
  *   会把「技能两侧都缺、仅工程有」的业务页（`pages/admin/*Page.vue` 等）误报成 ENG-DRIFT，
  *   照提示「以技能版覆盖工程」就会删掉业务页。
  *
- * ★ 期望的「健康态」（**默认三根**）= ENG-DRIFT=0 · CORE-DRIFT=0，只剩 24 条 SCAFFOLD-DRIFT。
+ * ★ 期望的「健康态」（**默认三根**）= ENG-DRIFT=0 · CORE-DRIFT=0，只剩 24 条 SCAFFOLD-DRIFT
+ *   （工程若在骨架件上做了结构性扩展并在 PROJECT_FORKED 登记，则再多出相应条数的 ENG-FORKED，同属健康态）。
  *   若另以 `--demo` 启用第四根，则在其上再要求：DEMO-STALE=0 · DEMO-WL-STALE=0 ·
  *   SCAFFOLD-ONLY-WL-STALE=0，并固定出现 12 条 DEMO-DIVERGENT + 7 条 DEMO-ONLY。
  *   （2026-09-13 scaffold 换代 `-temp all` 后：SCAFFOLD-DRIFT 由 1 → 24，ALL-DIFF 由 4 → 0，
@@ -236,6 +239,62 @@ const PROJECT_EDITABLE = [
 const projectNorm = new Map(PROJECT_EDITABLE.map((e) => [e.rel, e.normalize]));
 const projectCustom = [];   // 命中归一化豁免的文件（预期，单独打印）
 
+/**
+ * ★ 工程「派生件」：工程在技能骨架上做了**结构性扩展**（不是文案级改写）。
+ *
+ * 为什么不能并进 PROJECT_EDITABLE：那张表的判据是「剥掉项目自填区段后哈希相等」，
+ * 只对**差异集中在一个可整体剥离的区段**的文件成立。派生件的差异散布全文件
+ * （既改了既有行，又追加了新行），哈希判据无从成立；硬写正则去剥，必然既宽又脆
+ * （剥多了把真漂移一起吞掉，剥少了仍报红灯）。
+ *
+ * 故改用**骨架锚点存在性**：人工挑一组「骨架地标行」，要求在**技能侧与工程侧同时逐字存在**。
+ *   · 全命中   → ENG-FORKED（属预期，不计漂移）
+ *   · 任一侧缺 → 照常报 ENG-DRIFT（骨架换代未合并，或骨架被删 —— 须人工裁决）
+ * ⚠️ 锚点只回答「骨架还在不在」，不回答「工程扩展对不对」—— 后者只能人工看。
+ *
+ * 本表与 check-assets-copied.mjs 的同名表**必须逐字一致**（两边判据同源）。
+ */
+const PROJECT_FORKED = new Map([
+  [
+    'layouts/BasicLayout.vue',
+    {
+      why: '顶栏用户区改为共用组件 `components/portal/UserMenu.vue`（门户与后台同一入口），原内联 t-dropdown 及其样式已随之删除',
+      anchors: [
+        "import { useAuthStore } from '@/stores/auth';",
+        "import { titleOf, areaTitleOf } from '@/api/menuTitles';",
+        "import MenuSidebar from '@/components/cube/MenuSidebar.vue';",
+        "import SettingPanel from '@/components/cube/SettingPanel.vue';",
+        "const menuTheme = computed<'light' | 'dark'>(() => (setting.mode === 'dark' ? 'dark' : 'light'));",
+        "const areaLabel = computed(() => areaTitleOf(areaRaw.value) || areaRaw.value || '概览');",
+        'function onTenant(v: SelectValue<SelectOption>) {',
+        'function toggleCollapsed() {',
+        '.content { padding: 20px; overflow: auto; background: var(--cube-content-bg); min-width: 0; }',
+        '.side.collapsed .side-brand b { display: none; }',
+      ],
+    },
+  ],
+  [
+    'pages/DashboardView.vue',
+    {
+      why: '新增「应用登录分析」整块（服务端聚合 KPI + 条形图 + 明细表）与菜单树空态提示；KPI / 图表 / 排行 / 日志等原有区块仍为技能骨架',
+      anchors: [
+        "import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'",
+        "import { getApi, getRaw } from '@/api/http'",
+        "const FRAMEWORK_AREAS = new Set(['admin', 'cube', 'sys', 'core', 'xcode', 'log'])",
+        'function isChildTableNode(n: any): boolean {',
+        'async function pool<T>(items: T[], limit: number, fn: (x: T) => Promise<void>) {',
+        'const areaStats = computed(() => {',
+        'function cssVar(name: string, fallback: string): string {',
+        'watch([topModules, areaStats], () => nextTick(renderCharts), { deep: true })',
+        'function cellOf(row: any, key: string): string {',
+        'function rankClass(idx: number) {',
+        '.dash-item--main :deep(.t-card__title),',
+      ],
+    },
+  ],
+]);
+const projectForked = [];   // 命中派生件豁免的文件（预期，单独打印）
+
 const rawMd5 = (p) => crypto.createHash('md5').update(norm(fs.readFileSync(p, 'utf8')), 'utf8').digest('hex').slice(0, 10).toUpperCase();
 const md5 = (p, rel) => {
   let t = norm(fs.readFileSync(p, 'utf8'));
@@ -253,11 +312,31 @@ function walk(root, rel = '', out = []) {
   return out;
 }
 
+/**
+ * 派生件判定：该文件在 PROJECT_FORKED 表内，且其**全部骨架锚点**在技能侧真源与工程侧都逐字存在。
+ * 任一侧缺失即返回 false（照常按 ENG-DRIFT 报出）——「骨架换代未合并」不能被静默吞掉。
+ */
+function forkedOK(rel, engPath) {
+  const fk = PROJECT_FORKED.get(rel);
+  if (!fk) return false;
+  let a = '';
+  let c = '';
+  try {
+    a = norm(fs.readFileSync(path.join(SCAFFOLD_SRC, rel), 'utf8'));
+    c = norm(fs.readFileSync(engPath, 'utf8'));
+  } catch {
+    return false;
+  }
+  const ok = fk.anchors.every((x) => a.includes(x) && c.includes(x));
+  if (ok) projectForked.push(rel);
+  return ok;
+}
+
 /* ── 对照 ───────────────────────────────────────────────── */
 const roots = [SCAFFOLD_SRC, CORE_DIR, ...(DEMO_SRC ? [DEMO_SRC] : []), ENG_SRC];
 const files = [...new Set(roots.flatMap((r) => walk(r)))].sort();
 
-const ALL_FLAGS = ['ALL-SAME', 'ENG-ONLY', 'ENG-DRIFT', 'CORE-DRIFT', 'SCAFFOLD-DRIFT', 'ALL-DIFF', 'DEMO-STALE', 'DEMO-DIVERGENT', 'DEMO-ONLY'];
+const ALL_FLAGS = ['ALL-SAME', 'ENG-ONLY', 'ENG-DRIFT', 'ENG-FORKED', 'CORE-DRIFT', 'SCAFFOLD-DRIFT', 'ALL-DIFF', 'DEMO-STALE', 'DEMO-DIVERGENT', 'DEMO-ONLY'];
 const GROUPS = Object.fromEntries(ALL_FLAGS.map((k) => [k, []]));
 const detail = [];
 let demoMissing = 0;   // ①② 有、③ 缺 —— 缺件≠漂移，仅作信息
@@ -290,6 +369,8 @@ for (const f of files) {
   if (!ea && !eb && ed) flag = 'DEMO-ONLY';            // 仅 demo 有（注册/找回密码页）
   else if (!ea && !eb && !ed && ec) flag = 'ENG-ONLY'; // 工程独有（业务新增页），技能侧本就不提供
   else if (ea && eb && ec && eq(ha, hb) && eq(hb, hc)) flag = 'ALL-SAME';
+  // ★ 派生件须在 ENG-DRIFT 之前判：技能两侧一致、工程侧不同，但骨架锚点仍在 ⇒ 属预期的结构性扩展
+  else if (eq(ha, hb) && forkedOK(f, pc)) flag = 'ENG-FORKED';
   else if (eq(ha, hb)) flag = 'ENG-DRIFT';             // 技能侧一致，工程分叉或缺件
   else if (!eb && SCAFFOLD_ONLY_EXPECTED.has(f)) flag = 'SCAFFOLD-DRIFT'; // ★ scaffold 独有且必然不在 core 内（外壳/DEV 页/上游基础设施）→ 属预期
   else if (eq(ha, hc)) flag = 'CORE-DRIFT';            // scaffold==工程，core 是异类
@@ -337,6 +418,7 @@ const exitCode = bad + stale + diverged > 0 ? 1 : 0;
 const FIX_HINT = {
   'ENG-ONLY': '工程独有（业务新增页 / 本地专有适配），技能侧不提供 —— 无需动作',
   'ENG-DRIFT': '以技能版（scaffold/core）覆盖工程 —— §11.1',
+  'ENG-FORKED': '属预期：工程派生件（技能骨架 + 业务结构性扩展，骨架锚点两侧全命中）—— 无需动作',
   'CORE-DRIFT': '以 scaffold/工程 覆盖 assets/core',
   'SCAFFOLD-DRIFT': '预期：工程外壳 / DEV 验证页 / `all` 保留的上游基础设施（共 24 件，恒不在 core 内）',
   'ALL-DIFF': '预期：工程外壳 4 件，不归本脚本判',
@@ -366,7 +448,7 @@ if (opt.json) {
   L.push('');
   L.push(`共 ${files.length} 文件（${roots.length} 根并集）`);
   L.push(`分类计数: ALL-SAME=${GROUPS['ALL-SAME'].length}  ENG-ONLY=${GROUPS['ENG-ONLY'].length}  ` +
-         `ENG-DRIFT=${GROUPS['ENG-DRIFT'].length}  CORE-DRIFT=${GROUPS['CORE-DRIFT'].length}  ` +
+         `ENG-DRIFT=${GROUPS['ENG-DRIFT'].length}  ENG-FORKED=${GROUPS['ENG-FORKED'].length}  CORE-DRIFT=${GROUPS['CORE-DRIFT'].length}  ` +
          `SCAFFOLD-DRIFT=${GROUPS['SCAFFOLD-DRIFT'].length}  ALL-DIFF=${GROUPS['ALL-DIFF'].length}  ` +
          `DEMO-STALE=${GROUPS['DEMO-STALE'].length}  DEMO-DIVERGENT=${GROUPS['DEMO-DIVERGENT'].length}  ` +
          `DEMO-ONLY=${GROUPS['DEMO-ONLY'].length}`);
@@ -382,7 +464,7 @@ if (opt.json) {
     }
   }
   L.push('');
-  const ORDER = ['ENG-DRIFT', 'CORE-DRIFT', 'DEMO-STALE', 'ENG-ONLY', 'SCAFFOLD-DRIFT', 'DEMO-DIVERGENT', 'DEMO-ONLY', 'ALL-DIFF'];
+  const ORDER = ['ENG-DRIFT', 'ENG-FORKED', 'CORE-DRIFT', 'DEMO-STALE', 'ENG-ONLY', 'SCAFFOLD-DRIFT', 'DEMO-DIVERGENT', 'DEMO-ONLY', 'ALL-DIFF'];
   for (const flag of ORDER) {
     const list = GROUPS[flag];
     if (!list.length) continue;
@@ -409,7 +491,7 @@ if (opt.json) {
     L.push('');
   }
   if (bad === 0) {
-    L.push(`✓ 健康态：ENG-DRIFT=0  CORE-DRIFT=0（剩余 SCAFFOLD-DRIFT / ALL-DIFF / DEMO-DIVERGENT / DEMO-ONLY 属预期，不是漂移）`);
+    L.push(`✓ 健康态：ENG-DRIFT=0  CORE-DRIFT=0（剩余 ENG-FORKED / SCAFFOLD-DRIFT / ALL-DIFF / DEMO-DIVERGENT / DEMO-ONLY 属预期，不是漂移）`);
     if (GROUPS['DEMO-STALE'].length) {
       L.push(`! 另有 ${GROUPS['DEMO-STALE'].length} 条 DEMO-STALE：demo 侧**陈旧副本**（不在已知差异白名单内）⇒ 建议同步（--strict 时计入失败）`);
     } else if (DEMO_SRC) {

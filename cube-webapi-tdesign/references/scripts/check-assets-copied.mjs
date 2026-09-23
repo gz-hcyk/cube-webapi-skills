@@ -29,6 +29,8 @@
  *              （实测 27 件资产中 4 件为纯假阳性）。二进制扩展名仍按字节比对。
  *   WARN —— 残留已下线资产：命中 `DEPRECATED` 黑名单（早期拆分件 / 第二套 HTTP 层 /
  *           遮蔽类型的 d.ts）。命中即「拷了旧版资产」，比缺失更危险（静默错版）。
+ *   INFO —— **「按项目定制」豁免**：命中 `PROJECT_EDITABLE`（文案级改写，归一化后哈希相等）
+ *           或 `PROJECT_FORKED`（结构级扩展，骨架锚点两侧全命中）的文件 —— 属预期差异，不计漂移。
  *   INFO —— `assets/optional/**` 的按需件，只提示不判定（不拷属正常）。
  *           ⚠️ **2026-09-13 起 `assets/optional/` 已取消**（3 件可选件全部提升进 `core/`），
  *              本分级当前不会触发；保留该分支仅为兼容旧版技能目录与历史工程盘点。
@@ -165,6 +167,64 @@ const PROJECT_EDITABLE = [
     normalize: (t) => t.replace(/const PROJECT = \{[\s\S]*?\n\};/, 'const PROJECT = {/*PROJECT*/};'),
   },
 ];
+/**
+ * ★ 工程「派生件」：工程在技能骨架上做了**结构性扩展**后的豁免表。
+ *
+ * 与 PROJECT_EDITABLE 的分工（两者都属「预期差异」，但判据必须不同）：
+ *   PROJECT_EDITABLE —— **文案级**改写：差异集中在某个可整体剥离的区段（如 `PROJECT` 常量）。
+ *                       判据 = 剥掉该区段后哈希相等（骨架仍须逐字一致）。
+ *   PROJECT_FORKED   —— **结构级**扩展：工程既改了既有行（换掉一段模板、给函数包 try/finally），
+ *                       又追加了新行，差异散布全文件 ——「剥区段后哈希相等」根本不可能成立。
+ *                       判据 = **骨架锚点存在性**（见下）。
+ *
+ * 为什么不给这类文件硬写正则把差异都剥掉：正则必然既宽又脆 ——
+ * 剥多了会把真漂移一起吞掉（静默失守），剥少了仍报红灯（噪声训练人忽略红灯）。
+ * 故改用**锚点**：人工挑一组「骨架地标行」（导入语句 / 关键函数签名 / 关键样式选择器），
+ * 要求它们在**技能侧与工程侧同时逐字存在**：
+ *   · 全部命中 → INFO（骨架仍在，工程扩展属预期，无需动作）
+ *   · 任一侧缺失 → WARN（技能骨架换代而另一侧未合并，或工程把骨架删了 —— 须人工裁决）
+ * ⚠️ 锚点只回答「骨架还在不在」，**不回答「工程扩展对不对」**—— 后者只能人工看。
+ *
+ * 登记本表前先自问：**这段扩展是业务专有，还是本该回灌技能？**
+ *   通用改进（与业务无关的能力增强）应回灌 scaffold/src（§11.1）并 sync 到 core，**不入本表**。
+ * 本表与 tri-diff.mjs 的同名表**必须逐字一致**（两边判据同源，改一处须同步改另一处）。
+ */
+const PROJECT_FORKED = [
+  {
+    rel: 'layouts/BasicLayout.vue',
+    why: '顶栏用户区改为共用组件 `components/portal/UserMenu.vue`（门户与后台同一入口），原内联 t-dropdown 及其样式已随之删除',
+    anchors: [
+      "import { useAuthStore } from '@/stores/auth';",
+      "import { titleOf, areaTitleOf } from '@/api/menuTitles';",
+      "import MenuSidebar from '@/components/cube/MenuSidebar.vue';",
+      "import SettingPanel from '@/components/cube/SettingPanel.vue';",
+      "const menuTheme = computed<'light' | 'dark'>(() => (setting.mode === 'dark' ? 'dark' : 'light'));",
+      "const areaLabel = computed(() => areaTitleOf(areaRaw.value) || areaRaw.value || '概览');",
+      'function onTenant(v: SelectValue<SelectOption>) {',
+      'function toggleCollapsed() {',
+      '.content { padding: 20px; overflow: auto; background: var(--cube-content-bg); min-width: 0; }',
+      '.side.collapsed .side-brand b { display: none; }',
+    ],
+  },
+  {
+    rel: 'pages/DashboardView.vue',
+    why: '新增「应用登录分析」整块（服务端聚合 KPI + 条形图 + 明细表）与菜单树空态提示；KPI / 图表 / 排行 / 日志等原有区块仍为技能骨架',
+    anchors: [
+      "import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'",
+      "import { getApi, getRaw } from '@/api/http'",
+      "const FRAMEWORK_AREAS = new Set(['admin', 'cube', 'sys', 'core', 'xcode', 'log'])",
+      'function isChildTableNode(n: any): boolean {',
+      'async function pool<T>(items: T[], limit: number, fn: (x: T) => Promise<void>) {',
+      'const areaStats = computed(() => {',
+      'function cssVar(name: string, fallback: string): string {',
+      'watch([topModules, areaStats], () => nextTick(renderCharts), { deep: true })',
+      'function cellOf(row: any, key: string): string {',
+      'function rankClass(idx: number) {',
+      '.dash-item--main :deep(.t-card__title),',
+    ],
+  },
+];
+
 const sizeOf = (p) => {
   try {
     return fs.statSync(p).size;
@@ -209,6 +269,28 @@ export function check(root) {
           `core:${rel}`,
           `内容漂移（骨架级）：src/${rel} 在剥离「按项目必改区段」后仍与技能资产不一致 —— 骨架被改过或使用了前代版本，请按 §11.1 回灌`,
         );
+        continue;
+      }
+      const forked = PROJECT_FORKED.find((e) => e.rel === rel);
+      if (forked) {
+        // 工程派生件：判据 = 骨架锚点在两侧都还在（对这类文件哈希判据不成立，理由见 PROJECT_FORKED 注释）
+        const srcText = readText(src);
+        const dstText = readText(dst);
+        const missHere = forked.anchors.filter((a) => !srcText.includes(a));
+        const missThere = forked.anchors.filter((a) => !dstText.includes(a));
+        if (!missHere.length && !missThere.length) {
+          info(
+            `core:${rel}`,
+            `${forked.why} —— 工程做了结构性扩展（属预期差异）；骨架锚点 ${forked.anchors.length} 条两侧全命中`,
+          );
+        } else {
+          warn(
+            `core:${rel}`,
+            `骨架锚点缺失（技能侧缺 ${missHere.length} 条 / 工程侧缺 ${missThere.length} 条）—— ` +
+              `技能骨架已换代而另一侧未合并，或工程把骨架删了；锚点只验证「骨架还在」，具体差异须人工裁决` +
+              (missThere.length ? `；工程侧首个缺失：\`${missThere[0]}\`` : `；技能侧首个缺失：\`${missHere[0]}\``),
+          );
+        }
         continue;
       }
       warn(
@@ -369,6 +451,12 @@ if (isMain) {
       L.push('\n结论：资产已拷齐，但有内容漂移 / 已下线残留 —— 逐条确认后以技能版覆盖，或显式说明该工程不在本技能链路内');
     } else {
       L.push('\n结论：资产已完整并入（与技能 assets/ 逐文件一致）');
+      if (n.INFO) {
+        L.push(
+          `     另有 ${n.INFO} 条「已按项目定制」提示（归一化哈希 / 骨架锚点比对通过）—— 属预期差异，无需动作；` +
+            `明细见上，登记表在 PROJECT_EDITABLE / PROJECT_FORKED`,
+        );
+      }
     }
     emit(L, outFile);
   }

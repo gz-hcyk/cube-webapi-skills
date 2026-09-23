@@ -1071,6 +1071,23 @@ PY
 > **第②步出口校验（拷完 assets 立刻跑）**：`node references/scripts/check-assets-copied.mjs <工程目录>` —— 逐文件比对 `assets/core/**` 与 `<工程>/src/**`：**缺文件 = FAIL**（core 之间是静态 import 关系，缺一即构建失败）；**内容漂移 / 命中已下线黑名单 = WARN**（版本不同步或拷了旧版资产，须逐条确认）。加 `--manifest` 打印映射表与黑名单，`--strict` 让 WARN 也计入失败。
 > 另两条必跑：`node references/scripts/check-starter-align.mjs <工程目录>`（第①步出口，期望退出码 0）；若走「并入既有工程」路线，**必须**先按 §4.1 用 CLI 生成骨架再并入 —— 不得凭空手搭 `package.json`/`tsconfig`/`index.html`。下表用于「并入既有工程」的对照拷贝。
 
+> ★ **「已按项目定制」的两种豁免 —— 别把正确的落地读成漂移**。工程按业务改写技能骨架件是**正常且被鼓励**的，
+> 但 `check-assets-copied` / `tri-diff` 的判据都是「与技能资产逐字一致」，于是会把「按铁律正确落地」误报成
+> 「内容漂移」，并给出「以技能版覆盖工程」的建议 —— **照做即抹掉业务代码**。故两脚本共用两张豁免表
+> （判据必须同源，改一处须同步改另一处）：
+>   · `PROJECT_EDITABLE` —— **文案级**改写：差异集中在一个可整体剥离的区段（典型是登录页 `PROJECT` 常量）。
+>     判据 = 剥掉该区段后哈希相等 ⇒ 记 INFO。当前登记：`pages/LoginView.vue`。
+>   · `PROJECT_FORKED` —— **结构级**扩展：工程既改了既有行（换掉一段模板、给函数包 `try/finally`）又追加了新行，
+>     差异散布全文件 ⇒「剥区段后哈希相等」**根本不可能成立**。判据改为**骨架锚点存在性**：表中 `anchors`
+>     的每一条必须在**技能侧（`references/scaffold/src/`）与工程侧同时逐字存在** ⇒ 记 `ENG-FORKED`（info）；
+>     任一侧缺失 ⇒ 照常报 WARN / `ENG-DRIFT`（技能骨架已换代而另一侧未合并，或骨架被删 —— 须人工裁决）。
+> ⚠️ 对派生件**不写正则去剥差异**：正则必然既宽又脆 —— 剥多了会把真漂移一起吞掉（静默失守），
+>    剥少了仍报红灯（噪声训练人忽略红灯）。锚点只回答「骨架还在不在」，**不回答「工程扩展对不对」**。
+> ⚠️ 登记前先自问：这段扩展是业务专有，还是**本该回灌技能**？通用改进（与业务无关的能力增强）应回灌
+>    主真相源 `references/scaffold/src/` 并 `node references/scripts/sync-assets.mjs`，**不入这两张表**。
+> ⚠️ 两张表都是**豁免**（放行），所以必须做**反向自检**：故意破坏一条锚点 / 一个区段，确认闸门**会**转红。
+>    恒真的豁免等于把该文件从闸门里彻底摘掉 —— 比不登记更糟（不登记至少还报红灯）。
+
 `assets/` 是**单层**（`core/` 一层，2026-09-13 起取消 `optional/`），且路径镜像目标工程的 `src/`，因此可以整目录拷：
 
 ```bash
@@ -1224,7 +1241,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 | 步 | 硬门（机器判，不过即不交付） | 判不了的部分（人工 / 运行期） |
 |---|---|---|
 | ① 骨架 | `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 0** | 工程仍是 CLI 产物形态（未手工重排 `package.json`/`tsconfig`/`index.html`） |
-| ② 资产 | `node references/scripts/check-assets-copied.mjs <工程目录>` **0 FAIL**；WARN 须逐条确认，判定为「有意偏离」的写进工程 README「已声明偏差」段 | `assets/` 更新后**重新拷贝**，而不是就地改目标工程（否则下次同步即漂移） |
+| ② 资产 | `node references/scripts/check-assets-copied.mjs <工程目录>` **0 FAIL**；WARN 须逐条确认。**两类「按项目定制」走豁免表不算 WARN**（文案级 → `PROJECT_EDITABLE`，结构级 → `PROJECT_FORKED` / `ENG-FORKED`，见 §11.1），其余有意偏离写进工程 README「已声明偏差」段 | `assets/` 更新后**重新拷贝**，而不是就地改目标工程（否则下次同步即漂移）。豁免表登记后须做反向自检（破坏一条锚点应转红） |
 | ③ 个性化 | `vue-tsc --noEmit`（或 `npm run build`）**0 错误**（编译清零铁律） | §4.21 枚举/外键渲染核查；登录 → 跳 `/dashboard`；菜单与权限来自 `GetMenuTree` |
 
 - 全量陷阱排障走 `references/troubleshooting.md`（正文只留结论，不内联过程）。

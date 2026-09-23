@@ -151,6 +151,11 @@
   --cube-content-max-width: 1280px;
   --cube-topbar-height: 56px;
 
+  /* 门户（Portal）尺寸：纯尺寸、不涉及颜色，故无暗色模式适配成本 ——
+     品牌色与主题切换时门户自动跟随。 */
+  --cube-portal-max-width: 1180px;
+  --cube-portal-gap: 14px;
+
   /* 设备/连接状态映射（IoT 业务可见语义） */
   --cube-status-online: var(--cube-accent-cyan);
   --cube-status-offline: var(--td-text-color-placeholder);
