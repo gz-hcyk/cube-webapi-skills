@@ -802,6 +802,51 @@ Cube 自带 OAuth 客户端工厂，接入新第三方登录源（企微/钉钉/
 
 **`kind` 参数实测复核**（与 §五表一致，无需改）：`1`=List 列表列、`2`=Detail 详情、`3`=AddForm 新增表单、`4`=EditForm 编辑表单、`5`=Search 搜索条件；`0` 无效（`code=-2`）。列表列**不含** `Secret`/`Urls` 等敏感大字段（`App` 的 `kind=1` 仅 14 列），**取全字段必须用 `kind=2`/`4`**。
 
+### 7.4 `AppLog` 实体契约与「用户维度」统计的正解（实测，2026-09-23）
+
+**结论先说**：`AppLog`（OAuth 应用授权日志，表 `AppLog`）**不能用于「某用户的最近/常用应用系统」统计** —— 它没有用户ID列，且框架写入方法不接收用户参数。此类需求须**自建流水表**。
+
+**实体契约（`NewLife.Cube.Entity.AppLog`，取自包内 XML 文档全量属性）**：
+
+| 分组 | 字段 |
+|---|---|
+| 业务 | `Id`(Int64) `AppId`(Int32) `Action` `Success` `ClientId` `RedirectUri` `ResponseType` `Scope` `State` `AccessToken` `RefreshToken` `TraceId` |
+| 审计 | `CreateUser`(nvarchar(50)) `CreateIP` `CreateTime` `UpdateIP` `UpdateTime` |
+| 其他 | `Remark`；导航属性 `App` / `AppName` |
+
+**三条硬约束（决定"能不能拿它做用户统计"）**：
+
+1. **没有 `CreateUserId`**。审计组只有字符串 `CreateUser` —— 与本框架其他实体（`OAuthApp`/`OAuthConfig`/`AppModule`…均带 `CreateUserID`）**不一致**，别想当然。
+2. **写入方法不接收用户参数**：`AppLog.Create(Int32 appid, String action, Boolean success, String remark)`。`CreateUser` 由 XCode 基类在 `Save()` 时从 `ManageProvider.User` 自动填充（XML 注释原文：「创建者。可以是设备编码等唯一使用者标识」）⇒ **外部无法干预其取值**。
+3. **实测同一用户写入值不一致**（取决于调用链上的身份对象形态）：
+
+| `Action` | 实测 `CreateUser` |
+|---|---|
+| `Authorize` / `Password` | `admin`（用户名） |
+| `GetResult` | `管理员`（显示名） |
+
+⇒ 按单一值精确匹配会**把同一用户拆成两条**（实测聚合结果即出现 `admin` 与 `管理员` 两行）。
+
+**两个顺带查明的事实**：
+- **`AppLog.Id` 就是 SSO 授权码载体**（XML：「授权码，即 `AppLog.Id` 的字符串形式，5 分钟内有效」）——解释了实测未登录授权时跳转地址里的 `/Sso/Auth2?id=7508381324838551552`。`Action` 实测取值：`Authorize` / `GetResult` / `Password`。
+- **`OAuthLog`（第三方登录源日志）有 `UserId` 数字列**（`Provider`/`ConnectId`/`UserId`/`Action`…）。框架在「登录源」日志用数字ID、在「应用授权」日志用字符串，**自身不一致** —— 不可据此推断 `AppLog` 也有用户ID。
+
+**正解：自建流水表承载用户维度**（用于门户/工作台的「最近使用」「常用应用」）
+
+```
+PortalVisit: Id(Int64) / UserId(Int32, 索引) / AppId(Int32) / AppName(String 50)
+             / Action(String 20) / IP(String 50) / VisitTime(DateTime)
+             联合索引 (UserId, VisitTime)
+```
+
+- **写入点**（与"进入应用一律走 SSO 授权"天然契合）：门户的进入入口走**自建端点** `GET /api/Portal/Enter?appId=N` → 取登录态 `UserId` → 写流水 → `302` 到 `/Sso/Authorize?client_id={App.Name}&redirect_uri={App.Urls首项}&response_type=code`。一次请求同时完成**留痕 + SSO 授权跳转**。
+- **查询**：最近 = `GROUP BY AppId ORDER BY MAX(VisitTime) DESC`；常用 = `GROUP BY AppId ORDER BY COUNT(*) DESC`。
+- **取舍**：只统计「经门户进入」的行为 —— 门户本就是 SSO 入口，口径反而更准；且彻底摆脱框架审计字段的脏数据与升级风险。XCode 自动建表，无需人工 DDL（铁律 R3）。
+
+> 若强行复用 `AppLog`，唯一可行路径是按 `IN (用户 Name, 用户 DisplayName)` 双值匹配 —— 仍有同名风险，且依赖框架内部行为不变。**不推荐。**
+
+> **⛔ 平台侧提醒**：Cube WebApi 版**没有**任何「我的应用 / 门户聚合」类内置 API（实测 477 个内置接口中不存在）。门户首页的聚合接口（可访问应用集、最近、常用）**必须自研控制器**。
+
 ---
 
 ## 八、自定义 API Action
