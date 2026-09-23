@@ -320,6 +320,10 @@ ControllerBaseX                                    根基类：路由前缀 / �
 - 不直接暴露实体 CRUD，提供所有控制器共有的基础设施：`[ApiController]` + `[Route("api/[area]/[controller]/[action]")]`、`CurrentUser` / `CurrentTenant` / `Menu` / `Token` 属性、请求前 `LoadToken()`（Bearer / X-Token / Cookie / Query 四种令牌）、`OnActionExecuting` 中多租户 `ValidateTenant` **fail-closed** 校验、统一 JSON 序列化（FastJson：CamelCase、Int64 作为字符串）、`Json(code,message,data)` 助手、`WriteLog` 审计。
 - **适用场景**：纯自定义接口（看板聚合、RPC 风格动作、第三方回调等），不绑定单一实体、不需要 `GetFields` / 字段校验。
 - **注意**：它不带 `SearchData` / `FindData` / `GetFields` / `Valid` 等实体辅助方法；若接口要复用魔方实体查询与数据权限，应继承 `ReadOnlyEntityController` 或更上层，而非 `ControllerBaseX`。权限仍需在 Action / Controller 上显式 `[EntityAuthorize]`。
+- **自定义 Action 的短路由（实测，2026-09-23）**：基类带 `[Route("api/[area]/[controller]/[action]")]`，会强加控制器名段。想暴露 `/api/Portal/MyApps` 这种两段路径，就在 Action 上写**绝对模板**：`[HttpGet("/api/Portal/MyApps")]`、`[HttpPost("/api/Portal/UpdateProfile")]`；控制器仍要 `[XxxArea]` 标记区域（否则菜单/权限注册不到）。
+- **未认证请求由基类统一拦下**：`OnActionExecuting` 里 `LoadToken()` 失败即返回 `{"code":403,"message":"认证失败"}`（**HTTP 仍是 200**），**不会进入 Action** ⇒ Action 内 `CurrentUser == null` 的 401 分支属**防御性兜底、正常链路不可达**（保留防基类行为变更，但别指望用它做鉴权）。前端只需判 `code != 0`。
+- **`CurrentUser` 拿实体**：它是 `NewLife.Model.IManageUser`（不是 `XCode.Membership.IUser`，二者是继承关系、**不可互转**），也拿不到会员实体的权限判定方法。正解：`CurrentUser?.ID` → `XCode.Membership.User.FindByKey(id)` 回查。`ManageProvider.Provider.Current` 走 Session，纯 API 恒 null。
+- **区域与控制器会自动登记进 `Menu` 表**：用 `[Menu(0, false)]` 隐藏。启动日志可见 `Insert Into Menu(...)` 与 `Update Menu Set Visible=0 Where ID=..`；若无任何角色持有该菜单权限，框架会自动把新菜单授权给系统角色。
 
 ### 3.3 ReadOnlyEntityController<TEntity>（只读 / 字典 / 统计）
 
@@ -877,6 +881,29 @@ PortalVisit: Id(Int64) / UserId(Int32, 索引) / AppId(Int32) / AppName(String 5
 
 2. **按时间清理**（可选，默认关闭）：定时调用 `DeleteBefore(DateTime.Now.AddMonths(-N))`；定时器可直接复用框架自带的 `CronJob` 表，不必另引调度组件。
 
+**★ 自建实体不要学上面这套 DDL（2026-09-23 实战修正）**：
+
+上面只适用于**改不动的框架内置表**。项目**自己的手写实体**应当用特性声明索引，让 XCode 随建表一起同步：
+
+```csharp
+[BindTable("PortalVisit", Description = "门户访问流水", ConnName = "Cube")]
+[BindIndex("IX_PortalVisit_UserId_VisitTime", false, "UserId, VisitTime")]
+[BindIndex("IX_PortalVisit_UserId_AppId", false, "UserId, AppId")]
+public partial class PortalVisit : Entity<PortalVisit> { /* ... */ }
+```
+
+- 签名只有 `(name, unique, columns)`，**多列写在一个逗号分隔的字符串里**（写成 4 个参数报 `CS1729`）。
+- 建表日志会直接出现 `[Cube] Create Index IX_... On PortalVisit (UserId, VisitTime)`。
+- 反过来，**手写 DDL 建出来的索引会被框架当成模型外的多余物**：日志出现
+  `DDL模式[On]，禁止修改表[Xxx]：Drop Index IX_...`（`On` 只提示不真删，`Full` 会真删）。
+- 另：手写实体**必须**带 `[BindTable]`，否则 `TableItem.Create` 直接抛 `ArgumentOutOfRangeException (Parameter 'type')`、
+  表永远建不出来 —— 详见 skill `xcode-handwritten-entity` 必做件 0。
+
+**MySQL 分支的写法修正**：不要指望「先查 `information_schema.statistics` 判断存在性再建」——
+实测所用的 XCode 12.2.2026.901 **未对外开放可直接执行标量/聚合查询的 DAL 入口**
+（`DAL.Select` 的 1 参 / 2 参 / 3 参重载**全部无法编译**，与本 skill 早期记载不一致；用 PowerShell 反射探明意图亦被安全策略拦截）。
+可行写法是**直接 `CREATE INDEX` 并吞掉「重复定义」异常**（MySQL 1061 / PostgreSQL 42P07），幂等效果等价且少一次往返。
+
 **★ 一条容易踩空的坑**：`XCode:Migration` 若设为 **`Full`**，框架会**删除模型外的索引** ⇒ 手工补的索引会被清掉。生产环境必须保持 **`On`**（仅新建表/列）。
 
 **雪花 ID 做时间裁剪？不可靠**：雪花内嵌时间戳、单机单调递增，理论上可用 `Id >= snowflake(startTime)` 免建索引做区间下推。但**多实例部署时不同 `workerId` 的雪花不保证全局有序**（时钟回拨、机器时差），边界会错漏。仅作了解，不作为方案。
@@ -1273,6 +1300,11 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 
 ### 14.7 标准冒烟探针脚本（curl）
 完整五步脚本（登录→token→401→匿名门户→`Detail?id=`）与判定标准、PowerShell 取 token 替代写法 → **`references/curl-smoke.md`**。改登录/路由契约或部署后必跑（§十五.7 同引用）。
+
+**★ 令牌必须现登现用（实测，2026-09-23）**：`UserToken` 表里存的历史令牌**在服务重启后即失效**，
+直接拿库里读出来的 `Token` 当 Bearer 用，所有接口会被 `ControllerBaseX` 统一拦成
+`{"code":403,"message":"认证失败"}`（HTTP 200）——**很容易误判成"接口没授权/权限配错"**。
+冒烟脚本第一步必须走 `POST /Auth/Login` 换新令牌。同一份令牌串长度每次登录都不同（服务端掺了随机量）。
 
 ### 14.8 后台项目首次启动排错（实测坑，2026-09）
 | 现象 | 根因 | 修法 |
