@@ -744,6 +744,43 @@ Cube 自带 OAuth 客户端工厂，接入新第三方登录源（企微/钉钉/
 
 ---
 
+### 7.2 内置 OAuth SSO 服务端（IdP，SsoController）
+
+`AddCube()`/`UseCube()` 自动注册 `SsoController`，提供**开箱即用的 OAuth 2.0 / OIDC 授权服务端**（本系统即 IdP）。无需手写控制器，但**纯 WebApi 下有一处必须补：登录页桥接**（见下）。
+
+**关键端点（路径前缀 `/Sso`，无 `/api`）**：
+
+| 端点 | 方法 | 用途 |
+|---|---|---|
+| `/Sso/Authorize` | GET | 授权码申请（未登录 → 内置登录入口跳转） |
+| `/Sso/Auth2` | GET | 签发授权码并回跳 `redirect_uri`（已认证时直接发码，无 Consent 页） |
+| `/Sso/Token` | POST | **统一令牌端点**（覆盖 authorization_code/password/client_credentials/refresh_token，以 `grant_type` 区分） |
+| `/Sso/UserInfo` | GET | 用户信息（`Bearer`/`X-Token`） |
+| `/Sso/Verify` | GET/POST | 令牌校验 |
+| `/Sso/Logout` | GET | 登出（`end_session_endpoint`） |
+| `/Sso/Login/{name}` | GET | 第三方登录入口（企业微信/钉钉/GitHub/微软，走 `OAuthConfig`） |
+| `/Sso/LoginInfo/{id}` | GET | 第三方回调 |
+| `/Sso/GetKey` | GET | JWKS（id_token RS256 公钥） |
+| `/.well-known/openid-configuration` | GET | OIDC 发现文档（实测 200） |
+
+**⚠️ 三处实测校正（2026-09-23，NewLife.Cube 6.15.2026.0901，以 HTTP 探活为权威）**：
+1. **令牌端点不是 `/Sso/Access_Token`，是 `/Sso/Token`**（以 `/.well-known/openid-configuration` 的 `token_endpoint` 为准）。四种 grant 全走 `/Sso/Token`：`grant_types_supported=[authorization_code,password,client_credentials,refresh_token]`。`/Sso/Access_Token` 仅为历史别名，对外契约统一用 `/Sso/Token`。
+2. **未登录 `GET /Sso/Authorize` → `302` 到 `/Admin/User/Login?ssoAppId=<id>&r=%2fSso%2fAuth2%3fid%3d<id>`**（内置登录入口；回跳 `r=/Sso/Auth2?id` 由该端点签发授权码）。未知/禁用 `client_id` → `{"code":500,"message":"应用[xxx]不可用"}`。
+3. **纯 WebApi 构建下 `GET /Admin/User/Login` 返回 404**（无 Razor 视图）→ 必须由本系统提供**登录桥接**，否则未登录 SSO 流程断裂。
+
+**登录桥接（Login Bridge，纯 WebApi 必需）**：
+- 新增控制器接管 `GET /Admin/User/Login`，透传 `ssoAppId` 与 `r` 参数，302 到同域前端登录页 `https://sso.example.com/login?ssoAppId=<id>&r=<r>`；
+- 前端登录页提交账号密码 → `POST /Auth/Login`（放行，见 §7）→ 设置同域 `.Cube.Session` Cookie；
+- 前端携带 Cookie 回跳 `r`(`/Sso/Auth2?id=…`) → SSO 识别已认证会话 → 直接回跳 `redirect_uri?code&state` → RP 用 `code` 调 `/Sso/Token(grant_type=authorization_code)` 换 JWT。
+
+**客户端登记（`OAuthApp` 表，落 Cube 库）**：`Name`=client_id（唯一）、`Secret`、`Urls`=回调白名单（逗号分隔多值）、`Scopes`、`TokenExpire`、`Enable`、`Category`、`RoleIds`；框架客户端校验走 `IOAuthAppService`。**已播种测试客户端** `webclient`(Secret=sec_123456, Enable=1, Urls=http://localhost:5173/callback,https://app.example.com/callback, Scopes=user, TokenExpire=86400)，可直接联调。
+
+**第三方源（`OAuthConfig` 表）**：Provider∈{企业微信,钉钉,GitHub,微软}（均为内置客户端，无需自写），填 `AppId`/`Secret`/`AuthUrl`/`AccessUrl`/`UserUrl`/`AutoRegister`/`Enable`；入口 `/Sso/Login/{provider}`，回调 `/Sso/LoginInfo/{provider}`。
+
+**密钥**：access_token 用 `JwtSecret`(HS256，落 `Config/Cube.config`，见 §1.3)；id_token 用 RS256（公钥经 `/Sso/GetKey` 暴露）。`scopes_supported=[openid,profile,email]`；`response_types_supported=[code]`。
+
+---
+
 ## 八、自定义 API Action
 
 ```csharp
