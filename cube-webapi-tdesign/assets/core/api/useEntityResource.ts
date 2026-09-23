@@ -37,9 +37,13 @@ export interface DataField {
   precision?: number;
   scale?: number;
   /**
-   * 数据库是否允许为空（NOT NULL 约束）。布尔键**恒下发**（实测 129/129 字段全带），
-   * 故判据统一写 `=== true`，**不要依赖「键缺失」**。
-   * **注意**：这是数据库层约束，不等同于界面必填；界面必填看 `required`。
+   * 是否允许为空（对应数据库 NOT NULL 约束）。**三态语义，缺省按「允许为空」处理**：
+   *   - `false`（明确 NOT NULL）→ 不可空，`inferRequired` 据此推断为必填；
+   *   - `true` / **未下发（null·undefined）** → 允许为空，**不加必填校验**。
+   * 本框架（NewLife.Cube 自带控制器）**恒下发**该键（实测 129/129 字段全带），
+   * 但自研控制器 / 精简 DTO 可能整键缺失——故 `inferRequired` 的判据写作 `!== false`
+   * （**唯一**非 `=== true` 的布尔位，因为它要区分「未下发」第三态）。
+   * **注意**：这是数据库层约束；UI 层显式必填看 `required`。
    */
   nullable?: boolean;
   /** 界面是否必填（true → 表单加必填校验 + 红星），这才是 UI 层的必填依据 */

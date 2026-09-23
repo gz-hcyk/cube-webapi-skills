@@ -23,6 +23,7 @@ import {
   formItemName,
   selectFormControl,
   groupFormItemsByCategory,
+  resolveFieldBehavior,
   DEFAULT_CATEGORY,
 } from '@/api/fieldRender';
 import { normalizeSchema, type DataField } from '@/api/useEntityResource';
@@ -152,7 +153,11 @@ const renderFields = computed<RenderField[]>(() => {
           label: f.displayName ?? f.name,
           control,
           options: opts && opts.length ? opts : undefined,
-          required: !!f.required,
+          // 必填走与 ListPage/FormDialog 同一判据（resolveFieldBehavior）：
+          // required===true 或 nullable===false 才必填；**元数据未下发一律不必填**。
+          // ⚠️ 勿退回 `!!f.required`——那样会漏掉 `nullable===false` 的必填，
+          //    且与 buildFormRules 分支判据不一致（同页两条链路行为分叉）。
+          required: resolveFieldBehavior(f).required,
           placeholder: f.description,
           category: f.category ?? undefined,
         };

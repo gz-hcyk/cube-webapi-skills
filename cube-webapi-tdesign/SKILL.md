@@ -495,14 +495,27 @@ stylelint.config.js   package-lock.json          ← 全是「工具链配置文
 > ① 枚举字典**不用** `mapField`，走独立的 **`dataSource`**（26 实体 17 枚举类型 105 处全覆盖、缺口 0）；读 `field.map` 或只认 `mapField` 字典串都会把枚举渲染成原始 Int32。
 >
 > **版本前提（重要）**：`dataSource` 为 Cube **6.15.x** 观测通道。**6.13.x** 下枚举列由后端 `SetLov` 下发 **`lovCode = "Enum.{命名空间}.{枚举名}"`**，前端 `useLov` 拉 `/api/Admin/Lov/Meta` 消费（列/表单/详情/搜索五组均生效）；`dataSource`/`mapField` 字典串在该版本对枚举均为空。落地前先抓一次 `GetPage` 确认实际通道，勿跨版本套用。
-> ② **`required` 全量不为 true（1452 个描述符里 `required:true` 出现 0 次）**，后端不提供独立必填信号（键本身恒下发，值为 `false`）—— 但这**不等于**无法推必填，见 ③。
+> ② **`required` 全量不为 true（1452 个描述符里 `required:true` 出现 0 次）**，后端不提供独立必填信号（键本身恒下发，值为 `false`）—— 但这**不等于**无法推必填，见 ③ 与 ⑦。
 > ③ ★ **布尔键恒下发，一律 `=== true` 判定**（本契约最易踩的坑）。**权威依据**：Cube 源码 `NewLife.CubeNC/ViewModels/DataField.cs` 中 `Nullable`/`PrimaryKey`/`ReadOnly`/`Visible`/`Required` 均为**非空 `Boolean` 值类型**，`System.Text.Json` 默认**不忽略 false**（全仓仅 `AiController.cs` 设 `WhenWritingNull`，只忽略 null）⇒ 这些键**恒下发**。实测抓包 `userpage.json`：129 个字段描述符**全部显式带** `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`。
 > ⇒ 统一写 `f.xxx === true`，**不要写 `f.xxx === false`，也不要依赖「键缺失」做判断**。**已废弃的错误断言**：曾据一次抓包（只看 `primaryKey:true` 单个字段）误判为「Cube 省略取值为 `false` 的布尔键」，据此推出「键缺失即 false」「推必填只能用 `nullable !== true`」——**该断言已被证伪，键并不省略**。
-> 必填判据：优先 **后端 `required === true`**；否则由 `inferRequired` 推断（`nullable === true` ⇒ 不必填），并**排除主键与服务端填充的审计字段**（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`），否则新增表单被系统字段卡死。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定。
+> 必填判据见 ⑦（**三级判定**，含「未下发」的兜底方向）。同理 `readOnly`/`visible`/`primaryKey` 一律 `=== true` 判定。
 > ℹ️ `length`/`maxWidth`/`textAlign`/`dataAction`/`header`/`headerTitle` 来自**另一个类** `NewLife.CubeNC/ViewModels/ListField.cs`（**不在** `DataField.cs`），抓包是**多源合并视图**，TS 侧仍按可选声明。
 > ④ 未填字段仍须由 `FormDialog.defaultValue` 给「数值 0 / 布尔 false / 空串」，否则 `null` 会被 NOT NULL 列拒绝（实测 400）。
 > ⑤ 全量属性取值统计（1452 个字段描述符）：`dataSource` 105 / `mapField` 236 / `nullable` 387 / `length` 322 / `category` 373 / `itemType` 12 / `required` **0**。⚠️ 布尔项是**取值为 `true` 的次数**（如 387 表示 387 个字段 `nullable:true`），**不是键出现次数**——若是键出现次数应为 1452（=100%）。此处曾误读并推出「Cube 省略 false 布尔键」，见 ③。
-> ⑥ **实测校验值**（可作回归基线）：某业务实体新增表单应得 **17 个必填标记**，其中 `nullable: true` 的字段（如 `BillNo`/`Remark`）正确豁免。拿到 0 个必填标记 ⇒ 必是踩了 ③。
+> ⑥ **实测校验值**（可作回归基线）：某业务实体新增表单应得 **17 个必填标记**，其中 `nullable: true` 的字段（如 `BillNo`/`Remark`）正确豁免。拿到 0 个必填标记 ⇒ 必是踩了 ③。该基线取自**本框架自带控制器**（`nullable` 恒下发）；若换成不下发 `nullable` 的后端，必填标记会收缩到只剩 `required: true` 的字段——**属预期，不是 bug**（见 ⑦）。
+> ⑦ ★★★ **必填判据 = 三级判定（2026-09-23 收敛，`inferRequired` 按此实现）**：
+
+| 字段元数据 | 前端行为 | 依据 |
+|---|---|---|
+| `required === true` | **必填** | 后端 UI 层明确要求 |
+| 否则 `nullable === false` | **必填** | 明确 NOT NULL（明确不允许为空） |
+| `nullable === true` 或 **未下发（null · undefined）** | **不必填** | **缺省宽松** |
+
+> ⇒ 一句话：**只有后端明确说「必填」或「不允许为空」才加必填校验；没明说的一律按可空处理。**
+> 另**排除**主键/自增/只读字段与服务端填充的审计字段（`CreateUserID`/`CreateTime`/`UpdateUserID`/`UpdateTime`/`CreateIP`/`UpdateIP`）——它们由系统赋值，否则新增表单被系统字段卡死。
+> ⚠️ **`nullable` 是唯一非 `=== true` 的布尔位**：它要区分「未下发」这第三态，故判据写作 `!== false`（未下发视同可空）。**别把这个写法照搬给** `primaryKey`/`readOnly`/`visible`（它们仍是 `=== true`）。
+> ⚠️ **为何改（历史教训）**：旧实现把「未下发 `nullable`」兜底成**必填**（`if (f.nullable === true) return false; … return true;`）。对本框架无碍（键恒下发），但**自研控制器 / 精简 DTO / 第三方实现常整键缺失**，会把表单卡在一堆后端从未声明要求的字段上。故兜底方向改为宽松。
+> 落地单源：`fieldRender.resolveFieldBehavior(f)` / `inferRequired(f)`；`FormDialog` 与 `ConfigView`（GetFields 链路）**共用同一判据**，勿在组件内另写 `!!f.required` 之类的简化版（会造成同页两条链路行为分叉）。
 
 **外键 lookup 回退与别名（实测 2026-09）**：`useLookups` 要找的是「字段名基」对应的控制器，但字段名基常与真实控制器名不一致，且外键可能指向框架内置表（业务库里根本没有）。落地两条表 + 命中率优先的候选顺序：
 

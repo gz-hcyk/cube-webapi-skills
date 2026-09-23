@@ -12,19 +12,27 @@
  *   【权威依据】Cube 源码 `NewLife.CubeNC/ViewModels/DataField.cs`：
  *     `Nullable` / `PrimaryKey` / `ReadOnly` / `Visible` / `Required` 均为**非空 `Boolean` 值类型**，
  *     `System.Text.Json` 默认**不忽略 false**（全仓仅 `AiController.cs` 设 WhenWritingNull，只忽略 null）
- *     ⇒ 这些键在真实 GetPage 响应中**恒下发**。
+ *     ⇒ 这些键在**本框架自带控制器**的 GetPage 响应中**恒下发**。
  *   实测抓包 `userpage.json`：129 个字段描述符**全部显式带**
  *     `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`。
  *   【已废弃的错误断言】曾据一次抓包（只看 `primaryKey:true` 那一个字段）误判为
  *     「Cube 序列化时省略取值为 false 的布尔属性」，并据此推出「键缺失即 false」
- *     「推必填只能用 `nullable !== true`」。**该断言已被证伪：键并不省略。**
+ *     「推必填只能用 `nullable !== true`」。**该断言已被证伪：本框架的键并不省略。**
  *     同源错误：频次统计 `nullable` 387 / `required` 0 被误读成「键出现次数」，
  *     实为「取值为 true 的次数」（若是键出现次数则应为 1452 = 100%）。
  *
- *   正确判据（`resolveFieldBehavior` / `inferRequired` 已按此实现，无需改动）：
- *     - 必填：优先**后端 `required === true`**；否则由 `inferRequired` 推断，
- *       其中 `nullable === true` ⇒ 不必填（键恒下发，此判定稳定）；
- *     - 其余布尔位（`primaryKey` / `readOnly` / `visible`）一律 `=== true`。
+ *   ⚠️ 但「恒下发」只对**本框架自带控制器**成立。一旦后端换成自研控制器 / 精简 DTO /
+ *     第三方实现，`nullable`、`required` **可能整键缺失**——故必填判据必须对
+ *     「未下发」给出明确兜底，且兜底方向是**宽松（不必填）**，见下方 `inferRequired`。
+ *
+ *   ★★★ 必填判据（**三级判定**，2026-09-23 收敛）：
+ *     ① `required === true`                              → **必填**
+ *     ② 否则 `nullable === false`（明确 NOT NULL）        → **必填**
+ *     ③ `nullable === true` 或**未下发（null·undefined）** → **不必填（默认可空）**
+ *     ⇒ 一句话：**只有后端明确说「必填」或「不允许为空」才必填；没明说的，一律按可空处理。**
+ *   其余布尔位（`primaryKey` / `readOnly` / `visible`）仍严格 `=== true`。
+ *   ⚠️ `nullable` 是**唯一例外**：它需区分「未下发」这第三态，故判据写作 `!== false`
+ *     （未下发视同 `true` = 可空）。这是唯一非 `=== true` 的布尔位，勿照搬给其它键。
  *   注：`length`/`maxWidth`/`textAlign`/`dataAction`/`header`/`headerTitle` **不在 `DataField.cs`**，
  *   而属 `NewLife.CubeNC/ViewModels/ListField.cs`，抓包为**多源合并视图**，TS 侧仍按可选声明。
  */
@@ -67,7 +75,7 @@ export interface FieldBehavior {
   required: boolean;
   /** 是否只读（控件禁用，值只展示） */
   readOnly: boolean;
-  /** 数据库是否允许为空（NOT NULL 约束），仅作辅助提示 */
+  /** 是否允许为空：仅「明确 NOT NULL（`nullable === false`）」为 false；`true` / 未下发 均为 true */
   nullable: boolean;
   /** 是否主键（主键由系统维护，表单/列表通常排除） */
   primaryKey: boolean;
@@ -76,31 +84,28 @@ export interface FieldBehavior {
 /**
  * 推导字段的展示行为。
  *
- * **必填判定（关键，易错）**：
- *  - `required === true` → 必填（UI 层明确要求，**唯一权威信号**）；
- *  - 否则用 `nullable` **兜底推断**，但排除「系统维护字段」：主键、自增、只读、
- *    以及 CreateTime/UpdateTime/CreateUserID/UpdateUserID/CreateIP 等审计字段——
- *    它们由系统自动赋值，不应要求用户填写。
+ * **必填判定（三级，关键且易错）**：
+ *  - `required === true` → 必填（后端 UI 层明确要求）；
+ *  - 否则由 `inferRequired` 用 `nullable` 推断：`nullable === false`（明确 NOT NULL）→ 必填；
+ *  - `nullable === true` 或**未下发** → 不必填（**缺省宽松**，见文件头判据表）。
  *
- *  > ★ 为何统一写 `=== true`（而非 `!== false`）：本后端布尔键**恒下发**
- *  > （源码 `DataField.cs` 中为非空 Boolean，System.Text.Json 默认不忽略 false；
- *  > 实测 `userpage.json` 129/129 字段全带 `"nullable":false`）。
- *  > 既然键必存在，`f.nullable === true` 与 `f.nullable !== false` 等价，
- *  > 但 `=== true` 与 `required === true` 书写一致，且不会把「未下发」误当「可空」。
- *  > ⚠️ 历史误判：曾据「Cube 省略取值为 false 的布尔键」推出「键缺失即 false」，
- *  > 那是**错的**，勿再采用。
+ *  > ★ 为何「未下发」判可空：本框架虽恒下发布尔键，但自研控制器 / 精简 DTO 常整键缺失。
+ *  > 若把「未下发」当必填，表单会被一堆后端从未声明要求的字段卡死。
+ *  > ⚠️ 历史实现 `if (nullable === true) return false; … return true;` 把「未下发」
+ *  > 兜底成必填，**已废弃**（2026-09-23 按用户要求改为宽松兜底）。
  *
- *  > 为何不把 `required === false` 当作「明确不必填」：实测本后端对所有字段都下发
+ *  > 为何不把 `required === false` 当作「明确不必填」：实测本框架对全部字段都下发
  *  > `required:false`（1452 个描述符里 0 个 true），若照此判定则连 `Name` 这类
- *  > 业务必填项都不校验。故 `required` 只在为 `true` 时生效，其余交给 `nullable` 兜底推断。
+ *  > 业务必填项都不校验。故 `required` 只在为 `true` 时生效，其余交给 `nullable` 推断。
  */
 export function resolveFieldBehavior(f: DataField): FieldBehavior {
   const required = f.required === true ? true : inferRequired(f);
   return {
     required,
     readOnly: f.readOnly === true,
-    // 语义对齐 DataField.nullable：仅显式 true（可空）时为 true（布尔键恒下发，见文件头）
-    nullable: f.nullable === true,
+    // 是否允许为空：仅「明确 false（NOT NULL）」视为不可空；true / 未下发(null·undefined) 均视为可空。
+    // 与 inferRequired 同源（均为「未下发=宽松」）；本框架恒下发，故对它行为不变。
+    nullable: f.nullable !== false,
     primaryKey: f.primaryKey === true,
   };
 }
@@ -112,17 +117,22 @@ const SYSTEM_MANAGED_FIELDS = new Set([
 ]);
 
 /**
- * `required` 缺省时用 `nullable` 兜底推断是否必填。
+ * `required !== true` 时用 `nullable` 推断是否必填（**缺省宽松**）。
  * 排除主键/自增/只读/系统维护字段，避免把审计字段误判为用户必填。
  *
- * ★ 判据：`nullable === true`（显式「可空」）⇒ 不必填。布尔键恒下发（见文件头），判据稳定。
+ * ★ 判据（2026-09-23 收敛）：**只有「明确不允许为空」才推断为必填**——
+ *   - `nullable === false`（显式 NOT NULL）→ 必填；
+ *   - `nullable === true` 或 **未下发（null / undefined）** → 不必填。
+ *   即「后端没指定是否可为空」时，一律按**允许为空**处理，不加必填校验。
+ *   （`nullable` 需区分第三态，故此处用 `!== false`——这是文件头「布尔位一律 `=== true`」
+ *     的唯一例外；本框架恒下发，故对其行为与旧实现完全一致。）
  */
 function inferRequired(f: DataField): boolean {
-  if (f.nullable === true) return false; // 显式「可空」→ 不必填
+  if (f.nullable !== false) return false; // 可空 / 未下发 → 不必填（缺省宽松）
   if (f.primaryKey || f.isIdentity) return false; // 主键/自增由系统生成
   if (f.readOnly === true) return false; // 只读字段无需用户填写
   if (SYSTEM_MANAGED_FIELDS.has(f.name.toLowerCase())) return false; // 审计字段自动赋值
-  return true;
+  return true; // 仅「明确 NOT NULL」且非系统维护字段 → 必填
 }
 
 // ---------- 字段分类辅助 ----------
@@ -909,7 +919,9 @@ export function buildFormItems(
  * 如 RoleName→roleID），保证规则键与 t-form-item 的 name 完全一致，规则才真正生效。
  *
  * **规则生成（对齐铁律 R2：组件库/框架内置校验规则优先，禁止手写正则重复实现）**：
- *  1) 必填：resolveFieldBehavior(f).required 为真 → `{ required: true, message }`。
+ *  1) 必填：`resolveFieldBehavior(f).required` 为真 → `{ required: true, message }`。
+ *     ⚠️ 该判据为**三级**（见文件头判据表）：`required===true` 或 `nullable===false` 才必填；
+ *     **`nullable` 未下发（null / undefined）时一律按可空处理，不加必填校验**（缺省宽松）。
  *  2) itemType === 'mail' → 追加 TDesign/async-validator **内置** `{ type:'email', message }`
  *     （非必填空值由 async-validator 自动跳过格式校验，无需手工判空）。
  *  3) itemType === 'mobile' → 追加 TDesign **内置** `{ telnumber: true, message }`

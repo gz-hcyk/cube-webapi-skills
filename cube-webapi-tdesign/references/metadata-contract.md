@@ -106,7 +106,7 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 | `itemType` | string? | 特化编辑器：`html`/`mail`/`mobile`/`TimeSpan` | 富文本 / 邮箱 / 手机号输入 |
 | `length` | number? | 字符串长度上限 | `maxlength`；>200 视为长文本→textarea |
 | `required` | boolean? | **界面是否必填**（UI 语义） | `true` ⇒ 必填校验 + 红星 |
-| `nullable` | boolean? | **数据库是否允许为空**（NOT NULL 约束） | 仅作必填的兜底推断，**不直接等于界面必填** |
+| `nullable` | boolean? | **是否允许为空**（NOT NULL 约束）。**三态**：`false`=明确不可空 / `true`=可空 / **未下发=按可空处理** | 仅 `false` 参与必填推断（见 §4）；`true` 与未下发均不加必填校验 |
 | `primaryKey` | boolean? | 主键 | 列表/表单排除，不要求用户填写 |
 | `isIdentity` | boolean? | 自增标识 | 新增表单隐藏、禁用 |
 | `readOnly` | boolean? | **是否只读** | 表单控件 `disabled`，值只展示 |
@@ -119,20 +119,26 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 | `map` | `Record<string,string>`? | 枚举/字典映射（值→显示） | 下拉选项 + 列表回显 label |
 | `dataSource` | `{text,value}[]` \| `Record<string,string>`（**双形态**）? | 外键/数据字典选项源 | 下拉选项（优先级低于 `map`），经 `fieldRender.dictEntries()` 归一 |
 
-> **必填判定（易错，务必按此实现）**：`required` 是 UI 语义、`nullable` 是数据库约束，二者**不可互相推导**。
-> - `required === true` → 必填（**唯一权威信号**）；
-> - 其余情况 → 由 `fieldRender.inferRequired()` 兜底推断：**`nullable === true` ⇒ 不必填**；
->   再排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`…）。
-> - ⚠️ 本后端实测对所有字段下发 `required:false`（**1452 个描述符中 `required:true` 出现 0 次**），若把
+> **必填判定（三级，2026-09-23 收敛，务必按此实现）**：`required` 是 UI 语义、`nullable` 是数据库约束，二者**不可互相推导**。
+> - `required === true` → 必填；
+> - 否则 `nullable === false`（明确 NOT NULL）→ 必填；
+> - `nullable === true` 或 **未下发（null / undefined）** → **不必填（缺省宽松）**。
+>   另排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`…）——它们由系统赋值。
+>   ⇒ 一句话：**只有后端明确说「必填」或「不允许为空」才必填；没明说的一律按可空处理。**
+> - ⚠️ 本框架实测对所有字段下发 `required:false`（**1452 个描述符中 `required:true` 出现 0 次**），若把
 >   `required===false` 当「明确不必填」，连 `Name` 这类业务必填项都不会校验。**故 `required` 仅在为 `true` 时生效**。
-> - ⚠️ 反例：直接用 `nullable===false` 当必填，会把 `ID`/`CreateTime`/`CreateUserID` 也标红星要求用户填。
+> - ⚠️ 反例：直接用 `!nullable`（即把「未下发」也当不可空）当必填，会把 `ID`/`CreateTime`/`CreateUserID` 也标红星；这类系统字段须由排除表豁免。
+> - ⚠️ **`nullable` 是唯一非 `=== true` 的布尔位**：它要区分「未下发」这第三态，判据写作 `!== false`（未下发视同可空）。
 > - ⚠️ **布尔键「恒下发」——不得据「键缺失」做判断**（旧版本文档曾断言「Cube 省略取值为 false 的布尔键」，
 >   **已证伪**）：频次统计 `nullable` 387 / `required` 0 曾被误读成「键出现次数」，实为「**取值为 `true` 的次数**」
 >   （若是键出现次数则应为 1452 = 100%）。真实 `GetPage` 抓包 `userpage.json`：129/129 字段全部显式带
 >   `"nullable":false,"required":false,"primaryKey":false,"readOnly":false`。
 >   **源码依据**：`NewLife.CubeNC/ViewModels/DataField.cs` 中这些属性均为非空 `Boolean` 值类型，
 >   `System.Text.Json` 默认不忽略 false（全仓仅 `AiController.cs` 设 `WhenWritingNull`，只忽略 null）。
->   故统一写 `f.xxx === true`，**不要写 `f.xxx === false`，也不要依赖键缺失**。
+>   故 `primaryKey`/`readOnly`/`visible` 等统一写 `f.xxx === true`，**不要写 `f.xxx === false`，也不要依赖键缺失**；
+>   **唯一例外是 `nullable`** —— 它需区分「未下发」第三态，判据为 `!== false`（未下发视同可空，见上「必填判定」）。
+>   ⚠️ 上述「恒下发」只对**本框架自带控制器**成立；自研控制器 / 精简 DTO / 第三方实现可能整键缺失，
+>   故必填兜底方向必须是**宽松（不必填）**，否则表单会被卡在一堆后端从未声明要求的字段上。
 > 统一实现见 `fieldRender.resolveFieldBehavior()`。
 >
 > ℹ️ `textAlign`/`maxWidth`/`dataAction`/`header`/`headerTitle` 来自 `NewLife.CubeNC/ViewModels/ListField.cs`

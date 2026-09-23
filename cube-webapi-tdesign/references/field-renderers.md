@@ -236,7 +236,14 @@ export function buildTree(rows: any[], idKey = 'id', parentKey = 'parentID') {
 
 - `primaryKey || isIdentity`：新增表单（`addForm`）中隐藏该字段；编辑表单禁用。
 - `readOnly`：表单 `disabled`。
-- **必填判定（`required` 语义）**：`required`=界面是否必填（UI 语义），`nullable`=数据库是否允许为空（NOT NULL 约束），**二者不可互相推导**。统一走 `resolveFieldBehavior(f)`（返回 `{required, readOnly, nullable, primaryKey}`）：`required===true` → 必填；其余由 `inferRequired()` **兜底推断**（`nullable===true` ⇒ 可空 ⇒ 不必填），但排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`）。⚠️ 实测本后端对所有字段下发 `required:false`（0 个 true），故 `required` 仅在为 `true` 时生效，不能把 `false` 当「明确不必填」（否则连 `Name` 都不校验）；反例：直接 `!nullable` 当必填会把 `ID`/`CreateTime`/`CreateUserID` 也标红星。详见 SKILL.md §七与 `metadata-contract.md` §4。
+- **必填判定（三级，2026-09-23 收敛）**：`required`=界面是否必填（UI 语义），`nullable`=是否允许为空（NOT NULL 约束），**二者不可互相推导**。统一走 `resolveFieldBehavior(f)`（返回 `{required, readOnly, nullable, primaryKey}`）：
+  1. `required === true` → **必填**（后端 UI 层明确要求）；
+  2. 否则 `nullable === false`（**明确 NOT NULL**）→ **必填**；
+  3. `nullable === true` 或 **未下发（null / undefined）** → **不必填（缺省宽松）**。
+  即 **只有后端明确说「必填」或「不允许为空」才必填；没明说的一律按可空处理**。另排除主键/自增/`readOnly`/审计字段（`CreateTime`/`UpdateTime`/`CreateUserID`/`UpdateUserID`/`CreateIP`/`UpdateIP`）——它们由系统赋值。
+  ⚠️ 实测本框架对所有字段下发 `required:false`（0 个 true），故 `required` 仅在为 `true` 时生效，不能把 `false` 当「明确不必填」（否则连 `Name` 都不校验）；反例：直接 `!nullable`（把「未下发」也当不可空）当必填，会把 `ID`/`CreateTime`/`CreateUserID` 也标红星，须靠系统字段排除表豁免。
+  ⚠️ **`nullable` 是唯一非 `=== true` 的布尔位**：它要区分「未下发」第三态，故写作 `!== false`（未下发视同可空）。别照搬给 `primaryKey`/`readOnly`/`visible`。
+  详见 SKILL.md §4.8 ⑦与 `metadata-contract.md` §4。
 - `sortable`：`t-table` 列设 `sortable: true`，排序事件回写 `page.sort` 重新拉取。
 
 ## 6. 搜索栏（kind=5）
@@ -372,7 +379,7 @@ function selectFormControl(f: DataField): FieldControl {
 
 | 字段特征 | 追加规则 | 依据（铁律 R2：内置优先） |
 |----------|----------|---------------------------|
-| `resolveFieldBehavior(f).required` 为真 | `{ required: true, message: '请填写{displayName}' }` | 必填红标 + 校验 |
+| `resolveFieldBehavior(f).required` 为真（= `required===true` 或 `nullable===false`） | `{ required: true, message: '请填写{displayName}' }` | 必填红标 + 校验；**`nullable` 未下发时不必填**（三级判定见 §5） |
 | `itemType = mail` | `{ type:'email', message:'{displayName}格式不正确' }` | async-validator **内置** `type:'email'`，不手写正则 |
 | `itemType = mobile` | `{ telnumber: true, message:'{displayName}格式不正确' }` | TDesign/async-validator **内置** `telnumber`，不手写正则 |
 | `itemType = url` | `{ type:'url', message:'{displayName}格式不正确' }` | async-validator **内置** `type:'url'`，不手写正则（R2 优先内置） |
