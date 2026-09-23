@@ -779,6 +779,29 @@ Cube 自带 OAuth 客户端工厂，接入新第三方登录源（企微/钉钉/
 
 **密钥**：access_token 用 `JwtSecret`(HS256，落 `Config/Cube.config`，见 §1.3)；id_token 用 RS256（公钥经 `/Sso/GetKey` 暴露）。`scopes_supported=[openid,profile,email]`；`response_types_supported=[code]`。
 
+### 7.3 内置管理控制器清单与区域归属（实测，2026-09-23 —— 防「误判 API 缺失」）
+
+**核心结论**：魔方 WebApi 版**已内置大量实体管理控制器**，`/api/{区域}/{控制器}/GetPage|GetFields|Insert|Update|Delete` 直接可用，**无需自写 `EntityController<T>`**。但**控制器名 ≠ 表名，区域也不体现在名字里**——凭猜测拼前缀会误判成「该 API 缺失」（本会话实际踩过，浪费数轮）。
+
+| 能力 | 控制器 | 区域 | 权威路径 | 实测 |
+|---|---|---|---|---|
+| 账号管理 | `UserController` | `Admin` | `/api/Admin/User/GetPage` | 200 |
+| 第三方登录源 | `OAuthConfigController` | `Admin` | `/api/Admin/OAuthConfig/GetPage` | 200 |
+| **OAuth 客户端应用（表 `OAuthApp`）** | **`AppController`** | **`Cube`** | **`/api/Cube/App/GetPage`** | **200** |
+| OAuth 授权日志（表 `AppLog`） | `AppLogController` | `Cube` | `/api/Cube/AppLog/GetPage` | 200 |
+| 角色 / 菜单 / 参数 / 短信 / 邮件 / 部门 / 租户 / 在线用户 … | `Role`/`Menu`/`Parameter`/`SmsConfig`/`MailConfig`/`Department`/`Tenant`/`UserOnline`Controller | `Admin` | `/api/Admin/{X}/GetPage` | — |
+| 数据库管理（`ControllerBaseX`，非实体） | `DbController` | `Admin` | `/api/Admin/Db`（`data` 直接是数组） | — |
+
+**两条判定规则（防误判）**：
+
+1. **`GET /Cube/Apis` 返回的是「控制器/动作名」扁平字符串列表（实测 477 条），不含区域字段** → **不可据此推断路由前缀**。区域只能从 `NewLife.Cube.dll` 的 XML 文档全限定类型名读出（`T:NewLife.Cube.Areas.<区域>.Controllers.<X>Controller`）。
+2. **实体类名 ≠ 表名**：`AppController` 管理的实体类叫 `App`，**表名是 `OAuthApp`**；判据 = `GET /api/Cube/App/GetFields?kind=2` 返回的 25 个字段与 `OAuthApp` 表 25 列**逐列一致**（`Id/Name/DisplayName/Secret/Category/Enable/HomePage/Logo/White/Black/TokenExpire/Urls/RoleIds/Scopes/OAuths/Expired/Auths/LastAuth/CreateUserID/CreateTime/CreateIP/UpdateUserID/UpdateTime/UpdateIP/Remark`）。
+
+**权威排查配方（比逐个猜前缀快一个数量级）**：读 NuGet 包内 XML 文档（`~/.nuget/packages/newlife.cube/<ver>/lib/<tfm>/NewLife.Cube.xml`）取 `T:...Areas.<区域>.Controllers.<X>Controller` → 拆出「区域 + 控制器」→ 拼 `/api/<区域>/<控制器>/GetPage` 实测 200。
+> 反例（本会话）：只试了 `/api/Admin/App`、`/api/Sso/App`、`/api/App`、`/App` 全 404 便下结论「OAuthApp 管理 API 缺失」——真实路径是 `/api/Cube/App`，一直没试。
+
+**`kind` 参数实测复核**（与 §五表一致，无需改）：`1`=List 列表列、`2`=Detail 详情、`3`=AddForm 新增表单、`4`=EditForm 编辑表单、`5`=Search 搜索条件；`0` 无效（`code=-2`）。列表列**不含** `Secret`/`Urls` 等敏感大字段（`App` 的 `kind=1` 仅 14 列），**取全字段必须用 `kind=2`/`4`**。
+
 ---
 
 ## 八、自定义 API Action
