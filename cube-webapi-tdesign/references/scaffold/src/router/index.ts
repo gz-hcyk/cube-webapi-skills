@@ -1,9 +1,18 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { isAuthed } from '@/api/token';
 import LoginView from '@/pages/LoginView.vue';
+import RegisterView from '@/pages/RegisterView.vue';
+import ForgotPasswordView from '@/pages/ForgotPasswordView.vue';
 import BasicLayout from '@/layouts/BasicLayout.vue';
 import EntityPage from '@/pages/EntityPage.vue';
 import DashboardView from '@/pages/DashboardView.vue';
+
+/**
+ * 免登录页（认证族）：登录 / 注册 / 忘记密码。
+ * 与业务页分离——业务页一律要过守卫，认证页已登录时反向跳回 dashboard。
+ * 认证族端点在**根族**（无 [Area]），故不走 /api 前缀（见 SKILL.md §H2 判据）。
+ */
+export const GUEST_PATHS = ['/login', '/register', '/forgot-password'];
 
 /**
  * 组件可视化验证页（**仅 DEV 注册**，生产构建不暴露；连同对应 .vue 一起可整段删除）：
@@ -26,6 +35,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: LoginView },
+    { path: '/register', name: 'register', component: RegisterView },
+    { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },
     {
       path: '/',
       component: BasicLayout,
@@ -43,8 +54,11 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  if (to.path !== '/login' && !isAuthed()) return '/login';
-  if (to.path === '/login' && isAuthed()) return '/dashboard';
+  const isGuest = GUEST_PATHS.includes(to.path);
+  // 未登录访问业务页 → 去登录（redirect 记住来路，登录后可回跳）
+  if (!isGuest && !isAuthed()) return { path: '/login', query: { redirect: to.fullPath } };
+  // 已登录再访问认证页 → 回 dashboard（注册 / 忘记密码同此规则）
+  if (isGuest && isAuthed()) return '/dashboard';
   return true;
 });
 

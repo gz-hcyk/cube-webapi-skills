@@ -68,6 +68,10 @@
         </t-descriptions-item>
       </template>
     </t-descriptions>
+
+    <!-- ▼ 覆盖点 L2（对标 MVC 分部视图覆盖）：详情尾部追加自定义区块
+         （如用户绑定列表、令牌列表、在线设备、关联子表） -->
+    <slot name="detail-extra" />
   </t-drawer>
 </template>
 

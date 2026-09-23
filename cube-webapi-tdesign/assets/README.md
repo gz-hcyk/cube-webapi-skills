@@ -41,7 +41,7 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 
   逐文件 MD5 比对 + 已下线黑名单反扫，判据见 `references/scripts/README.md`。同一命令换目标路径即可查任意业务工程是否真的把 `assets/` 并入且未漂移。
 
-`scaffold/src`（**55 件**）相对 `assets/core`（31 件）**多 24 件**，且这 24 件**恒不在 `core` 内**：
+`scaffold/src`（**62 件**）相对 `assets/core`（38 件）**多 24 件**，且这 24 件**恒不在 `core` 内**：
 「工程外壳」3 件（`main.ts` / `App.vue` / `router/index.ts`，由 `tdesign-starter-cli -temp all` 生成）
 + DEV 验证页 `pages/LovDemoView.vue`（`/lov-demo` 路由用，生产构建不注册）
 + `all` 模板保留的上游基础设施 20 件（`src/types/`5 + `src/locales/`4 + `src/config/`3 + `src/constants/`1 + `src/hooks/`1 + `src/stores/index.ts`1 + `src/styles/*.less`5）。
@@ -53,11 +53,16 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 需 `--demo <归档>/src` 显式启用；**启用后**才适用下列历史判据：
 它与 `core` 的关系是**子集**（14 件 `core` 资产它不收录，缺件≠漂移，脚本单独打印该计数）；
 其**独占资产**仅注册 `RegisterView.vue` / 找回密码 `ForgotPasswordView.vue` 两页 → 报 `DEMO-ONLY`（属预期）。
+> ★ **2026-09-23 变更**：这两页已按框架契约**正式落进 `core/`**
+> （`AuthShell.vue` + `RegisterView.vue` + `ForgotPasswordView.vue`，修复了工程里「登录页指向
+> `/register`、`/forgot-password` 却是死链」的真实缺陷）。故此后**启用 `--demo` 时**，
+> 它们不再报 `DEMO-ONLY`，而会因实现不同落入 `DEMO-DIVERGENT` / `DEMO-STALE` 二分
+> ——需相应更新 `references/scripts/tri-diff.mjs` 的白名单；**默认（不启用 `--demo`）不受影响**。
 它**有**且与 `core` 不同的文件**按白名单二分**：命中白名单的 **12 件**报 `DEMO-DIVERGENT`
 （精简变体 / 上一代认证架构，**非漂移，无需同步**）；白名单外的报 `DEMO-STALE`（**须同步它**，实测 0 条）。
 判据见 `references/scripts/README.md`《③ 为何是「层次差异」而非「陈旧」》。
 
-## 一、core/ —— 核心（**必拷，31 件一次拷全**）
+## 一、core/ —— 核心（**必拷，38 件一次拷全**）
 
 | 文件（→ 目标路径） | 作用 | 被谁引用 |
 |---|---|---|
@@ -88,7 +93,14 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 | `pages/EntityPage.vue` → `src/pages/` | 泛型实体页（按 `specialControllers` 分发，否则 ListPage） | router |
 | `pages/DashboardView.vue` → `src/pages/` | 仪表盘（菜单树驱动，按 permissions 位 2/4/8 判实体） | router |
 | `pages/LoginView.vue` → `src/pages/` | 登录门禁（系统名读 `/Auth/LoginConfig`；**铁律 L1~L4**：左栏 `PROJECT` 文案按项目生成、账号密码不预填、页面无实现细节文案、**无租户选择**；注册页同理见 L4） | router |
-| `specialControllers.ts` → `src/` | 非实体控制器显式注册表 | EntityPage |
+| `specialControllers.ts` → `src/` | 非实体控制器显式注册表（页面分发单一依据） | EntityPage |
+| `components/cube/AuthShell.vue` | **认证族统一外壳**（左栏品牌 + 右栏表单卡；向插槽交 `config`），被注册/忘记密码页静态 import | RegisterView、ForgotPasswordView |
+| `components/cube/DataProbe.vue` | **响应结构探针**（DEV 可见）：把「未实测契约」的真实返回摊开，杜绝猜错字段导致的静默空白 | FileView、ServerInfoView、WidgetBoardView |
+| `components/cube/FileView.vue` | 文件管理页（`Admin/File`：目录浏览 / 面包屑 / 上传 / 下载 / 删除 / 压缩 / 解压） | `specialControllers.ts` |
+| `components/cube/ServerInfoView.vue` | 服务器信息与监控页（`Admin/Index`：Main / MonitorData 轮询 / 程序集 / 进程 / 变量 / 释放内存 / 重启） | `specialControllers.ts` |
+| `components/cube/WidgetBoardView.vue` | 工作台部件管理页（`Cube/Widget`：启用禁用 / 分组排序 / 组内排序） | `specialControllers.ts` |
+| `pages/RegisterView.vue` → `src/pages/` | 注册页（`POST /Auth/Register`；开关全部来自 `LoginConfig.register`，成功态按是否需验证分流「待激活 / 可直接登录」） | router |
+| `pages/ForgotPasswordView.vue` → `src/pages/` | 忘记密码页（`/Auth/SendCode` + `/Auth/ResetPassword`；通道选择来自 `LoginConfig.login.sms/mail`） | router |
 
 > `ConfigView` / `DbView` 之所以在 **core**（而非 optional）：它们被 core 的
 > `specialControllers.ts` **静态 import**——只拷 core 却漏掉它们会直接构建失败。

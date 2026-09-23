@@ -823,6 +823,52 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 3. 前端：字段渲染为 select/multi-select/tree-select，而非文本/数字框。
 > **门禁现状（勿夸大）**：`references/scripts/check-assets-copied.mjs` 管的是**第②步「资产是否并入」**（逐文件一致 + 已下线残留），它**不**校验本条清单。本清单依赖运行期数据（服务端 `GetPage` / `Lookup` 的实际返回），无法静态判定，**仍是人工核查项**——勿在文档或 CI 中声称它「可执行、退出码 1」。
 
+### 4.22 框架全量页面目录（**默认全覆盖，不留占位**）
+
+**权威入口**：`references/cube-page-catalog.md`（控制器 / 端点 / 类别 / 默认组件 / 状态逐行给出）。
+取证来源三层，**不要凭命名猜**：① 框架程序集 XML 文档（动作签名的权威）；
+② 运行时 `GET /Cube/Apis`（接口清单的权威）；③ `GetPage` 是否 200（判定「是不是实体页」的探针）。
+
+三分法与对应组件（速记）：
+
+| 类别 | 判据 | 组件 |
+|---|---|---|
+| ① 实体 | `GetPage` 200 | `ListPage` + `FormDialog` + `DetailDrawer`（零新增页） |
+| ② 配置 | `GetPage` 404 且有 `GetFields` + 单对象 `Get`/`Update` | `ConfigView` |
+| ③ 工具 | `GetPage` 404 且为自定义端点（Db/File/Index/Widget…） | 专属页 + `specialControllers.ts` 登记 |
+
+**已随 core 落地的专用页**：`DbView`（数据库）、`FileView`（文件管理）、`ServerInfoView`（服务器信息 / 监控）、
+`WidgetBoardView`（工作台部件）、`ConfigView`（配置族）、认证族 `AuthShell` + `RegisterView` + `ForgotPasswordView`。
+
+**未实测契约的纪律**：官方文档只给动作签名、不给响应结构时，页面必须
+（a）**自适应渲染**（按键/按值类型自动成行成表，不硬编码字段名），
+（b）挂 `DataProbe.vue`（DEV 可见）把真实返回摊开。
+这样「猜错字段」表现为**可见的偏差**，而不是**静默空白**。
+
+### 4.23 页面构成与三级覆盖机制（对标 MVC 分部视图）
+
+**权威入口**：`references/page-composition.md`。核心是一句：**公共块只有一份，差异靠覆盖点**。
+
+MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolbar/_Footer`→`ListPage` 内同名块；
+`_Form_Body/_Form_Item`→`FormDialog`；`_Detail_*`→`DetailDrawer`；`_Layout`→`BasicLayout`+`MenuSidebar`；
+认证页→`AuthShell`；配置页→`ConfigView`。
+
+覆盖点**从轻到重**（能用轻的就不用重的）：
+
+| 级 | 手段 | 入口 |
+|---|---|---|
+| **L1 配置** | 不改代码，改装配 | `GetPage.setting.*`、`ListPage` props（`searchParamMap`/`showIdColumn`/`lookups`/`uploadUrl`）、`ConfigView` props（`fieldsKind`/`loadUrl`/`saveUrl`/`defaultCategory`） |
+| **L2 插槽** | 在既有块固定位置追加 | `ListPage`：`#navbar-extra` / `#search-extra` / `#toolbar-extra` / `#row-actions` / `#footer-extra`；`FormDialog`：`#form-extra`；`DetailDrawer`：`#detail-extra`；`MenuSidebar`：`#logo` / `#operations`；`AuthShell`：默认插槽（交 `config`） |
+| **L3 整页** | 加薄页面 / 登记专用页 / 改公共块 | 薄页面 `pages/{Area}/{X}.vue`；专用页登记 `specialControllers.ts`；**改公共块是最后手段**（仅当所有页面都需要），改完必须回同步技能资产 |
+
+**纪律**：禁止 fork 公共组件做局部改动（复制即产生第二份真相源）；禁止在前端硬编码菜单
+（唯一权威是 `GetMenuTree`）；禁止用隐藏名单屏蔽页面（可见性由后端权限决定）。
+
+**已知扩展端点接线（🧩 配方全在 page-catalog §5）**：角色权限树（`Role/PermissionTree`+`SavePermission`）、
+强制下线（`UserOnline/Kick`）、吊销令牌（`User/RevokeTokens`）、立即执行（`CronJob/ExecuteNow`）、
+统计图表（`GetChartData`）、值集四子表（`Lov/BatchSave*`）、订单指令（`OrderManager/GetInfo`）、
+地区地图（`Area/Map`）、AI 助手浮窗（`/Ai/AiChat` SSE + `/Ai/OperationResult`）、安全中心（User/Mfa/Sso 组合）。
+
 ## 四、字段类型 → 组件映射速查
 
 完整规则与优先级见 `references/field-renderers.md`（§1 优先级、§2 速查表）。要点：
@@ -1000,7 +1046,7 @@ PY
 `assets/` 是**单层**（`core/` 一层，2026-09-13 起取消 `optional/`），且路径镜像目标工程的 `src/`，因此可以整目录拷：
 
 ```bash
-cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（31 文件，见 assets/README.md）
+cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，见 assets/README.md）
 ```
 
 | 分类 | assets/ 路径 → 目标路径 | 内容 |

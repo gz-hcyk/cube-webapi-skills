@@ -9,6 +9,8 @@
         <span class="nb-title">{{ title }}</span>
         <t-tag v-if="area" theme="primary" variant="light" size="small">{{ area }} / {{ controller }}</t-tag>
       </div>
+      <!-- ▼ 覆盖点 L2（对标 MVC 分部视图覆盖，见 references/page-composition.md）：导航栏右侧扩展 -->
+      <slot name="navbar-extra" />
     </div>
 
     <!-- 搜索栏（内联，对应魔方 MVC 的 _List_Search.cshtml）：GetPage.search 驱动 + 默认自带的关键词（Q）框。
@@ -71,6 +73,8 @@
       <t-button v-if="canDelete && selectedKeys.length" theme="danger" @click="onBatchDelete">
         批量删除（{{ selectedKeys.length }}）
       </t-button>
+      <!-- ▼ 覆盖点 L2：工具栏扩展按钮（对标 MVC 分部视图覆盖，用 res.loadData() 刷新） -->
+      <slot name="toolbar-extra" :selected="selectedKeys" :reload="res.loadData" />
     </t-space>
 
     <!-- 普通表格（setting.enableSelect=true 显示选择列；enableTableDoubleClick=true 双击行打开详情） -->

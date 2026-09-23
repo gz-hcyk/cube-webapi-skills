@@ -235,6 +235,9 @@
       </t-tabs>
     </t-form>
 
+    <!-- ▼ 覆盖点 L2（对标 MVC 分部视图覆盖）：表单内追加自定义区块（如角色权限树、关联子表） -->
+    <slot name="form-extra" :row="row ?? {}" />
+
     <!-- LOV 弹窗表格选择器（lov-table / lov-table-multi）：解析 lovCode=List.{area}.{controller} 拉取实体列表 -->
     <t-dialog
       v-if="lovActive"
