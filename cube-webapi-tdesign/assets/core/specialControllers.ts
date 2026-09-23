@@ -90,16 +90,16 @@ export const SPECIAL_CONTROLLERS: Record<string, SpecialDescriptor> = {
     note: 'WidgetController：Index 部件列表 + Enable + SaveGroupOrder / SaveGroupItemOrder（Parameter 全局配置）',
   },
 
-  /* ═══════════ ③ 待核实候选（**不要凭命名直接启用**） ═══════════
-   * 下列控制器已在官方 XML 文档中出现，但「是实体控制器还是 ConfigController」需以
-   * 真实后端的 `GET /api/{area}/{controller}/GetPage` 是否 200 为准（判据见 SKILL.md §4.17）：
-   *   · Admin/Star            星尘设置控制器 —— 疑为 Config<T>（若 GetPage 404 则启用下一行）
-   *   · Admin/SmsConfig       短信配置       —— 疑为实体控制器（默认走 ListPage）
-   *   · Admin/MailConfig      邮件配置       —— 疑为实体控制器（默认走 ListPage）
-   *   · Admin/OAuthConfig     OAuth 配置     —— 疑为实体控制器（默认走 ListPage）
-   *   · Cube/OrderManager     订单管理       —— 有 GetInfo 自定义端点，列表仍可能走 ListPage
-   * 核实方法：对每个候选调用一次 GetPage，404 ⇒ 在该控制器段加 `{ kind:'config', view: ConfigView }`。
-   *
-   * 'Admin/Star': { kind: 'config', view: ConfigView, note: '待核实：GetPage 404 才启用' },
+  /* ═══════════ ③ 待核实候选 —— 已于 2026-09-23 全量实测定论 ═══════════
+   * 核实方法：对每个候选调 `GET /api/{area}/{controller}/GetPage`，**404 ⇒ 非实体**。
+   * 实测结果（NewLife.Cube 6.15.2026.0901，后端 Cube WebApi 实测）：
+   *   · Admin/Star        GetPage **404** ⇒ Config<T>（已登记，见下）
+   *   · Admin/SmsConfig   GetPage 200  ⇒ **实体控制器**，走 ListPage（勿加 ConfigView）
+   *   · Admin/MailConfig  GetPage 200  ⇒ **实体控制器**，走 ListPage
+   *   · Admin/OAuthConfig GetPage 200  ⇒ **实体控制器**，走 ListPage
+   *   · Cube/OrderManager GetPage 200  ⇒ **实体控制器**，走 ListPage
+   * 另有 25 个实体控制器（含 Cube/App、Admin/User、Admin/Role、Admin/Menu、Admin/Department、
+   * Admin/Tenant、Cube/Area、Cube/Attachment、Cube/CronJob、Admin/Lov、Admin/Log 等）实测 GetPage 均 200。
    */
+  'Admin/Star': { kind: 'config', view: ConfigView, note: 'StarController：实测 GetPage 404 ⇒ 单对象配置（StarSetting）' },
 };
