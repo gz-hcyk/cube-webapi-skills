@@ -25,6 +25,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 | curl 冒烟探针脚本（登录→token→401 五步） | `references/curl-smoke.md` |
 | 前端如何消费（camelize/normToken/登录页/代理） | `cube-webapi-tdesign`（前端消费契约归其职责） |
 
+<<<<<<< HEAD
 ## 版本与组件选型
 
 新建项目的 .NET SDK 版本、xcodetool 与 NewLife 组件版本，一律按「铁律：新建项目的 SDK 与组件版本选型」执行——**SDK 让用户选，工具与组件一律取最新稳定版，本文不再钉任何版本**。
@@ -49,6 +50,29 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 ## 铁律：前端菜单必须后端动态下发（不可违反）
 
 - **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /api/Admin/Index/GetMenuTree`（区域族，**带 `/api`**）。2026-10-04 复测：带 `/api` 为 HTTP 200，不带 `/api` 为 404。**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
+=======
+## 依赖的新生命团队技能（缺失请到仓库补齐）
+
+本技能与以下**新生命团队技能**协同工作，若本地技能目录缺失其中任一项，请按下方方式补齐：
+
+| 技能 | 用途 | 本技能何处引用 |
+|---|---|---|
+| `cube-webapi-tdesign` | 前端 TDesign 消费端（GetFields/GetPage 元数据驱动） | 元流程 ⑦、第九节、第十四节 |
+| `cube-mvc-backend` | 魔方 MVC 版后台（字段定制 ListField 扩展属性速查） | 文件头字段定制说明 |
+| `project-architecture` | 分层架构选型（两层起步、按需渐进三层） | 元流程 ① |
+| `xcode-data-modeling` | Model.xml 数据建模（表/字段/索引/外键 Map/ShowIn） | 元流程 ② |
+
+**仓库地址**：`https://github.com/NewLifeX/NewLife.Skills`
+
+- 技能在仓库中的路径：`.github/skills/<技能名>/`（每个子目录含 `SKILL.md`）。
+- **WorkBuddy 用户**：把缺的 `<技能名>/` 目录整目录复制到 `~/.workbuddy/skills/<技能名>/` 即可，无需重启对话（下次触发自动加载）。
+- **VS Code Copilot 用户**：克隆仓库后执行 `.\scripts\install-copilot-assets.ps1`，会自动同步全部技能到 `%USERPROFILE%\.copilot\skills\`（详见仓库 README）。
+- 也可直接将整个仓库克隆到本地，按需把 `.github/skills/` 下所需子目录拷入上述技能目录。
+
+## 铁律：前端菜单必须后端动态下发（不可违反）
+
+- **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /Admin/Index/GetMenuTree` 动态生成，**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - 新增某个页面的菜单入口时，**只能在后端产出菜单节点**：实体控制器/自定义 API 控制器被自动扫描后自然会带出（`~/Ctrl` 形态），或显式挂菜单；前端只做「url → 前端路由」的**映射表**（如把 `~/Reconcile` 改写为前端专用路由 `/reconcile`），**映射不算新增菜单**。
 - 例外（允许内置，不视为业务菜单）：登录后默认落地页 **dashboard** 及顶部品牌跳转，作为前端默认首页常驻。
 - **违反判定**：前端代码中出现手工向菜单树 push 业务菜单项/写死业务菜单配置并展示 = 违反；后端已有对应节点却仍需前端手工补 = 后端节点缺失，应补后端而非改前端。
@@ -70,6 +94,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 ---
 
+<<<<<<< HEAD
 ## 铁律：魔方内置功能直接用，不重复造轮子（不可违反）
 
 **框架已实现的能力一律优先使用内置实现，禁止另起炉灶自建同类功能**。动手写自定义代码前，先确认 NewLife.Cube（所用最新稳定版）是否已有对应内置能力（开发环境挂 `/Swagger` 核对自带接口清单，或查框架源码/反编译确认扩展点）——**有就直接用，没有才自建**。
@@ -103,31 +128,48 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 ---
 
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 ## 〇、标准开发路线（元流程，先于一切编码）
 
 基于魔方 WebApi 的完整项目按以下路线推进，每一步有明确产出与检查点，**编译错误必须清零后才能进入下一步**：
 
 ```
+<<<<<<< HEAD
 ① 搭建项目框架          → 使用 project-architecture 技能（分层选型、目录结构、.sln/.csproj 落地）；SDK/组件版本选型见「铁律：新建项目的 SDK 与组件版本选型」
 ② 生成 XML 数据模型     → 使用 xcode-data-modeling 技能，根据需求文档/设计文档编写 Model.xml（表、字段、索引、外键 Map）
 ③ 代码生成              → 使用 xcodetool（xcode 命令 / Build.tt，一律最新稳定版）从 Model.xml 生成实体类 + WebApi 控制器
+=======
+① 搭建项目框架          → 使用 project-architecture 技能（分层选型、目录结构、.sln/.csproj 落地）
+② 生成 XML 数据模型     → 使用 xcode-data-modeling 技能，根据需求文档/设计文档编写 Model.xml（表、字段、索引、外键 Map）
+③ 代码生成              → 使用 xcodetool（xcode 命令 / Build.tt）从 Model.xml 生成实体类 + WebApi 控制器
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 ④ 编译检查              → dotnet build，错误清零
 ⑤ 补充业务代码          → 在实体类（业务方法/Search/枚举访问）与控制器（字段定制/自定义 Action/权限位）中补充，生成代码不手改
 ⑥ 编译检查              → dotnet build，错误清零
 ⑦ 创建前端项目          → 使用 cube-webapi-tdesign 技能（TDesign Vue Next，GetFields/GetPage 元数据驱动）
 ⑧ 前端编译、测试        → npm run build + npm run dev 自测（列表/表单/详情/空状态/错误状态）
+<<<<<<< HEAD
 ⑨ 前后端联调测试        → 登录鉴权、CRUD、字段名以 camelCase 为准（见 §14.2）、权限显隐、导出、分页排序筛选
+=======
+⑨ 前后端联调测试        → 登录鉴权、CRUD、字段元数据映射（PascalCase→camelCase）、权限显隐、导出、分页排序筛选
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 ```
 
 要点：
 - **模型先行**：所有实体/控制器由 Model.xml 驱动生成，需求变更先改 XML 再重新生成，禁止手改生成器产物（会被覆盖）；字段/表结构调整一律走「改 Model.xml → xcodetool 重新生成 → 编译检查」。
 - **两次编译检查是硬闸门**：③ 生成后、⑤ 业务补充后各一次，任何修复后编译错误数必须为 0。
+<<<<<<< HEAD
 - **技能衔接**：①② 依赖的 `project-architecture`、`xcode-data-modeling` **不在本仓库**。读不到就停，不要手写实体冒充生成结果。⑦ 依赖本仓库的 `cube-webapi-tdesign`。
 - **`xcode` 的副作用（实测；`xcode-data-modeling` 不在本仓库，写在这里）**：
   - 生成结束会执行 `dotnet tool update xcodetool -g --prerelease`，把刚装的稳定版换成预发布版。本仓库没有看到关闭开关。生成后立刻执行 `dotnet tool update xcodetool -g` 装回最新稳定版（见「铁律：新建项目的 SDK 与组件版本选型」），否则下一次生成用的是 beta。
   - 没有 `ModelVersion` 的 `Model.xml` 会被改写：补上版本号，`<ChineseFileName>` 被改成 `True`，部分 `Length` 被删掉，实体文件名变成中文（如 `设备.cs`）。示例 XML 要么带上当前 `ModelVersion`，要么接受这次重写。
 - **外部模板缺口（不改、不引入 xcodetool 仓库）**：生成出的 `XxxArea` 若写成 `nameof(XxxArea).TrimEnd("Area")` 编译报 CS0618（过时 API）。实体 `InitData` 在启动期没有 `ManageProvider.User` 时，`createUser` 会落成操作系统账户。这两处在 xcodetool 模板里，本仓库不携带该模板。
 - **联调常见坑**：实体 JSON 是 camelCase（见 §14.2）；Int64 仍字符串化。`GetFields` 匿名可取但数据接口需登录。区域路由 `[XxxArea]` 缺失导致 404。
+=======
+- **技能衔接**：① 依赖 `project-architecture` 技能确定分层（两层起步、按需渐进）；② 依赖 `xcode-data-modeling` 技能（Model.xml 完整属性体系、主键设计、Map 外键、ShowIn、分表字段）；⑦ 依赖 `cube-webapi-tdesign` 技能，其零代码列表/表单正是本 skill 第五节元数据接口的消费端。
+- **联调常见坑**：前端字段名映射（后端 FastJson CamelCase 输出、Int64 字符串化）、`GetFields` 匿名可取但数据接口需登录、区域路由 `[XxxArea]` 缺失导致 404。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - **新增实体后验收网关（枚举 / 外键字段与前端组件约定，硬约束）**：
   - **枚举字段 → 首选 LOV 值集（权威通道）**：在控制器 `static XxxController()` 中显式下发值集编码，前端 `useLov` 据此拉 `/api/Admin/Lov/Meta` 显示 `[Description]` 中文标签，**无需前端改动**：
     ```
@@ -142,7 +184,11 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
     ```
     权威源：`CubeDemo/Areas/Test/Controllers/TestFieldController.cs`。
     **前提**：`AddCubeLov(o => o.ScanNamespace("你的实体命名空间"))` + `UseCubeLov()`，且枚举项带 `[Description]`。
+<<<<<<< HEAD
     实测：`list/addForm/editForm/detail/search` 五组字段集合均下发 `lovCode=Enum.{FullName}`。
+=======
+    实测（Cube 6.13.2026.802）：`list/addForm/editForm/detail/search` 五组字段集合均下发 `lovCode=Enum.{FullName}`。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
   - **`[Map("0=文本1,1=文本2")]` 为兼容降级通道，非首选**：仅在标量枚举无 LOV 注册时使用；它**不**驱动前端 LOV 下拉 / 中文标签链路，且 `mapField` 对枚举恒为 `null`。
   - **外键字段**：命名 `xxxID`，虚拟显示字段的 `mapField` 指向真实列。
   - 前端渲染核查见 `cube-webapi-tdesign` §4.20/§4.21。
@@ -211,13 +257,21 @@ if (app.Environment.IsDevelopment())
 要点（全部实测踩过）：
 - **需安装包**：`dotnet add package Swashbuckle.AspNetCore`，否则 CS1061 三连（`AddSwaggerGen`/`UseSwagger`/`UseSwaggerUI` 均不存在）。
 - **服务与中间件两处都要包 `IsDevelopment()`**：只包中间件不包服务，生产仍注册了 Swagger 服务（徒增暴露面）；只包服务不包中间件则开发期 UI 不可达。
+<<<<<<< HEAD
 - **环境判定**：`dotnet run` 无 `launchSettings.json` 或其未指定时默认 **Production**（实测启动日志 `Hosting environment: Production`）；开发期显式 `ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5052`。默认端口与 `cube-webapi-tdesign/references/scaffold/vite.config.ts` 的 `API_TARGET`（`http://127.0.0.1:5052`）相同。旧示例里的 `5077` 不再使用。
+=======
+- **环境判定**：`dotnet run` 无 `launchSettings.json` 或其未指定时默认 **Production**（实测启动日志 `Hosting environment: Production`）；开发期显式 `ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5077`。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - **实测行为**：Production 下 `/Swagger` → 404 且业务接口（如 `POST /Auth/Login`）正常 200；Development 下 `/Swagger` → 301 → `/Swagger/index.html` 200，`/swagger/v1/swagger.json` 200（含全部实体 CRUD 路径）。
 - **构建期文件锁**：旧进程未杀时 `dotnet build` 报 MSB3027/3021「文件被 WeComAddressBook.WebApi 锁定」——先 `taskkill /F /IM dotnet.exe` 再构建（代码本身 0 错误，勿误判为代码问题）。
 
 ### 1.2 数据层预热（EntityFactory.InitAll / InitConnection）——UseCube 已内置，勿重复调用
 
+<<<<<<< HEAD
 > 下面的 `InitAll` 流程以框架反编译实证为准；与所用版本实际行为不一致时，以实际使用版本的行为为准。
+=======
+> 反编译核实版本：XCode 12.1.2026.801 + NewLife.Cube 6.13.2026.802（2026-08 构建）。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 **XCode 侧 API（`EntityFactory`，`using XCode;`）：**
 
@@ -256,9 +310,15 @@ app.UseManagerProvider();
 ```json
 {
   "ConnectionStrings": {
+<<<<<<< HEAD
     "Membership": "Data Source=Data/Membership.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
     "Cube": "Data Source=Data/Cube.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
     "Log": "Data Source=Data/Log.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000"
+=======
+    "Membership": "DataSource=..\\Data\\Membership.db;Provider=sqlite",
+    "Cube": "DataSource=..\\Data\\Cube.db;Provider=sqlite",
+    "Log": "DataSource=..\\Data\\Log.db;Provider=sqlite"
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
   },
   "Cube": {
     "JwtSecret": "请替换为强密钥",
@@ -268,9 +328,14 @@ app.UseManagerProvider();
 }
 ```
 
+<<<<<<< HEAD
 > 连接串键名必须是 **`Data Source=`**（有空格）。`DataSource=`（无空格）和反斜杠 `..\\Data\\` 不要再写。路径用正斜杠。
 > XCode 把这条相对路径解析到 **`AppContext.BaseDirectory`**（`dotnet run` 时就是 `bin/Debug/<目标框架>/`），不是进程 CWD，也不是工程目录。库文件出现在输出目录的 `Data/` 下是预期结果。「相对 CWD」是旧行为。
 > 生产环境**必须**配置强 `JwtSecret`，否则令牌可伪造。`LoginConfig` 实际读的是 Membership 库 `Parameter` 表，见 §1.3。
+=======
+> ⚠️ 连接串里的 `..\Data\` 相对路径基于**进程当前工作目录（CWD）**，不是 ContentRoot。`dotnet run`（CWD=工程目录）与直接运行 `bin/Debug/net8.0/*.dll`（CWD=输出目录）会解析到不同 Data 目录，导致"建了表却查不到""冒烟打到旧库"。调试时固定一种启动方式。
+> 生产环境**必须**配置强 `JwtSecret`，否则令牌可伪造。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ### 1.3 配置分属两套体系：`Config/*.config` 必须落到**运行目录**
 
@@ -282,7 +347,11 @@ app.UseManagerProvider();
 | `SysConfig`（系统名 `DisplayName` / 公司 / 版本） | NewLife `Config<T>` | 运行目录 **`Config/Sys.config`** | ❌ **无效**（缺失时回落到**程序集名**） |
 | `CubeSetting`（版权 / 登录页提示 / 跨域 / `JwtSecret` / 主题） | NewLife `Config<T>` | 运行目录 **`Config/Cube.config`** | ❌ **无效** |
 
+<<<<<<< HEAD
 **「运行目录」= `bin/Debug/<目标框架>/`（或 publish 输出目录），不是你的工程目录**。因此把
+=======
+**「运行目录」= `bin/Debug/net8.0/`（或 publish 输出目录），不是你的工程目录**。因此把
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 `Config/Sys.config`、`Config/Cube.config` 放在工程根下**不会生效**——表现为：系统名变成程序集名、
 `JwtSecret` 每次启动都随机、跨域设置不生效。
 
@@ -300,6 +369,7 @@ app.UseManagerProvider();
 > **静默**替换为 `HS256:` + 16 位随机串 ⇒ 每次重启令牌全部失效，表现为「昨天还好好的，今天全员 401」。
 > 裸密钥串写在 `appsettings.json` 里同样无效。正确落点：`Config/Cube.config` 的 `<JwtSecret>`。
 > 一个可用的最小骨架：`Sys.config`（Name/DisplayName/Company/Develop）+ `Cube.config`
+<<<<<<< HEAD
 > （CorsOrigins / Copyright / LoginTip / JwtSecret / Registration）。
 >
 > **实测：`GET /Auth/LoginConfig` 的 `copyright` / `loginTip` 不读这份 `Cube.config`。** 当时文件里写了版权和登录提示，响应仍是 `null`。同一轮启动把 `CubeSetting` 的属性默认值写进了 Membership 库 `Parameter`（`Category='Cube'`）：`Copyright`/`LoginTip` 为 null，`JwtSecret` 被 `OnLoaded` 换成随机的 `HS256:` + 16 位，**没有采用文件里的密钥**。`Sys.config` 的 `DisplayName` 仍会进 `LoginConfig.name`。
@@ -307,6 +377,9 @@ app.UseManagerProvider();
 > `registration` 的来源是 `CubeSetting.Registration` 的属性默认值 **`沪ICP备10000000号`**（程序集字段初始化器）。首次启动写入 `Parameter.Name='Registration'`。XML 注释写「留空表示不显示」。文件里改 `<Registration>` **清不掉**已经进库的值。要去掉登录页备案号：把该行 `Value` 更新成空字符串（或删掉这一行后重启，让其按空值重新加载）。`GetCopyright()` 在 `Copyright` 为空时返回 null，所以版权要改同一张表的 `Name='Copyright'` / `Name='LoginTip'`，不要只改 `Cube.config`。
 >
 > 未配置第三方登录时，`OAuthConfig` 的初始数据仍会插入一行 `Name=NewLife`、`NickName=新生命用户中心`，且 `Enable=1`、`Visible=1`。`LoginConfig.oAuth` 来自 `OAuthConfig.GetVisibles`（`Enable && Visible && 未删除`）。登录页在 `oAuth.length > 0` 时会画出来。不想出现：把 Cube 库 `OAuthConfig` 里 `Name='NewLife'` 的 `Enable` 或 `Visible` 设为 0。其它内置提供商默认 `Enable=0`，本来就不会出现。
+=======
+> （CorsOrigins / Copyright / LoginTip / JwtSecret）。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ---
 
@@ -368,8 +441,12 @@ ControllerBaseX                                    根基类：路由前缀 / �
 - **适用场景**：纯自定义接口（看板聚合、RPC 风格动作、第三方回调等），不绑定单一实体、不需要 `GetFields` / 字段校验。
 - **注意**：它不带 `SearchData` / `FindData` / `GetFields` / `Valid` 等实体辅助方法；若接口要复用魔方实体查询与数据权限，应继承 `ReadOnlyEntityController` 或更上层，而非 `ControllerBaseX`。权限仍需在 Action / Controller 上显式 `[EntityAuthorize]`。
 - **自定义 Action 的短路由（实测，2026-09-23）**：基类带 `[Route("api/[area]/[controller]/[action]")]`，会强加控制器名段。想暴露 `/api/Portal/MyApps` 这种两段路径，就在 Action 上写**绝对模板**：`[HttpGet("/api/Portal/MyApps")]`、`[HttpPost("/api/Portal/UpdateProfile")]`；控制器仍要 `[XxxArea]` 标记区域（否则菜单/权限注册不到）。
+<<<<<<< HEAD
 - **未登录的实体列表（实测）**：`GET /api/{area}/{controller}` 不带令牌 → **HTTP 401**，体为 `{"code":401,"message":"没有登录或登录超时！"}`。这与 §6.5 的 EntityAuthorize 未登录分支一致。
 - **更早版本的基类拦截（不要和上一条同时当成事实）**：旧版 `ControllerBaseX.OnActionExecuting` 在 `LoadToken()` 失败时返回 `{"code":403,"message":"认证失败"}`，**HTTP 仍是 200**，且不会进入 Action。只有在仍跑旧版时才按这条判。当前版本的实体列表不要再期待 HTTP 200。前端以 HTTP 状态和 `code` 一起看，不要只判 `code != 0` 就当成「HTTP 一定是 200」。
+=======
+- **未认证请求由基类统一拦下**：`OnActionExecuting` 里 `LoadToken()` 失败即返回 `{"code":403,"message":"认证失败"}`（**HTTP 仍是 200**），**不会进入 Action** ⇒ Action 内 `CurrentUser == null` 的 401 分支属**防御性兜底、正常链路不可达**（保留防基类行为变更，但别指望用它做鉴权）。前端只需判 `code != 0`。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - **`CurrentUser` 拿实体**：它是 `NewLife.Model.IManageUser`（不是 `XCode.Membership.IUser`，二者是继承关系、**不可互转**），也拿不到会员实体的权限判定方法。正解：`CurrentUser?.ID` → `XCode.Membership.User.FindByKey(id)` 回查。`ManageProvider.Provider.Current` 走 Session，纯 API 恒 null。
 - **区域与控制器会自动登记进 `Menu` 表**：用 `[Menu(0, false)]` 隐藏。启动日志可见 `Insert Into Menu(...)` 与 `Update Menu Set Visible=0 Where ID=..`；若无任何角色持有该菜单权限，框架会自动把新菜单授权给系统角色。
 
@@ -471,7 +548,11 @@ public class MenuController : EntityTreeApiController<Menu, MenuModel> { }
 - **需要写操作却用 `ReadOnlyEntityController`**：它天生无 Insert/Update/Delete，别在子类手写写接口绕过——直接升级为 `EntityController`。
 - **`EnableFieldValidation` 默认关闭**：想在 Insert/Update 拿到 `FieldErrors` 字段级错误，必须子类 `override EnableFieldValidation => true`（源码注释“默认 true”不实，实际 `=> false`）。
 - **`ControllerBaseX` 缺实体辅助方法**：自定义接口若需 `SearchData` / `FindData` / `GetFields` / `Valid` 与数据权限，应继承 `ReadOnlyEntityController` 而非 `ControllerBaseX`。
+<<<<<<< HEAD
 - **`EntityController<T>` 创建/删除 Action 名字写错（override 静默失效）**：MVC 习惯的 `Add`/`Delete` 在 WebApi 第三代是 **`Insert(TModel)`**（非 `Add`）、**`Delete(String id)`**（基类 `[HttpDelete]` verb，无 `DeleteSelect`/`DeleteAll`）。若用 `Add`/`DeleteSelect` 拼写 override，编译不报错但**运行时不被路由命中（收口等于没做）**；若与基类 virtual 签名不符还会触发 **CS0111 重复定义**。必须重写 `public virtual Insert(TModel)` / `Delete(String id)`。
+=======
+- **`EntityController<T>` 创建/删除 Action 名字写错（override 静默失效）**：MVC 习惯的 `Add`/`Delete` 在 WebApi 第三代是 **`Insert(TModel)`**（非 `Add`）、**`Delete(String id)`**（基类 `[HttpDelete]` verb，6.13 无 `DeleteSelect`/`DeleteAll`）。若用 `Add`/`DeleteSelect` 拼写 override，编译不报错但**运行时不被路由命中（收口等于没做）**；若与基类 virtual 签名不符还会触发 **CS0111 重复定义**。必须重写 `public virtual Insert(TModel)` / `Delete(String id)`。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - **数据由同步引擎维护的实体收口手动增删**：学生/成员等“数据来自同步、不应手改”的实体，将控制器升为 `EntityController` 后**重写 `Insert`/`Delete` 固定返回 403**（`Response.StatusCode=403` + `ApiResponse{Code=403}`），`Update` 保留供必要字段（如手机号）编辑；注意 `Insert` 返回 `Task<ApiResponse<T>>`、`Delete` 返回 `ApiResponse<T>`（签名须对齐基类 virtual）。
 
 ---
@@ -557,12 +638,15 @@ GET /api/School/Student/GetPage        // 一次性返回 setting+list+addForm+e
 
 ### 6.1 权限位模型（PermissionFlags，XCode.Membership，UInt32 [Flags]）
 
+<<<<<<< HEAD
 **模型（官方 [角色菜单与权限控制](https://www.newlifex.com/cube/permission)）**：一个控制器对应一个菜单，控制器的方法（Action）就是该菜单的操作；每个操作分配一个 2 的幂作为标记（1、2、4、8…），角色的授权记录即这些标记的位域组合。
 
 - **位域三运算**：授权 = 或运算（`1|2|4=7`）、判断 = 与运算（`2 & 7 = 2` → 有权限；`2 & 5 = 0` → 无权限）、取消 = 异或（`7 ^ 2 = 5`）；
 - **`Role.Permission` 存储格式**：逗号分隔每个菜单，每项 `菜单id#操作记录值`，如 `1#255,2#255,3#255,4#255`（255 = 八个内置位 `1|2|4|8|16|32|64|128` 全开）；单菜单权限值是 UInt32 位域，`-1` 表示全动作；
 - **容量口径（官方）**：Int32 最多支持 32 种权限，框架内置排到 8，**用户自定义权限从 16 开始**（16/32/64/128…，与内置 1/2/4/8 错开）。
 
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 | 值 | 枚举 | 描述（菜单权限项显示名） |
 |----|------|--------------------------|
 | 0 | `None` | 无权限（仅用于“已登录”语义） |
@@ -579,7 +663,10 @@ GET /api/School/Student/GetPage        // 一次性返回 setting+list+addForm+e
 
 框架在首次访问或扫描时（`MenuHelper.ScanActionMenu` / `EntityAuthorizeAttribute.CreateMenu`）遍历控制器 Action：
 
+<<<<<<< HEAD
 - **扫描入口（官方 permission 文档）**：每个区域必须继承 `AreaRegistrationBase` 并调用其 `RegisterArea` 完成注册——区域没注册，该区控制器的菜单与权限项根本不会生成（自定义权限「静默不生效」的头号原因）；
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - 仅处理 `public`、非 `static`、未标 `[AllowAnonymous]` 的 Action；
 - 若 Action 标了 `[EntityAuthorize(p)]` 且 `p > None`：
   - `p ≤ Delete` → 权限项名取 `[Description]`（查看/添加/修改/删除）；
@@ -758,6 +845,7 @@ if (user.Has(menu, PermissionFlags.Detail)) { ... }   // 或关系可传多个�
 - `[DataPermission("系统管理员,超级管理员", "CreateUserID={$user.Id} or linkId in {#SiteIds}")]`（详见第十节）；
 - `DataPermissionAttribute.Valid(roles)`：当前用户属于 `SystemRoles` 时**跳过**表达式过滤（系统角色不受限）。
 
+<<<<<<< HEAD
 ### 6.8 自定义权限落地闭环（官方 permission_custom 配方 · WebApi 版）
 
 官方 [自定义功能按钮的权限控制](https://www.newlifex.com/cube/permission_custom) 以 ERP 出入库为例演示了完整闭环，WebApi 版按同一顺序落地：
@@ -769,6 +857,8 @@ if (user.Has(menu, PermissionFlags.Detail)) { ... }   // 或关系可传多个�
 
 > 官方同页口径：`PermissionFlags` 为 Int32，最多 32 个权限位，内置占用到 8，**自定义一律从 16 起**；同一控制器内权限位不得重复（去重坑见 6.4）。
 
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 ---
 
 ## 七、登录与 JWT（Auth/Login）
@@ -778,11 +868,18 @@ POST /Auth/Login
 Content-Type: application/json
 { "username": "admin", "password": "admin" }
 ```
+<<<<<<< HEAD
 返回（键名是 snake_case；`expire_in` 实测为 **0**，JWT 的 `exp-iat` 仍是 7200 秒）：
 ```json
 { "code": 0, "data": { "access_token": "xxx", "refresh_token": "yyy", "expire_in": 0 }, "message": "ok" }
 ```
 `expire_in` 为 0 不表示登录失败，也不表示令牌已过期。前端不要用它判断过期，以 JWT `exp` 或下一次真实请求为准。旧示例里的 camelCase `accessToken` 不是这一版的响应键。
+=======
+返回：
+```json
+{ "code": 0, "data": { "accessToken": "xxx", "refreshToken": "yyy" }, "message": "登录成功" }
+```
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 **令牌传递方式（任选其一）**：
 - Header：`Authorization: Bearer <token>`
@@ -796,7 +893,11 @@ Content-Type: application/json
 - `POST /Auth/Refresh` —— 用 RefreshToken 换新的 AccessToken
 - `POST /Auth/Logout` —— 登出
 
+<<<<<<< HEAD
 > 种子账号是 `admin` / `admin`，启动后可以直接登录。本次没有观察到「第一个进入系统的用户变成管理员、原 admin 被禁用」。不要再按那条旧说明去停用种子账号。
+=======
+> 首个进入系统的用户自动成为管理员，原 `admin` 被禁用。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ### 7.1 第三方登录：扩展 `NewLife.Web.OAuthClient`（实测，2026-09）
 
@@ -834,7 +935,11 @@ Cube 自带 OAuth 客户端工厂，接入新第三方登录源（企微/钉钉/
 | `/Sso/GetKey` | GET | JWKS（id_token RS256 公钥） |
 | `/.well-known/openid-configuration` | GET | OIDC 发现文档（实测 200） |
 
+<<<<<<< HEAD
 **⚠️ 三处实测校正（2026-09-23 实测，以 HTTP 探活为权威）**：
+=======
+**⚠️ 三处实测校正（2026-09-23，NewLife.Cube 6.15.2026.0901，以 HTTP 探活为权威）**：
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 1. **令牌端点不是 `/Sso/Access_Token`，是 `/Sso/Token`**（以 `/.well-known/openid-configuration` 的 `token_endpoint` 为准）。四种 grant 全走 `/Sso/Token`：`grant_types_supported=[authorization_code,password,client_credentials,refresh_token]`。`/Sso/Access_Token` 仅为历史别名，对外契约统一用 `/Sso/Token`。
 2. **未登录 `GET /Sso/Authorize` → `302` 到 `/Admin/User/Login?ssoAppId=<id>&r=%2fSso%2fAuth2%3fid%3d<id>`**（内置登录入口；回跳 `r=/Sso/Auth2?id` 由该端点签发授权码）。未知/禁用 `client_id` → `{"code":500,"message":"应用[xxx]不可用"}`。
 3. **纯 WebApi 构建下 `GET /Admin/User/Login` 返回 404**（无 Razor 视图）→ 必须由本系统提供**登录桥接**，否则未登录 SSO 流程断裂。
@@ -967,7 +1072,11 @@ public partial class PortalVisit : Entity<PortalVisit> { /* ... */ }
   表永远建不出来 —— 详见 skill `xcode-handwritten-entity` 必做件 0。
 
 **MySQL 分支的写法修正**：不要指望「先查 `information_schema.statistics` 判断存在性再建」——
+<<<<<<< HEAD
 实测所用的 XCode **未对外开放可直接执行标量/聚合查询的 DAL 入口**
+=======
+实测所用的 XCode 12.2.2026.901 **未对外开放可直接执行标量/聚合查询的 DAL 入口**
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 （`DAL.Select` 的 1 参 / 2 参 / 3 参重载**全部无法编译**，与本 skill 早期记载不一致；用 PowerShell 反射探明意图亦被安全策略拦截）。
 可行写法是**直接 `CREATE INDEX` 并吞掉「重复定义」异常**（MySQL 1061 / PostgreSQL 42P07），幂等效果等价且少一次往返。
 
@@ -1002,7 +1111,11 @@ public partial class StudentController : EntityController<Student, StudentModel>
 
 三类高频业务 Action 的可复用骨架（均落在 `EntityController<T>` 子类，复用基类 `SearchData`/权限/`Json` 助手）：
 
+<<<<<<< HEAD
 **(1) 数据源连接测试**——真正建连校验 + 映射可读性。⚠️ **勿 `DAL.Create(ds.ConnStr)`**：`DAL.Create(String)` 只把参数当「已注册连接名」（实测坑），原始连接串会被当名字去查配置而抛「非法连接名」。必须先 `DAL.AddConnStr(name, connStr, null, null)`（type/provider 传 null 自动按连接串探测 provider；同名重复注册不抛、换串自动覆盖）再 `DAL.Create(name)`：
+=======
+**(1) 数据源连接测试**——真正建连校验 + 映射可读性。⚠️ **勿 `DAL.Create(ds.ConnStr)`**：XCode v12.1 的 `DAL.Create(String)` 只把参数当「已注册连接名」，原始连接串会被当名字去查配置而抛「非法连接名」。必须先 `DAL.AddConnStr(name, connStr, null, null)`（type/provider 传 null 自动按连接串探测 provider；同名重复注册不抛、换串自动覆盖）再 `DAL.Create(name)`：
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ```csharp
 public static DAL CreateDataSourceDAL(DataSourceConfig ds)
@@ -1292,10 +1405,17 @@ GET /api/School/Student/ExportFile?format=xml
 1. **`[AllowAnonymous]` 只对 Action 方法生效**，标在类/控制器上无效（第 0 层鉴权只认方法级）——匿名接口必须方法级标注（§14.4 门户）。
 2. **`AddCube()` 内部注册返回 null 的 `ITracer` 工厂会覆盖外部注册**：`AddSingleton<ILog>`/`AddSingleton<ITracer>` 必须在 `AddCube()` **之后**注册；**`AddControllers()` 是 `UseCube` 的硬依赖**，纯 WebApi 也必须手动调用。
 3. **不要混用 `NewLife.Cube.AdminLTE`（魔方 MVC 版前端皮肤）**：本技能是 WebApi 版（控制器返回 JSON）；MVC 版 Razor/Up/Down(302) 与 WebApi 不兼容，给 WebApi 项目加 AdminLTE/UseTabler 等 → 空白/500/路由冲突。前端用独立 SPA（cube-webapi-tdesign）消费 `/api` JSON。
+<<<<<<< HEAD
 4. **部分字段 PUT 会重置为默认值（账号被禁用事故）**：`EntityController` Insert/Update 按**整实体**绑定，PUT 未传字段被重置为默认——保存须带全必填/关键字段原值；`ConfigController<T>.Update` 走 XCode `Copy(obj, ignoreNull:false)`，缺省字符串属性被清空为 null（数据丢失）。**判定方法**：不要只看 PUT 响应体。这次 PUT 响应把审计字段显示成默认值（`createTime` 为 `0001-01-01`），随后 `GET Detail`（以及按同一 id 删除前的回读）仍是原来的 `createTime`。省略字段有没有落库，以随后的 `GET /api/{area}/{ctrl}/Detail?id=` 为准。
 5. **`ListFields`/`DetailFields.RemoveField("敏感列")` 只裁剪元数据**（GetFields/表单/列表列），**绝不裁剪 JSON 响应体**；投影脱敏**勿原地改** `FindAll`/`FindByKey` 返回的实体（共享缓存实体被污染）——拷贝副本再遮蔽。
 6. **不要自定义 `UploadFile` 动作**（`EntityController<T>` 已自带，重名冲突）；上传 `POST /{area}/{ctrl}/UploadFile`，返回 `data:{attId, filePath:/cube/image?id=, contentType}`（§14.3）。
 7. **启动时勿手写数据层预热**（`EntityFactory.InitConnection`/`InitAll`）——`UseCube` 已内置，重复调用 + SQLite `:memory:` 连接串覆盖 = 所有接口 500 / `no such table`。连接串写 `Data Source=`（有空格）+ 正斜杠。XCode 的相对路径基准是 `AppContext.BaseDirectory`（输出目录），不是进程 CWD。见 §1.2。
+=======
+4. **部分字段 PUT 会重置为默认值（账号被禁用事故）**：`EntityController` Insert/Update 按**整实体**绑定，PUT 未传字段被重置为默认——保存须带全必填/关键字段原值；`ConfigController<T>.Update` 走 XCode `Copy(obj, ignoreNull:false)`，缺省字符串属性被清空为 null（数据丢失）。
+5. **`ListFields`/`DetailFields.RemoveField("敏感列")` 只裁剪元数据**（GetFields/表单/列表列），**绝不裁剪 JSON 响应体**；投影脱敏**勿原地改** `FindAll`/`FindByKey` 返回的实体（共享缓存实体被污染）——拷贝副本再遮蔽。
+6. **不要自定义 `UploadFile` 动作**（`EntityController<T>` 已自带，重名冲突）；上传 `POST /{area}/{ctrl}/UploadFile`，返回 `data:{attId, filePath:/cube/image?id=, contentType}`（§14.3）。
+7. **启动时勿手写数据层预热**（`EntityFactory.InitConnection`/`InitAll`）——`UseCube` 已内置，重复调用 + SQLite `:memory:` 连接串覆盖 = 所有接口 500 / `no such table`；SQLite 相对路径基于**进程 CWD** 而非 ContentRoot。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 8. **`[Map]` 派生（仅显示）属性被收进新增/编辑表单 → Insert 静默 `code:-2 添加失败`**（不抛异常，极难排查）：表单字段须 RemoveField 裁剪；**重写 `Valid` 做唯一性/业务校验时 Delete 也要排除自身**（否则删除被吞成「删除失败！」）。
 9. **`PermissionFlags` 必须 > None，自定义位用更高位**（1/2/4/8 已被 CRUD 占用）；权限项由框架扫描 Action 自动生成（`ScanActionMenu`），勿手写权限项。
 10. **`EnableFieldValidation` 默认关闭**：需字段级错误（`fieldErrors`）时子类 `override EnableFieldValidation => true`（§3.4 校验）。
@@ -1330,14 +1450,22 @@ GET /api/School/Student/ExportFile?format=xml
 | 端点 | `POST /Auth/Login`（AuthController，无 `/api` 前缀） | `/Admin/User/Login` 仅保留 MVC 皮肤/SSO 回调 |
 | 请求模型 | `LoginModel`（dll 反射：`Category/Username/Password/Remember/ChallengeId/Pkey/CaptchaId/CaptchaCode`） | HTTP 绑定大小写不敏感；前端惯用 `username` |
 | `category` | 枚举 `AuthCategory` **整数**（Password=0/Mobile=1/Mail=2/OAuth=3） | **未注册 JsonStringEnumConverter**：传字符串/空串 → `code:-2` |
+<<<<<<< HEAD
 | 令牌键名 | `data.access_token` / `refresh_token` / `expire_in`（snake_case） | `expire_in` 可为 0；0 不是失败也不是已过期。前端 `normToken` 三向兜底，过期看 JWT `exp` |
+=======
+| 令牌键名 | `data.access_token` / `refresh_token` / `expire_in`（snake_case） | 文档曾写 accessToken；前端 `normToken` 三向兜底 |
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 | 鉴权头 | `Authorization: Bearer <token>` | `LoadToken` 亦支持 X-Token/Cookie/Query；前端双头保险 |
 | 登录配置 | `GET /Auth/LoginConfig`（匿名）；`oAuth` 键**大写 A** | 前端双向归一、页面读 `config.oAuth` |
 | MFA/Challenge/Refresh | `/Mfa/*`、`/Auth/Challenge`、`/Auth/Refresh`（均无 `/api`） | 消费细节归 tdesign |
 
 ### 14.2 响应 JSON 大小写（后端输出事实）
+<<<<<<< HEAD
 - **实体 JSON 是 camelCase**（`id` / `categoryID` / `purchasedDate` / `createTime`）。登录令牌键是另一套 snake_case（§14.1），不要和实体字段混成一种命名。
 - **更早文档里的 PascalCase**（`Id`/`Title`/`CreateUserID`）只在仍观察到该形态的旧版本上成立。不要把 PascalCase 与 camelCase 写成同时成立的事实。前端 `normalizeRows` 对已经是 camelCase 的行是幂等兜底，不必为了迁就旧句去改接口。
+=======
+- **响应体 PascalCase**（`Id`/`Title`/`CreateUserID`/`PublishTime`），非 CamelCase（旧文档误述 FastJson CamelCase）。前端须 `camelize`（缩写白名单 ID/URL/API/HTTP/IP 规则见 tdesign）。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - **请求体大小写不敏感**（ASP.NET ModelBinder 不区分）——前端发 PascalCase 或 camelCase 均可绑定。
 - **Int64 序列化为字符串**（大整数 id 防前端精度丢失）。
 
@@ -1347,7 +1475,11 @@ GET /api/School/Student/ExportFile?format=xml
 | 列表 | `GET /api/{area}/{ctrl}?pageIndex=&pageSize=` | `data` 数组 + 独立 `page` |
 | 详情 | `GET /api/{area}/{ctrl}/Detail?id=` | **id 在 query**；路径 `/Detail/{id}` 返回空 |
 | 新增 | `POST /api/{area}/{ctrl}`（body=实体） | 成功 `code:0` |
+<<<<<<< HEAD
 | 修改 | `PUT /api/{area}/{ctrl}`（body 带 `id`） | **整实体绑定**：带全原值（§十二 4）。PUT 响应体里的审计字段可能是默认值，是否写库以随后的 `GET Detail` 为准 |
+=======
+| 修改 | `PUT /api/{area}/{ctrl}`（body 带 `id`） | **整实体绑定**：带全原值（§十二 4） |
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 | 删除 | `DELETE /api/{area}/{ctrl}?id=` | 单条 |
 | 自定义动作 | `POST /api/{area}/{ctrl}/{Action}?id=` | 返回 `ApiResponse<String>`（Code=0/500） |
 
@@ -1361,7 +1493,11 @@ GET /api/School/Student/ExportFile?format=xml
 
 ### 14.5 前端工程落地坑（跨端事实，代码归 tdesign）
 Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualChunks 拆 vendor / base 子路径 / DialogPlugin.confirm / `@submit.prevent` 崩溃——已全部归 `cube-webapi-tdesign`（troubleshooting G8/G6），此处不重复。
+<<<<<<< HEAD
 **跨端事实（后端行为，须知）**：SQLite 同页 3+ 并发查询会死锁（busy timeout 不够，前端表现为永久 loading）→ 前端应串行发请求；治本在后端连接串加 `Busy Timeout=30000`（与 §1.2 / §14.8 同一条连接串）。
+=======
+**跨端事实（后端行为，须知）**：SQLite 同页 3+ 并发查询会死锁（busy timeout 不够，前端表现为永久 loading）→ 前端应串行发请求；治本在后端连接串加 `Busy Timeout=15000`（见 `references/troubleshooting.md` `:memory:` 条）。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ### 14.6 联调验证清单（冒烟）
 `POST /Auth/Login` 返 `access_token` → 带 Bearer `GET /api/{area}/{ctrl}` 200+`data` 数组 → **不带 token 401**（鉴权链路通）→ 门户 `data` 为对象（分支）→ camelize 后字段对齐（`createUserID`）→ 自定义动作 `code:0` → 多接口串行、无永久 loading。
@@ -1377,7 +1513,11 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 ### 14.8 后台项目首次启动排错（实测坑，2026-09）
 | 现象 | 根因 | 修法 |
 |---|---|---|
+<<<<<<< HEAD
 | `no such table: Parameter/UserOnline`，Data 目录无 db 文件 | 连接串写成 `DataSource=`（无空格），或用了反斜杠 / 当成相对 CWD | 写 **`Data Source=Data/Membership.db;Provider=sqlite`**（有空格、正斜杠）；再加 `Journal Mode=Wal;Busy Timeout=30000`。相对路径基准是 `AppContext.BaseDirectory`（输出目录下的 `Data/`） |
+=======
+| `no such table: Parameter/UserOnline`，Data 目录无 db 文件 | 连接串写成 `DataSource=`（无空格），XCode 解析异常不建表 | 必须写 **`Data Source=`**（带空格）；建议再加 `Journal Mode=Wal;Busy Timeout=30000` |
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 | 业务库（自建 ConnName）一张表都没有 | `UseCube` 内部 `InitAll` 只扫**已加载**程序集，业务实体 dll 未 JIT 加载 | `Program.cs` 中 `AddControllers()` 后加一行 `_ = typeof(你的实体).Assembly;` 触发加载 |
 | 实体控制器 404 | 路由是 Cube 自带的 **`api/{area}/{controller}/{action}`**，漏了 `api` 前缀；也**不要**手写 `MapControllerRoute` | 用 `/api/{Area}/{Ctrl}/GetPage`；诊断可临时加 `/_routes` 端点打印 `EndpointDataSource` |
 | `DELETE` 报 `The id field is required` / `GET /Delete?id=` 404 | 删除走 `DELETE /api/{area}/{ctrl}?id={id}`（query，非 body、非路由段） | 按此调用；`DeleteSelect` 同理 |
@@ -1388,9 +1528,15 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 ## 十五、生成生产部署包（可复用 Playbook）
 
 > 全量 Playbook 已保真外移 **`references/deployment.md`**（适用场景 + 15.1 目标产物结构 + 15.2 后端发布 + 15.3 Production 配置并入 + 15.4 上线前必改红线 + 15.5 Nginx 模板 + 15.6 systemd + 15.7 本地冒烟 + 15.8 README 模板 + 15.9 常见坑）。上线部署时读。快速要点：
+<<<<<<< HEAD
 - **发布**：`dotnet publish <Web>.csproj -c Release -r linux-x64 --no-self-contained -o publish/backend`（本机 Windows 上的 SDK 也能跨平台出 linux-x64 包）；本机 SDK 较新 + 新增包时 `dotnet restore` 可能 NuGet 异常 → `--no-restore` 复用已还原资产。
 - **上线必改红线**：`Cube.JwtSecret` → 强随机 `openssl rand -hex 32`（占位串上线 = 令牌可伪造）；`Cube.CorsOrigins` → 真实前端域名。
 - **本地冒烟**：`DOTNET_ROLL_FORWARD=Major` + `ASPNETCORE_ENVIRONMENT=Development`（Production 的 AllowedHosts 限域名，127.0.0.1 会 400）跑发布包 → 执行 `references/curl-smoke.md` 冒烟；**测试库务必清理**再打包。
+=======
+- **发布**：`dotnet publish <Web>.csproj -c Release -r linux-x64 --no-self-contained -o publish/backend`（本机 Windows/.NET 10 SDK 也能出 linux-x64 包）；SDK 10 + 新增包时 `dotnet restore` 可能 NuGet 异常 → `--no-restore` 复用已还原资产。
+- **上线必改红线**：`Cube.JwtSecret` → 强随机 `openssl rand -hex 32`（占位串上线 = 令牌可伪造）；`Cube.CorsOrigins` → 真实前端域名。
+- **本地冒烟**：`DOTNET_ROLL_FORWARD=Major` + `ASPNETCORE_ENVIRONMENT=Development`（Production 的 AllowedHosts 限域名，127.0.0.1 会 400）跑 net8 包 → 执行 `references/curl-smoke.md` 冒烟；**测试库务必清理**再打包。
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - 连接串反斜杠（Windows `Data\*.db` → Linux 解析错乱，一律正斜杠）等坑 → `references/deployment.md` §15.9。
 - **前端构建与同步**（`npm run build` → dist → `publish/frontend`、base 路径、manualChunks）→ `cube-webapi-tdesign` §十。
 
@@ -1407,7 +1553,10 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 - [ ] 字段定制写在 `static XxxController(){}` 而非实例构造器
 - [ ] 自定义 Action 已标注 `[EntityAuthorize]` 或 `[AllowAnonymous]`
 - [ ] 需要非 CRUD 的业务权限时，已用更高权限位 `(PermissionFlags)16/32` + `[DisplayName]` 标注，且角色管理能正确显示该权限项
+<<<<<<< HEAD
 - [ ] 自定义权限位驱动的业务按钮，前端已按菜单节点 `permissions` 字典的 16/32 位显隐（§6.8，前端配方见 tdesign §4.10.1）
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - [ ] **同一控制器内权限位无重复**（重复会使整个控制器的权限项注册失败，运行时报「找不到菜单」/权限名为空；用 grep 逐位核对，重启后在 `Menu.Permission` 验证）
 - [ ] 控制器已通过 `[Menu]` 声明可见性 `Mode`（`Admin`/`Tenant`/组合），避免租户/后台越权可见
 - [ ] 前端调用 `GetFields`/`GetPage` 驱动动态界面，未硬编码字段

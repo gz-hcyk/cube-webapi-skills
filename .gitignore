@@ -6,6 +6,7 @@ Thumbs.db
 **/references/scripts/_*.txt
 **/references/scripts/_*.mjs
 **/*.report.txt
+<<<<<<< HEAD
 
 # examples/equipment-ledger 构建与运行产物（源码入库）
 examples/equipment-ledger/**/bin/
@@ -16,3 +17,5 @@ examples/equipment-ledger/**/.vite/
 examples/equipment-ledger/**/*.db
 examples/equipment-ledger/**/*.db-wal
 examples/equipment-ledger/**/*.db-shm
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)

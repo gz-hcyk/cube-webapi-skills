@@ -10,8 +10,11 @@
 
 - 后端无需改动：`Role` 实体由 `AddCube()` 自动暴露 `Admin/Role` CRUD；`Permission` 字段契约固定——
   逗号分隔 `菜单ID#权限位掩码`，位：1查看 / 2新增 / 4修改 / 8删除（组合=或），`-1`=全动作。
+<<<<<<< HEAD
   自定义业务位 16/32/64/128… 同串参与（`16#16`=仅「入库」；`16#48`=`16|32` 入库+取消入库；权限项名 = 后端 Action
   `[DisplayName]`；官方 [permission_custom](https://www.newlifex.com/cube/permission_custom)：Int32 上限 32 位、内置到 8、自定义从 16 起）。
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 - 组件依赖：`@/api/http`（`getApi`）、`tdesign-vue-next`（t-checkbox/t-tag/t-button/t-loading）。
 - 菜单数据源：`GET /api/Admin/Menu?page=1&pageSize=1000`（Index 端点，返回扁平 `{id,name,displayName,parentId}`，
   vite 代理 `/api` 可达）。**不要用无 `/api` 前缀的 `/Admin/Menu`**（会打到 SPA 回退）。
@@ -19,7 +22,11 @@
 ## 1. 拷贝资产
 
 ```bash
+<<<<<<< HEAD
 cp -r <skill>/cube-webapi-tdesign/assets/core/. <工程>/src/    # 一次拷全 38 个文件（2026-09-13 曾计 31），RoleMenuEditor 已含在内
+=======
+cp -r <skill>/cube-webapi-tdesign/assets/core/. <工程>/src/    # 一次拷全 31 件，RoleMenuEditor 已含在内
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 # 或单独取：cp <skill>/cube-webapi-tdesign/assets/core/components/cube/RoleMenuEditor.vue <工程>/src/components/cube/
 ```
 
@@ -78,7 +85,10 @@ const dialogWidth = computed(() => {
 - [ ] 勾选父节点某动作位 → 子孙全部授予该位；取消 → 子孙同步收回（PUT body 为最终判据，如父勾「查看」→ `Permission:"1#1,...,56#1"` 17 段级联）
 - [ ] 保存 → 重开编辑回填勾选一致；后端 `Detail` 回读 Permission 串一致
 - [ ] 详情抽屉不再出现 `16#1` 明文（Role 页 `detailFields` 过滤 `permission`）
+<<<<<<< HEAD
 - [ ] 后端有 >8 自定义权限位时：角色页该菜单下出现对应勾选项（如「入库」值 16），勾选 → PUT body 含 `16#16` 段，保存重开回填一致
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 ## 5. 坑速查
 
@@ -89,4 +99,7 @@ const dialogWidth = computed(() => {
 | 页签没出现/矩阵贴行 | item 需 `category:'权限设置'`；组件以全宽 div 渲染，勿套 label form-item |
 | 自动化同帧连点丢位 | 受控 checkbox-group 竞态；本组件已用独立 t-checkbox 规避，验收脚本仍建议逐项间隔点击 |
 | Role 详情/列表显示 `16#1` 明文 | Role 页 `listFields/detailFields` 过滤 `permission` 字段（授权在编辑弹窗维护） |
+<<<<<<< HEAD
 | 角色页看不到「入库/审批」等自定义权限子项 | RoleMenuEditor 只渲染了 1/2/4/8 四位；需按菜单 `permissions` 字典扩展 >8 的位（键=位值，值=权限项名），序列化仍输出 `菜单ID#掩码`（SKILL §4.12.1 / §4.10.1） |
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)

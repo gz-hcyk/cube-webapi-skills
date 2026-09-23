@@ -11,7 +11,11 @@
 - 注意前缀拼接结果：`ST` + `S2026002` = `STS2026002`（双字母易看错，测试脚本别打错密码/登录名）。
 - **零 schema 变更**：业务表不加列，通过 `User.FindByName(prefix+key)` 即可定位账号。
 
+<<<<<<< HEAD
 ## User 字段约定（魔方）
+=======
+## User 字段约定（魔方 6.13）
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 
 | 字段 | 用途 |
 |---|---|

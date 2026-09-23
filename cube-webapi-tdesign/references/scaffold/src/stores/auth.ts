@@ -151,7 +151,10 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = d.accessToken || '';
     refreshToken.value = d.refreshToken || '';
     // 唯一写入点：src/api/token.ts（键名 assets_token / assets_refresh_token / assets_token_expire）
+<<<<<<< HEAD
     // expireIn === 0 不是登录失败（6.15.2026.901 的 expire_in 就是 0）。setTokens 会跳过本地过期时间。
+=======
+>>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
     setTokens(token.value, refreshToken.value, d.expireIn);
   }
 
