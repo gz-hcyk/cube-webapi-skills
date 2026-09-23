@@ -57,6 +57,8 @@
           <t-input v-else v-model="searchModel[item.name]" clearable style="width: 180px" />
         </t-form-item>
       </template>
+      <!-- ▼ 覆盖点 L2：搜索栏扩展项（对标 MVC 分部视图覆盖，GetPage.search 表达不了的自定义搜索项） -->
+      <slot name="search-extra" :model="searchModel" />
       <t-form-item>
         <t-space>
           <t-button theme="primary" type="submit">查询</t-button>
@@ -133,6 +135,8 @@
     <div v-if="footerVisible" class="cube-list-footer">
       <span v-if="pagination.total != null">共 {{ pagination.total }} 条</span>
       <span v-if="statText">{{ statText }}</span>
+      <!-- ▼ 覆盖点 L2：底部扩展（对标 MVC 分部视图覆盖，统计补充说明 / 合计行） -->
+      <slot name="footer-extra" />
     </div>
 
     <!-- 新增/编辑弹窗 -->
