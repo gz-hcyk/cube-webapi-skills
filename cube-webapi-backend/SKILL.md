@@ -847,6 +847,40 @@ PortalVisit: Id(Int64) / UserId(Int32, 索引) / AppId(Int32) / AppName(String 5
 
 > **⛔ 平台侧提醒**：Cube WebApi 版**没有**任何「我的应用 / 门户聚合」类内置 API（实测 477 个内置接口中不存在）。门户首页的聚合接口（可访问应用集、最近、常用）**必须自研控制器**。
 
+### 7.5 框架内置表的只读边界与索引补建（实测，2026-09-23）
+
+**结论先说**：`AppLog` / `Log` / `UserStat` 等**框架内置实体**的表名、分表策略、索引清单均由**编译进 `NewLife.Cube.dll` 的 Model** 固定 —— 项目侧自己的 `Model.xml` **改不动它们**。对这些表只能做「补索引」与「按时间清理」，**不能分表、不能分区**。
+
+**误判预防（先看这三条，再决定优化路线）**：
+
+| 事实 | 证据（2026-09-23 实测） |
+|---|---|
+| `AppLog` 主键**已是雪花 ID** | 表内 7 行 `Id` 全部 19 位（如 `7508377927259353088`）；框架方法签名 `FindById(System.Int64)`。建表语句为 `Id integer Primary Key`（**无 `AUTOINCREMENT`**；对照 `OAuthApp` 带 `AUTOINCREMENT`）⇒ **别再说"要改成雪花 ID"，它本来就是** |
+| `AppLog` **未分表** | 物理表名即 `AppLog`，无月份后缀 |
+| `AppLog` **只有 `IX_AppLog_AppId`** | `CreateTime` **无索引**。对照：`Log` 有 3 个复合索引、`OAuthLog` 有 `Provider`/`ConnectId`/`UserId` 三索引 —— 框架对 `AppLog` 的时间维度确实没建索引 |
+
+**为什么分表 / 分区都走不通**：
+
+- 启用分表须改实体 Model（`DataScale="timeShard:yyyyMM"`）⇒ 须改框架源码，不可行；
+- MySQL **原生分区**同样不行：分区键必须包含在**每个唯一索引**中，而 `AppLog` 主键是 `Id`、`CreateTime` 不在其中 ⇒ `PARTITION BY RANGE(CreateTime)` 直接报错。要绕开就得把主键改成 `(Id, CreateTime)` 复合 —— 又回到改框架。
+
+**框架自己给的答案**：`AppLog.DeleteBefore(DateTime)`（XML 注释「删除指定日期之前的数据」）—— **框架的设计意图是「定期清理」，不是分表**。
+
+**于是框架层只剩两件事可做**：
+
+1. **补索引（幂等 DDL）**，建议复合 `(CreateTime, AppId)`，直接覆盖「时间窗范围扫描 + 按 `AppId` 分组」这一主查询形态：
+
+| 库 | 写法 |
+|---|---|
+| SQLite | `CREATE INDEX IF NOT EXISTS IX_AppLog_CreateTime_AppId ON AppLog(CreateTime, AppId)` |
+| MySQL | ★ **不支持** `CREATE INDEX IF NOT EXISTS` ⇒ 须先查 `information_schema.statistics` 判断存在性再建（按 `Database.Type` 分支） |
+
+2. **按时间清理**（可选，默认关闭）：定时调用 `DeleteBefore(DateTime.Now.AddMonths(-N))`；定时器可直接复用框架自带的 `CronJob` 表，不必另引调度组件。
+
+**★ 一条容易踩空的坑**：`XCode:Migration` 若设为 **`Full`**，框架会**删除模型外的索引** ⇒ 手工补的索引会被清掉。生产环境必须保持 **`On`**（仅新建表/列）。
+
+**雪花 ID 做时间裁剪？不可靠**：雪花内嵌时间戳、单机单调递增，理论上可用 `Id >= snowflake(startTime)` 免建索引做区间下推。但**多实例部署时不同 `workerId` 的雪花不保证全局有序**（时钟回拨、机器时差），边界会错漏。仅作了解，不作为方案。
+
 ---
 
 ## 八、自定义 API Action
