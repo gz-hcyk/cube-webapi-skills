@@ -30,6 +30,21 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 后端契约（路由、响应信封、字段描述符）权威定义在 `cube-webapi-backend`；本技能聚焦**前端消费方式**。
 
+## 依赖的新生命团队技能（缺失请到仓库补齐）
+
+本技能与以下**新生命团队技能**协同工作，若本地技能目录缺失其中任一项，请按下方方式补齐：
+
+| 技能 | 用途 | 本技能何处引用 |
+|---|---|---|
+| `cube-webapi-backend` | 后端契约权威（路由/响应信封/字段描述符/权限位/数据范围/JWT/部署 Playbook） | 资源导航表、§五 分工、父子表铁律 |
+
+**仓库地址**：`https://github.com/NewLifeX/NewLife.Skills`
+
+- 技能在仓库中的路径：`.github/skills/<技能名>/`（每个子目录含 `SKILL.md`）。
+- **WorkBuddy 用户**：把缺的 `<技能名>/` 目录整目录复制到 `~/.workbuddy/skills/<技能名>/` 即可，无需重启对话（下次触发自动加载）。
+- **VS Code Copilot 用户**：克隆仓库后执行 `.\scripts\install-copilot-assets.ps1`，会自动同步全部技能到 `%USERPROFILE%\.copilot\skills\`（详见仓库 README）。
+- 也可直接将整个仓库克隆到本地，按需把 `.github/skills/` 下所需子目录拷入上述技能目录。
+
 ## 铁律：菜单必须后端动态生成 + 品牌点击回 dashboard（不可违反）
 
 - **M1** 业务菜单唯一权威 = 后端 `GET /api/Admin/Index/GetMenuTree`（**区域族必带 `/api`**，只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。

@@ -25,6 +25,24 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 | curl 冒烟探针脚本（登录→token→401 五步） | `references/curl-smoke.md` |
 | 前端如何消费（camelize/normToken/登录页/代理） | `cube-webapi-tdesign`（前端消费契约归其职责） |
 
+## 依赖的新生命团队技能（缺失请到仓库补齐）
+
+本技能与以下**新生命团队技能**协同工作，若本地技能目录缺失其中任一项，请按下方方式补齐：
+
+| 技能 | 用途 | 本技能何处引用 |
+|---|---|---|
+| `cube-webapi-tdesign` | 前端 TDesign 消费端（GetFields/GetPage 元数据驱动） | 元流程 ⑦、第九节、第十四节 |
+| `cube-mvc-backend` | 魔方 MVC 版后台（字段定制 ListField 扩展属性速查） | 文件头字段定制说明 |
+| `project-architecture` | 分层架构选型（两层起步、按需渐进三层） | 元流程 ① |
+| `xcode-data-modeling` | Model.xml 数据建模（表/字段/索引/外键 Map/ShowIn） | 元流程 ② |
+
+**仓库地址**：`https://github.com/NewLifeX/NewLife.Skills`
+
+- 技能在仓库中的路径：`.github/skills/<技能名>/`（每个子目录含 `SKILL.md`）。
+- **WorkBuddy 用户**：把缺的 `<技能名>/` 目录整目录复制到 `~/.workbuddy/skills/<技能名>/` 即可，无需重启对话（下次触发自动加载）。
+- **VS Code Copilot 用户**：克隆仓库后执行 `.\scripts\install-copilot-assets.ps1`，会自动同步全部技能到 `%USERPROFILE%\.copilot\skills\`（详见仓库 README）。
+- 也可直接将整个仓库克隆到本地，按需把 `.github/skills/` 下所需子目录拷入上述技能目录。
+
 ## 铁律：前端菜单必须后端动态下发（不可违反）
 
 - **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /Admin/Index/GetMenuTree` 动态生成，**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
