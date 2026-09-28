@@ -75,7 +75,34 @@ import '@/styles/tokens.css'; // 覆盖 TDesign 主题变量
 
 - **换肤**：编辑 `tokens.css` 中对应 `--td-*` / `--cube-*` 变量，全站（含 TDesign 组件）即时生效，业务页零改动。
 - **暗色主题**：TDesign 原生支持 `t-theme-dark`（组件加 `class="t-theme-dark"` 或根节点 `html.t-theme-dark`）。
-  在 `tokens.css` 增加 `.t-theme-dark { /* 暗色覆盖 */ }` 或 `@media (prefers-color-scheme: dark)` 补充暗色令牌即可。
+  在 `assets/core/styles/theme-dark.css` 的 `.t-theme-dark { … }` 内补暗色令牌，由 `setting.ts` 切换根类（三处接线见 SKILL §4.16）。
+  ★ **不是「补几个令牌即可」—— 必须补满三层**，详见下一条。
+
+- **★ 暗色令牌分级（关键：只补一半必出「白底白字」）**
+
+  TDesign 色板分三层，暗色覆盖**必须三层齐全**：
+
+  | 层 | 代表令牌 | 消费方 |
+  |---|---|---|
+  | ① 页面 / 容器级 | `--td-bg-color-page`、`--td-bg-color-container(-hover/-active/-disabled)` | 页面底、卡片、弹层 |
+  | ② **组件级** | `--td-bg-color-specialcomponent`、`--td-bg-color-component(-hover/-active/-disabled)`、`--td-bg-color-secondarycontainer(-hover/-active)`、`--td-bg-color-secondarycomponent(-hover/-active)`、`--td-bg-color-container-select` | **outline 按钮、input、select、textarea 的填充** |
+  | ③ 边框 / 遮罩级 | `--td-border-level-1-color`、`--td-border-level-2-color`、`--td-mask-background`、`--td-mask-disabled`、`--td-mask-gradient`、`--td-text-color-watermark` | 组件描边、loading / 弹层遮罩、水印 |
+
+  **失败机理**：文字色（`--td-text-color-primary` 等）在层①就翻白了，层②③若未覆盖，填充色仍是亮色 → **白底白字，对比度约 1:1，文字彻底不可读**。
+  2026-09 在消费方工程实测漏网数：`/guide/oauth` 2 处、`/dashboard` 4 处、`/profile` 4 处、`/theme` 11 处。
+
+  **取值原则 —— 零新增颜色**：组件级令牌**等价映射**到既有容器令牌，例如
+  `--td-bg-color-specialcomponent: var(--td-bg-color-container)`；
+  遮罩族取容器色加透明度（`rgba(36, 36, 36, 0.96)` 对应 `#242424`）。
+  亮色下 `#fff` ↔ `#fff` 本就等价，故对**亮色零副作用**。
+
+  **自查方法**（一次定位全部漏网）：暗色下遍历 `:root` 的全部 `--td-*`（约 **266** 个），
+  凡「亮暗同值」且属 `bg-color` / `border` / `mask` / `text-color-watermark` 族者，即为漏网。
+  CDP 参考实现见 SKILL §4.16。
+
+  **不在本资产职责内**：语义色阶（`--td-success-color-light` / `--td-error-color-focus` 等）与品牌色阶
+  （`--td-brand-color-light` 由 `utils/color.ts` 以 **inline style 运行时注入**，静态 CSS 覆盖不到）的暗色化
+  **须新增颜色 / 改 JS**，属设计决策 —— 不要在 `theme-dark.css` 里静默改。
 - **多品牌**：复制 `tokens.css` 为 `tokens-brand-b.css`，在 `main.ts` 按 `import.meta.env.VITE_BRAND` 动态 `import` 不同令牌文件。
 - **SCSS 深度定制**：改引 `tdesign-vue-next/esm/` 入口，在 `vite.config.ts` 配 `css.preprocessorOptions.scss.modifyVars` + 安装 `sass`。
 
