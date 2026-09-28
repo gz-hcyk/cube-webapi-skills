@@ -5,6 +5,18 @@
  * 令牌的暗色取值（对齐 TDesign 官方暗色规范）。品牌色由个性化 store
  * 通过 inline style 注入，不在此覆盖，故暗色下主色仍为用户所选。
  *
+ * 【暗色令牌分级 —— 关键，勿只补一半】
+ * TDesign 的色板分三层，覆盖时必须三层齐全，否则会出现「字翻白、底留白」
+ * 的白底白字（对比度 1:1，文字彻底不可读）：
+ *   1) 页面/容器级：--td-bg-color-page / --td-bg-color-container(-hover/-active/-disabled)
+ *   2) 组件级：--td-bg-color-specialcomponent / --td-bg-color-component(-hover/-active)
+ *              / --td-bg-color-secondarycontainer / --td-bg-color-secondarycomponent
+ *      —— outline 按钮、input、select、textarea 等的填充走这一层
+ *   3) 边框/遮罩级：--td-border-level-1-color / --td-border-level-2-color
+ *                  / --td-mask-background / --td-mask-disabled
+ *   自查方法：暗色下遍历 :root 的 --td-* 变量，凡「亮暗同值」且属
+ *   bg-color / border / mask / text-color-watermark 族者，即为漏网。
+ *
  * 引入顺序：main.ts 中须在 tokens.css 之后引入本文件，确保暗色中性
  * 变量覆盖亮色默认值；品牌变量优先级：inline style > 本文件 > tokens.css。
  * ============================================================= */
@@ -29,6 +41,35 @@
   --td-shadow-1: 0 1px 10px rgba(0, 0, 0, 0.4);
   --td-shadow-2: 0 1px 10px rgba(0, 0, 0, 0.4), 0 4px 5px rgba(0, 0, 0, 0.5);
   --td-shadow-3: 0 3px 14px 2px rgba(0, 0, 0, 0.4), 0 8px 10px 1px rgba(0, 0, 0, 0.45);
+
+  /* 组件级色板（「白底白字」的根因，见文件头「暗色令牌分级」说明）
+   * TDesign 的 outline 按钮、input、select、textarea 等填充取组件级令牌
+   * （--td-bg-color-specialcomponent / --td-bg-color-component 等），而上方
+   * 只覆盖了容器级令牌 —— 于是文字色翻了白、底色仍留在亮色，形成白底白字。
+   * 这里把组件级令牌等价映射到既有容器令牌，零新增颜色，随主题自动一致。 */
+  --td-bg-color-specialcomponent: var(--td-bg-color-container);
+  --td-bg-color-container-select: var(--td-bg-color-container);
+  --td-bg-color-component: var(--td-bg-color-container-hover);
+  --td-bg-color-component-hover: var(--td-bg-color-container-hover);
+  --td-bg-color-component-active: var(--td-bg-color-container-active);
+  --td-bg-color-component-disabled: var(--td-bg-color-container-disabled);
+  --td-bg-color-secondarycomponent: var(--td-bg-color-container-hover);
+  --td-bg-color-secondarycomponent-hover: var(--td-bg-color-container-active);
+  --td-bg-color-secondarycomponent-active: var(--td-bg-color-container-active);
+  --td-bg-color-secondarycontainer: var(--td-bg-color-container-hover);
+  --td-bg-color-secondarycontainer-hover: var(--td-bg-color-container-hover);
+  --td-bg-color-secondarycontainer-active: var(--td-bg-color-container-active);
+  /* 边框分级：亮灰边框在暗底上会「发白」，映射到既有描边令牌 */
+  --td-border-level-1-color: var(--td-component-border);
+  --td-border-level-2-color: var(--td-component-stroke);
+  /* 遮罩：loading / 弹层遮罩在暗色下必须为深色，否则白纱盖住白字。
+   * 取 #242424 加透明度，与容器色同源，不引入新色相。
+   * （--td-mask-active 亮色即为黑色遮罩，暗色下无需变更。） */
+  --td-mask-background: rgba(36, 36, 36, 0.96);
+  --td-mask-disabled: rgba(36, 36, 36, 0.6);
+  --td-mask-gradient: rgba(36, 36, 36, 0);
+  /* 水印文字：淡黑 → 淡白 */
+  --td-text-color-watermark: rgba(255, 255, 255, 0.1);
 
   /* Cube 扩展令牌：内容区在暗色下用页面底色，侧栏边框更弱 */
   --cube-content-bg: #181818;

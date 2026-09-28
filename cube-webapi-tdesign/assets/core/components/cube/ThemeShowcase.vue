@@ -146,7 +146,7 @@ const semanticList = [
 .radius-row { display: flex; gap: var(--cube-spacing-4); flex-wrap: wrap; }
 .radius-box { width: 92px; height: 64px; background: var(--td-brand-color-light); border: 1px solid var(--td-component-border); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--td-text-color-secondary); }
 .shadow-row { display: flex; gap: var(--cube-spacing-5); flex-wrap: wrap; }
-.shadow-box { width: 120px; height: 72px; background: #fff; border-radius: var(--cube-radius-md); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--td-text-color-secondary); }
+.shadow-box { width: 120px; height: 72px; background: var(--td-bg-color-container); border-radius: var(--cube-radius-md); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--td-text-color-secondary); }
 .spacing-row { display: flex; gap: var(--cube-spacing-3); align-items: flex-end; flex-wrap: wrap; }
 .spacing-item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--td-text-color-secondary); }
 .spacing-bar { height: 40px; background: var(--td-brand-color); border-radius: 2px; }
