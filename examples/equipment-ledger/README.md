@@ -2,14 +2,7 @@
 
 内部设备台账的最小前后端。后端是 NewLife.Cube WebApi，前端是 TDesign Vue Next，页面由 `GetPage` 元数据驱动。用来核对仓库里的两份技能能否被按原文做出来。
 
-本示例跟随的技能提交：
-
-| 技能 | 提交 |
-|---|---|
-| `cube-webapi-backend` | `756c85af1467af8432b8bce6dd16e2115add3be4` |
-| `cube-webapi-tdesign` | `756c85af1467af8432b8bce6dd16e2115add3be4` |
-
-两份技能在该提交上同时存在。对照过程与偏差见仓库 `docs/SKILL-VALIDATION.md`。
+本示例初次跟随的技能提交是 `main` 的 `756c85af1467af8432b8bce6dd16e2115add3be4`。后来按技能修正分支 `cursor/skill-fix-from-ledger-validation-7836` 复测到 `ed47602`，并据此改了前端令牌注释、`engines.node` 和下面的偏差说明。最后一轮完整检查没有再发现新的技能缺陷。对照过程见仓库 `docs/SKILL-VALIDATION.md` 文首「干净通过」。
 
 ## 范围
 
@@ -52,7 +45,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5052
 - 监听 `http://127.0.0.1:5052`，与前端脚手架默认代理目标一致。
 - 开发环境才挂 Swagger：`http://127.0.0.1:5052/Swagger`。
 - SQLite 文件出现在 `bin/Debug/net8.0/Data/`（`Membership.db`、`Cube.db`、`Log.db`、`Equipment.db`）。相对路径 `Data Source=Data/...` 相对的是程序输出目录，不是工程目录。
-- 令牌密钥在 `Config/Cube.config` 的 `<JwtSecret>`，格式为 `HS256:` 加一段示例串，仅供本示例，不能用于生产。
+- `Config/Cube.config` 里写了 `<JwtSecret>`，但 NewLife.Cube 6.15.2026.901 首次启动会把 `CubeSetting` 写进 Membership 库 `Parameter`。本机实测生效的是库里随机生成的 `HS256:` 密钥，不是文件里的示例串。文件仍保留，避免下次有人按旧文档只改 `appsettings.json`。不要把这份示例密钥用于生产。
 
 ## 运行前端
 
@@ -76,10 +69,10 @@ npm run build
 
 ## 已声明的工程偏差
 
-校验脚本 `check-starter-align.mjs` 对本目录给出 0 FAIL、2 WARN：缺少 `.husky/` 与 `.vscode/`。本次 `tdesign-starter-cli@0.5.3` 的产物里就没有这两个目录，没有手补，避免伪造官方骨架。`npm run lint` 与 husky 提交钩子因此不可用；要恢复需在 CLI 实际产出这两套文件后再装对应依赖。
+`tdesign-starter-cli@0.5.3` 的产物里没有 `.husky/` 与 `.vscode/`，本示例没有手补。技能修正后的 `check-starter-align.mjs` 不再把这两项缺失记为 WARN。`npm run lint` 与 husky 提交钩子因此仍不可用。
 
-`package.json` 的 `engines.node` 写的是 `>=22.12.0`，但 `lint-staged@17.0.8` 要求 Node `>=22.22.1`。Node 22.14 上 `npm install` 会以 `EBADENGINE` 失败。本机用 Node 22.22.2 安装成功（882 个包）。
+`package.json` 的 `engines.node` 为 `>=22.22.1`，与技能脚手架一致。Node 22.14 上 `npm install` 会因 `lint-staged@17.0.8` 报 `EBADENGINE`。本机用 Node 22.22.2 安装成功。
 
-未改 `tsconfig.json` 的编译策略，沿用 CLI 原文件（含 `@/*` 路径）。后端端口用前端脚手架默认的 `127.0.0.1:5052`，没有用后端技能正文里的 `5077`。
+未改 `tsconfig.json` 的编译策略，沿用 CLI 原文件（含 `@/*` 路径）。后端端口用前端脚手架默认的 `127.0.0.1:5052`。
 
-依赖安装走 `npm`。技能正文前半写 `pnpm install`，后半记录作者机器上 pnpm 会在链接阶段挂死，并改推 npm。
+依赖安装走 `npm install --no-audit --no-fund`。

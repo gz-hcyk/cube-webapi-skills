@@ -1,5 +1,48 @@
 # 技能验证报告：设备台账示例
 
+## 复测结论：干净通过
+
+最后一轮完整验证没有再发现新的技能缺陷。对照的是技能修正分支 `cursor/skill-fix-from-ledger-validation-7836` 的 `ed47602a7d2c7f27af3203bbe1fd82d45ee94326`，不是最初的 `main` `756c85af1467af8432b8bce6dd16e2115add3be4`。下面第 1–4 节保留第一次对着 `main` 的记录，没有删。
+
+最后一轮（技能提交 `ed47602` 之后，2026-10-04）：
+
+| 检查 | 结果 |
+|---|---|
+| `dotnet build --no-incremental` | 成功。0 错误，6 警告：`LedgerArea` 的 `TrimEnd` CS0618，实体 CS8601，未使用的 `MaxCacheCount`。模板不在本仓库，示例未改生成代码 |
+| `npm run build`（Node v22.22.2，满足技能 `engines.node` `>=22.22.1`） | 退出码 0。`vue-tsc` 无错误。vite 8.1.5。`tdesign` 分包 6,821.55 kB，大于 500 kB 的警告仍在，与技能「属预期」一致 |
+| `node check-all.mjs <web>`（含 `tri-diff`，不再加 `--no-tridiff`） | 7 个闸门全部 PASS |
+| `POST /Auth/Login`，`username` 与 `userName` 各一次 | 都是 HTTP 200，`code: 0`，`expire_in: 0`，令牌键 snake_case |
+| `GET /api/Admin/Index/GetMenuTree` | HTTP 200，含 `Ledger` |
+| `GET /Admin/Index/GetMenuTree`（不带 `/api`） | Kestrel HTTP 404。经 Vite（3002）则是 SPA 的 `index.html`（200 + `text/html`），请求没有进后端 |
+| 无令牌 `GET /api/Ledger/Equipment` | HTTP 401，`code: 401` |
+| 列表 / 新增 / `GET Detail` / `PUT` / 再 `GET Detail` / `DELETE` | 行键 camelCase（`id`/`categoryID`/`purchasedDate`）。`PUT` 之后的 `GET Detail` 仍保留原来的 `createTime`。`GetFields.name` 仍是 PascalCase（`Id`/`CategoryName`） |
+| `GET /Auth/LoginConfig` | `name` 为「设备台账」。`copyright`、`loginTip` 为 null。`registration` 为「沪ICP备10000000号」。供应商键名是 `oAuth` |
+| 经 `http://127.0.0.1:3002` 代理登录 | HTTP 200，`code: 0` |
+
+### 中间轮次：技能分支上修了什么
+
+这些提交只在技能 PR，没有把示例工程放进去。
+
+1. `71402cc`、`e307e47`：`deployment.md` 仍要求删掉 `Provider=sqlite` 且 `Busy Timeout=15000`；后端菜单铁律仍写不带 `/api` 的 `GetMenuTree`；§14.5 仍是 15000；前端工具链仍把 `.husky` 写成现行 CLI 必有；排障仍教无 `/api` 菜单、代理正则 `^/Admin/Index/`、缺 husky 算 FAIL、文件数 31/55。
+2. `e29258d`：排障里的 `Busy Timeout=15000` 和少了 `/Sso`、`/Cube` 的代理清单；`cube-page-catalog.md` 把实测会 302 的 `/Cube/MenuTree` 写成菜单权威；把 6.15 的行 JSON 写成当前就是 PascalCase；CLI 现行文件数仍写 193；`scripts/README.md` 仍把缺 `.husky/` 写成 WARN；登录体 `username` / `userName` 两条都能 200，`LoginConfig` 的键是 `oAuth`。
+3. `ed47602`：多处「一次拷 31 件」改成 38 个文件；`scaffold/README.md` 仍写登录体「不是 `userName`」。
+
+第 3 轮提交之后又做了一轮完整构建、HTTP 和 `check-all`。没有再出现同一类「步骤和实测相反」的新缺陷，所以停在干净通过，没有开第 4 轮。
+
+### 中间轮次：示例分支上修了什么
+
+只在 `cursor/equipment-ledger-sample-7836`：
+
+- `src/api/token.ts`、`src/stores/auth.ts` 与更新后的 `assets/core` 对齐（注释：`expire_in` 为 0 不是登录失败）。`LoginView.vue` 的 `PROJECT` 定制保留。
+- `web/package.json` 的 `engines.node` 改为 `>=22.22.1`。
+- README 改掉「缺 husky 仍是 2 条 WARN」「engines 仍是 22.12」「`Cube.config` 里的 JwtSecret 就是运行时密钥」这几句。本机首次启动写入 Membership `Parameter` 的是随机 `JwtSecret`，不是文件里的演示串。
+
+### 仍然故意没做
+
+报告第 4 节的 P2 没有纳入技能 PR，本轮也没有把它们当成新缺陷重开：`example-iothub` 短分类示例、5 个零引用声明文件改成非零退出、排障旁补 Linux `pkill`。`scan-assets-dead` 对那 5 个文件仍只打印、退出码 0。外部技能 `project-architecture`、`xcode-data-modeling`、`cube-mvc-backend` 和 xcodetool 模板仍不在本仓库。
+
+---
+
 验证对象是本仓库 `main` 上的两份技能，提交 `756c85af1467af8432b8bce6dd16e2115add3be4`：
 
 - `cube-webapi-backend/SKILL.md` 及其 `references/`
