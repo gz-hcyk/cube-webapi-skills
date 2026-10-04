@@ -37,7 +37,12 @@ public class HttpRuntimeTests
         var process = Publish(mark);
 
         await using var factory = new ApprovalApiFactory(_world);
-        using var client = factory.CreateClient();
+        // 关闭 Cookie，避免上一次登录的会话盖住后面的 Bearer。
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        // 先打一次登录，让 UseCube 扫完菜单，再把运行接口的权限位授给本角色。
+        _ = await Login(client, student.Name, "pass1234");
+        Grant(sys);
 
         var studentToken = await Login(client, student.Name, "pass1234");
         var wrong = await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", studentToken, new
@@ -111,6 +116,33 @@ public class HttpRuntimeTests
         });
         var agreed = Ok(agreedBody);
         Assert.Equal(2, agreed["status"]!.GetValue<Int32>());
+    }
+
+    private static void Grant(Role role)
+    {
+        var flags = PermissionFlags.All;
+        var menus = Menu.FindAll();
+        var hits = menus.Where(m =>
+        {
+            var text = (m.FullName ?? "") + " " + (m.Url ?? "") + " " + (m.Name ?? "");
+            return text.Contains("Runtime", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("审批");
+        }).ToList();
+        if (hits.Count == 0)
+        {
+            var dump = String.Join("\n", menus.Select(m => m.ID + " | " + m.Name + " | " + m.FullName + " | " + m.Url + " | " + m.Permission));
+            throw new InvalidOperationException("没有审批菜单\n" + dump);
+        }
+
+        foreach (var menu in hits)
+            role.Set(menu.ID, flags);
+        // Set 只改内存里的权限字典，要保存后鉴权重新加载才能看见。
+        role.Update();
+        Role.Meta.Cache?.Clear("grant", true);
+        Role.Meta.SingleCache.Clear("grant");
+        User.Meta.Cache?.Clear("grant", true);
+        User.Meta.SingleCache.Clear("grant");
     }
 
     private static ApprovalProcess Publish(String mark)
