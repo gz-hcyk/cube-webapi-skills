@@ -1,0 +1,374 @@
+<template>
+  <div class="login-wrap">
+    <div class="login-left" :style="loginBgStyle">
+      <div class="ll-logo">
+        <div class="lg">
+          <img v-if="brandLogo" :src="brandLogo" alt="logo" class="lg-img" @error="onLogoError" />
+          <template v-else>{{ (config.name || 'C').charAt(0) }}</template>
+        </div>
+        <div>
+          <b>{{ config.name || PROJECT.fallbackName }}</b>
+          <!-- L1：品牌副标题 = tagline（业务定位语）。留空不渲染 -->
+          <span v-if="PROJECT.tagline">{{ PROJECT.tagline }}</span>
+        </div>
+      </div>
+      <!-- L1：主标题 / 说明 / 能力要点 —— 全部按项目业务填写，留空则整块不渲染（禁技术栈话术） -->
+      <h2 v-if="PROJECT.title" class="proj-title">{{ PROJECT.title }}</h2>
+      <p v-if="PROJECT.subtitle">{{ PROJECT.subtitle }}</p>
+      <div v-if="PROJECT.highlights.length" class="feat">
+        <div v-for="(h, i) in PROJECT.highlights" :key="i"><t-icon name="check" /> {{ h }}</div>
+      </div>
+    </div>
+
+    <div class="login-right">
+      <div class="login-card">
+        <!-- MFA 二步验证步骤 -->
+        <template v-if="mfa.mfaRequired">
+          <h3>两步验证</h3>
+          <div class="sub">请输入身份验证器中的 6 位动态码</div>
+          <t-input v-model="mfa.code" placeholder="6 位动态码" size="large" maxlength="6" />
+          <t-button theme="primary" block size="large" :loading="loading" @click="onVerifyMfa">验 证</t-button>
+          <p v-if="mfa.err" class="err">{{ mfa.err }}</p>
+          <t-link theme="primary" class="back" @click="resetMfa">返回登录</t-link>
+        </template>
+
+        <!-- 登录表单（按 LoginConfig 开关渲染 Tab） -->
+        <template v-else>
+          <h3>欢迎登录</h3>
+          <div class="sub">{{ config.loginTip || '请输入账号密码进入管理控制台' }}</div>
+
+          <t-tabs v-if="hasTabs" v-model="activeTab">
+            <t-tab-panel v-if="sw.password" value="password" label="密码登录" />
+            <t-tab-panel v-if="sw.sms" value="sms" label="手机验证码" />
+            <t-tab-panel v-if="sw.mail" value="mail" label="邮箱验证码" />
+          </t-tabs>
+
+          <!-- 密码登录 -->
+          <t-form v-if="activeTab === 'password'" :data="pw" @submit="onPasswordLogin" label-width="0">
+            <t-form-item name="username">
+              <t-input v-model="pw.username" placeholder="用户名 / 手机号" size="large" clearable>
+                <template #prefix-icon><t-icon name="user" /></template>
+              </t-input>
+            </t-form-item>
+            <t-form-item name="password">
+              <t-input v-model="pw.password" type="password" placeholder="请输入密码" size="large" clearable>
+                <template #prefix-icon><t-icon name="lock-on" /></template>
+              </t-input>
+            </t-form-item>
+            <p v-if="pwdHint" class="pwd-hint"><t-icon name="info-circle" /> {{ pwdHint }}</p>
+            <t-form-item v-if="sw.captcha" name="captchaCode">
+              <div class="captcha-row">
+                <t-input v-model="pw.captchaCode" placeholder="图片验证码" size="large" clearable />
+                <img v-if="captcha.image" class="captcha-img" :src="captchaSrc" @click="loadCaptcha" alt="captcha" />
+              </div>
+            </t-form-item>
+            <!-- ★ L4：登录页不设租户选择——租户由后端登录响应头 X-Tenant 下发，http.ts 自动捕获持久化 -->
+            <div class="login-foot">
+              <t-checkbox v-model="remember">记住我</t-checkbox>
+              <t-link v-if="allowForgot" theme="primary" @click="goForgot">忘记密码？</t-link>
+            </div>
+            <t-button theme="primary" type="submit" block size="large" :loading="loading">登 录</t-button>
+          </t-form>
+
+          <!-- 短信 / 邮箱验证码登录 -->
+          <t-form v-else :data="codeForm" @submit="onCodeLogin" label-width="0">
+            <t-form-item name="username">
+              <t-input v-model="codeForm.username" :placeholder="activeTab === 'sms' ? '手机号' : '邮箱'" size="large" clearable>
+                <template #prefix-icon><t-icon name="user" /></template>
+              </t-input>
+            </t-form-item>
+            <t-form-item name="code">
+              <div class="captcha-row">
+                <t-input v-model="codeForm.code" placeholder="验证码" size="large" clearable />
+                <t-button variant="outline" :disabled="countdown > 0" @click="onSendCode">
+                  {{ countdown > 0 ? countdown + 's' : '发送验证码' }}
+                </t-button>
+              </div>
+            </t-form-item>
+            <t-button theme="primary" type="submit" block size="large" :loading="loading">登 录</t-button>
+          </t-form>
+
+          <!-- 第三方登录 -->
+          <div v-if="oauth.length" class="oauth">
+            <t-divider>第三方登录</t-divider>
+            <div class="oauth-list">
+              <a v-for="p in oauth" :key="p.name" href="javascript:void(0)" @click="onOauth(p)">
+                <img v-if="p.logo" :src="p.logo" :alt="p.nickName || p.name" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                <span>{{ p.nickName || p.name }}</span>
+              </a>
+            </div>
+          </div>
+
+          <t-link v-if="allowRegister" theme="primary" class="reg-link" @click="goRegister">还没有账号？立即注册</t-link>
+        </template>
+
+        <div v-if="config.copyright" class="copyright" v-html="config.copyright" />
+        <a v-if="config.registration" class="beian" href="https://www.beianx.cn/" target="_blank" rel="noreferrer">{{ config.registration }}</a>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { useAuthStore, AuthCategory, type LoginConfig, type OAuthProvider } from '@/stores/auth';
+
+/* ═════════════════════════ L1：登录页左栏文案（按当前项目填写） ═════════════════════════
+ * 铁律 L1（不可违反）：以下四项**必须按项目业务改写**，禁止沿用技术栈话术
+ * （反例：「魔方 WebApi 开发框架」「元数据驱动的后台开发新范式」「字段映射双模式」）。
+ * 生成口径：从项目名 / 后端 `LoginConfig.title` 出发，用**业务语言**写。
+ *   · tagline   品牌名下一句定位语，建议「能力A · 能力B · 能力C」
+ *   · title     主标题，支持 `
+` 换行（CSS `white-space: pre-line`）
+ *   · subtitle  主标题下一段说明
+ *   · highlights 2~4 条核心能力要点，逐条渲染并配 ✓ 图标
+ * 留空则对应区块不渲染；但 tagline 与 highlights **至少要给出内容**（都留空 → 左栏空白）。
+ * 示例（实验室资产平台）：
+ *   tagline: '资产台账 · 采购审批 · 全程留痕'
+ *   title: '实验室资产
+全流程数字化管理'
+ *   subtitle: '分类建档、台账维护、采购审批一体化，从入库到报废全程可追溯。'
+ *   highlights: ['多级分类树形建档，资产归属一目了然', '资产台账含配件明细，使用状态实时可查',
+ *                '采购订单在线审批，权限分级管控', '操作日志全程留痕，责任可追溯']
+ */
+const PROJECT = {
+  /** LoginConfig 未下发系统名时的兜底品牌名。填**项目名**，勿填框架名 */
+  fallbackName: '设备台账',
+  tagline: '设备建档 · 分类检索 · 状态可查',
+  title: '内部设备台账',
+  subtitle: '登记设备名称、编码、存放位置与购置日期，按分类维护在用、在库和维修状态。',
+  highlights: [
+    '按分类查看设备，位置和状态一目了然',
+    '编码唯一，列表支持搜索和分页',
+    '新增、修改、删除走统一台账',
+  ],
+};
+
+const auth = useAuthStore();
+const router = useRouter();
+const loading = ref(false);
+const remember = ref(true);
+
+const config = ref<LoginConfig>({});
+const activeTab = ref<'password' | 'sms' | 'mail'>('password');
+
+const sw = computed(() => ({
+  password: config.value.login?.password !== false,
+  sms: !!config.value.login?.sms,
+  mail: !!config.value.login?.mail,
+  captcha: !!config.value.login?.captcha,
+  sendCode: !!config.value.login?.sendCode,
+}));
+const hasTabs = computed(() => sw.value.sms || sw.value.mail);
+const allowForgot = computed(
+  () => !!config.value.login?.sms || !!config.value.login?.mail || !!config.value.login?.sendCode,
+);
+const allowRegister = computed(() => !!config.value.register?.enabled);
+const oauth = computed<OAuthProvider[]>(() => config.value.oAuth || []);
+
+/* 左栏 Logo：优先 loginLogo，其次 logo；加载失败回退到系统名首字母方块 */
+const logoBroken = ref(false);
+function onLogoError() {
+  logoBroken.value = true;
+}
+const brandLogo = computed<string>(() => {
+  const u = config.value.loginLogo || config.value.logo || '';
+  return !logoBroken.value && u ? u : '';
+});
+/* 登录页背景图（loginBackground 有值时叠加到渐变之上） */
+const loginBgStyle = computed(() =>
+  config.value.loginBackground
+    ? { backgroundImage: `url("${config.value.loginBackground}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : {},
+);
+/* 密码复杂度提示：仅当 passwordComplexity=true 且后端给出 passwordStrength 正则时展示（文案与校验规则一致） */
+const pwdHint = computed(() =>
+  config.value.security?.passwordComplexity && config.value.security?.passwordStrength
+    ? '密码需 8–32 位，含大写字母、小写字母、数字及特殊字符'
+    : '',
+);
+/* ★ L3：页面不渲染任何实现细节/契约说明（接口路径、加密方式、challengeRequired 等只留在代码注释里） */
+
+/* ★ L4：登录页不设租户字段——租户由后端登录响应头 X-Tenant 下发（http.ts 自动捕获存 cube_tenant_code） */
+const pw = reactive({ username: '', password: '', captchaCode: '' });
+const codeForm = reactive({ username: '', code: '' });
+
+/* 图片验证码（login.captcha=true 时） */
+const captcha = reactive<{ id: string; image: string }>({ id: '', image: '' });
+const captchaSrc = computed(() => (captcha.image ? 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(captcha.image))) : ''));
+async function loadCaptcha() {
+  try {
+    const c = await auth.getCaptcha();
+    if (c) {
+      captcha.id = c.captchaId;
+      captcha.image = c.image;
+    }
+  } catch {}
+}
+
+/* 倒计时 */
+const countdown = ref(0);
+let timer: number | undefined;
+function startCountdown() {
+  countdown.value = 60;
+  timer = window.setInterval(() => {
+    countdown.value -= 1;
+    if (countdown.value <= 0 && timer) window.clearInterval(timer);
+  }, 1000);
+}
+
+/* MFA */
+const mfa = reactive<{ mfaRequired: boolean; mfaToken: string; code: string; err: string }>({
+  mfaRequired: false,
+  mfaToken: '',
+  code: '',
+  err: '',
+});
+function resetMfa() {
+  mfa.mfaRequired = false;
+  mfa.mfaToken = '';
+  mfa.code = '';
+  mfa.err = '';
+}
+
+onMounted(async () => {
+  try {
+    config.value = await auth.getLoginConfig();
+  } catch {
+    config.value = { login: { password: true } };
+  }
+  if (sw.value.captcha) loadCaptcha();
+});
+
+async function onPasswordLogin() {
+  loading.value = true;
+  try {
+    // 仅当 LoginConfig.security.challengeRequired===true 才走 Challenge-Response；false（本环境返回）直接明文提交
+    const r = await auth.loginWithPassword(
+      pw.username,
+      pw.password,
+      { captchaId: captcha.id, captchaCode: pw.captchaCode },
+      config.value.security?.challengeRequired === true,
+      remember.value,
+    );
+    // 后端要求 MFA 但 LoginConfig.security.mfaAvailable 为 false（配置未开启）——按失败处理，不进入 MFA 步骤
+    if (r.mfaRequired && r.mfaToken) {
+      if (config.value.security?.mfaAvailable === true) {
+        mfa.mfaRequired = true;
+        mfa.mfaToken = r.mfaToken;
+        return;
+      }
+      MessagePlugin.error('当前未开启两步验证，请联系管理员');
+      return;
+    }
+    MessagePlugin.success('登录成功');
+    router.push('/');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function onSendCode() {
+  const channel = activeTab.value === 'sms' ? 'Sms' : 'Mail';
+  try {
+    await auth.sendCode(channel, codeForm.username, 'Login');
+    startCountdown();
+    MessagePlugin.success('验证码已发送');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '发送失败');
+  }
+}
+
+async function onCodeLogin() {
+  loading.value = true;
+  try {
+    // tab 值 sms → AuthCategory.Mobile(1)，mail → AuthCategory.Mail(2)；一律走枚举，禁止裸字符串
+    await auth.loginWithCode(
+      codeForm.username,
+      codeForm.code,
+      activeTab.value === 'sms' ? AuthCategory.Mobile : AuthCategory.Mail,
+    );
+    MessagePlugin.success('登录成功');
+    router.push('/');
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '登录失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function onVerifyMfa() {
+  loading.value = true;
+  try {
+    await auth.verifyMfa(mfa.mfaToken, mfa.code);
+    MessagePlugin.success('验证成功');
+    router.push('/');
+  } catch (e: any) {
+    mfa.err = e?.message || '验证失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onOauth(p: OAuthProvider) {
+  const returnUrl = encodeURIComponent(window.location.origin + '/');
+  window.location.href = '/Sso/Login/' + p.name + '?r=' + returnUrl;
+}
+
+function goForgot() {
+  router.push('/forgot-password');
+}
+function goRegister() {
+  router.push('/register');
+}
+</script>
+
+<style scoped>
+.login-wrap { display: flex; min-height: 100vh; }
+.login-left {
+  flex: 1; background: var(--cube-brand-gradient-iot);
+  color: #fff; display: flex; flex-direction: column; justify-content: center;
+  padding: 64px; position: relative; overflow: hidden;
+}
+.login-left::after {
+  content: ''; position: absolute; right: -120px; bottom: -120px; width: 380px; height: 380px;
+  border-radius: 50%; background: radial-gradient(circle, rgba(74, 150, 235, 0.5), transparent 70%);
+}
+.ll-logo { display: flex; align-items: center; gap: 12px; position: relative; z-index: 2; }
+.ll-logo .lg { width: 46px; height: 46px; border-radius: 12px; background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; overflow: hidden; }
+.ll-logo .lg-img { width: 100%; height: 100%; object-fit: contain; }
+.ll-logo b { font-size: 18px; display: block; }
+.ll-logo span { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+.login-left h2 { font-size: 30px; margin: 48px 0 14px; position: relative; z-index: 2; line-height: 1.3; }
+/* L1：主标题支持 `
+` 换行 */
+.login-left .proj-title { white-space: pre-line; }
+.login-left p { color: rgba(255, 255, 255, 0.78); font-size: 15px; max-width: 420px; position: relative; z-index: 2; line-height: 1.7; }
+.feat { margin-top: 36px; position: relative; z-index: 2; display: flex; flex-direction: column; gap: 14px; color: rgba(255, 255, 255, 0.9); font-size: 14px; }
+.feat div { display: flex; align-items: center; gap: 10px; }
+.feat :deep(.t-icon) { color: #7fb2ff; }
+.login-right { flex: 1; display: flex; align-items: center; justify-content: center; background: #fff; }
+.login-card { width: 380px; max-width: 90%; }
+.login-card h3 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.login-card .sub { color: var(--td-text-color-secondary); margin-bottom: 20px; font-size: 13.5px; }
+.login-foot { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 24px; font-size: 13px; }
+.pwd-hint { display: flex; align-items: center; gap: 6px; margin: -6px 0 14px; font-size: 12px; color: var(--td-text-color-placeholder); }
+.pwd-hint :deep(.t-icon) { color: var(--td-brand-color); }
+.captcha-row { display: flex; gap: 8px; width: 100%; }
+.captcha-row .t-input { flex: 1; }
+.captcha-img { height: 40px; border-radius: 6px; cursor: pointer; border: 1px solid var(--td-component-border); }
+.oauth { margin-top: 20px; }
+.oauth-list { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.oauth-list a { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--td-text-color-secondary); }
+.oauth-list img { width: 36px; height: 36px; border-radius: 8px; }
+.reg-link { display: block; text-align: center; margin-top: 16px; }
+.back { display: block; text-align: center; margin-top: 12px; }
+.err { color: var(--td-error-color); font-size: 13px; margin: 8px 0; }
+.copyright { margin-top: 12px; font-size: 12px; color: var(--td-text-color-secondary); text-align: center; }
+.beian { display: block; text-align: center; margin-top: 4px; font-size: 12px; color: var(--td-text-color-placeholder); }
+</style>
