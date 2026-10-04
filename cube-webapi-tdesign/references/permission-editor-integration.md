@@ -17,7 +17,7 @@
 ## 1. 拷贝资产
 
 ```bash
-cp -r <skill>/cube-webapi-tdesign/assets/core/. <工程>/src/    # 一次拷全 31 件，RoleMenuEditor 已含在内
+cp -r <skill>/cube-webapi-tdesign/assets/core/. <工程>/src/    # 一次拷全 38 个文件（2026-09-13 曾计 31），RoleMenuEditor 已含在内
 # 或单独取：cp <skill>/cube-webapi-tdesign/assets/core/components/cube/RoleMenuEditor.vue <工程>/src/components/cube/
 ```
 

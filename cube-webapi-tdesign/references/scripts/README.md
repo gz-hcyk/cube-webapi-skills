@@ -508,7 +508,7 @@ exit=0
 3. **资产拷贝模板的"零引用"是常态**：`assets/core/` 内的**配方件**（`RoleMenuEditor.vue` /
    `PriceYuanInput.vue` / `ThemeShowcase.vue`）不被业务 `src/` 引用属正常（`ThemeShowcase` 仅 DEV 路由用）。
    判定要看**文档是否承诺该能力**，不能只看 import 数。
-   > 2026-09-13 起可选项层已取消，`assets/` 仅剩 `core/` 一层（31 件全拷）。
+   > 2026-09-13 起可选项层已取消，`assets/` 仅剩 `core/` 一层。该日 31 个文件；2026-10-04 复数为 **38**，仍然一次全拷。
 
 ## 本次体检结论（2026-09-10）
 
