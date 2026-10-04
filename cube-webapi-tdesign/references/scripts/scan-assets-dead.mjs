@@ -4,9 +4,12 @@
 //    零引用是正常状态，不应计入「死文件」。命中白名单的条目以 WHITELIST 单列，
 //    不计入 dead 总结。判定规则见 isWhitelisted()。
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, basename } from 'node:path'
+import { join, relative, basename, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = process.env.SKILL_DIR || 'C:/Users/admin/.workbuddy/skills/cube-webapi-tdesign'
+// references/scripts → 上两级即技能根。SKILL_DIR 只作可选覆盖，默认不依赖任何本机家目录。
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = process.env.SKILL_DIR ? resolve(process.env.SKILL_DIR) : resolve(HERE, '..', '..')
 const SKIP = new Set(['node_modules', 'dist', '.git', 'public'])
 
 /** 白名单：basename → 原因（入口/外壳/可选组件/权限模块，结构上天然零 import 引用） */

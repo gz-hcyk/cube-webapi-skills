@@ -4,8 +4,8 @@
  *
  * 背景（D-17 的结构性成因）：
  *   技能资产是「两镜像」，**不是三副本**：
- *     · references/scaffold/src/  ← 真相源（55 件，完整可运行 CLI 产物）
- *     · assets/core/              ← 派生镜像（31 件，是 scaffold/src 的严格子集，供 `cp -r` 用）
+ *     · references/scaffold/src/  ← 真相源（62 个文件，完整可运行工程）
+ *     · assets/core/              ← 派生镜像（38 个文件，是 scaffold/src 的严格子集，供 `cp -r` 用）
  *   历史上还有第三个目录 `references/demo/src/`（lite 血统第二基线），但它**不是**同步目标，
  *   且已于 2026-09-13 **归档移出技能**（现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`），
  *   以免每次自检都产出与「真红灯」混在一起的 DEMO-* 噪声。

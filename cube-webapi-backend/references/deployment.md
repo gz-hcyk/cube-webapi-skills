@@ -128,7 +128,7 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 [Install]
 WantedBy=multi-user.target
 ```
-`WorkingDirectory` **必须**指向 backend 目录——SQLite 连接串 `Data/*.db` 相对 **进程 CWD**（见 §十二），非 ContentRoot，错了会建到别的目录/查不到库。
+`WorkingDirectory` 仍指向 backend 目录，便于日志和相对文件。SQLite 连接串 `Data/*.db` 在 XCode 12.2 上相对 **`AppContext.BaseDirectory`**（dll 所在目录），不是进程 CWD，也不是 ContentRoot。`dotnet /var/www/.../MyBlog.Web.dll` 时库落在该 dll 旁边的 `Data/`。
 
 ### 15.7 本地冒烟验证（本机 .NET 10 跑 net8 包）
 
@@ -153,7 +153,7 @@ DOTNET_ROLL_FORWARD=Major ASPNETCORE_ENVIRONMENT=Development \
 - **Production 400 Invalid Hostname**：本地冒烟必须 Development 环境；上线才切 Production + 真实 AllowedHosts。
 - **`--no-self-contained` 忘了装 .NET 8 Runtime**：服务器 `dotnet --version` 非 8.x 则起不来。
 - **端口残留进程**：`fuser -k <port>/tcp` 清理后换端口再起。
-- **SQLite 相对 CWD**：systemd `WorkingDirectory` 必须指向 backend 目录，否则库建错地方。
+- **SQLite 相对 `AppContext.BaseDirectory`**：发布后的 dll 目录就是路径基准，库在该目录的 `Data/`。不要再按「相对 CWD」去改 `WorkingDirectory` 来搬家。
 - **上传上限不一致**：Nginx `client_max_body_size` 与后端 `Kestrel MaxRequestBodySize` 须对齐（本项目 220m）。
 - **测试库污染**：冒烟后清理 `Data/*.db` 再打包，部署即新建干净库。
 - **前端同步坑（跨技能）**：`vite build --outDir` 在后台进程可能清空不写入 → 用默认 `dist` + Python `copytree`，见 tdesign §10.10。

@@ -16,7 +16,7 @@
  * 退出码：0 = 无 FAIL；1 = 有 FAIL。
  *
  * ── 双基线（2026-09-13 起） ──────────────────────────────────────────────────
- *   all  = `td-starter init <名> -type vue3 -temp all`             → **当前唯一受支持形态**（193 件）
+ *   all  = `td-starter init <名> -type vue3 -temp all`             → **当前唯一受支持形态**（2026-10-04 复跑 CLI 0.5.3：`find -type f` = 173 个文件）
  *   lite = `td-starter init <名> -type vue3 -bt vite -temp lite`   → **历史形态**，仅用于校验存量工程
  *
  *   ⚠️ 两者骨架**实质性不同**，用单基线校验必然互相误报。血统判据（见 detectLineage）：
@@ -44,8 +44,9 @@ const SKILL_ROOT = path.resolve(HERE, '..', '..');
 
 // ═════════════════════ 基线 A：all（完整脚手架，当前唯一受支持） ═════════════════════
 /**
- * `-temp all` 实测产物 **193 件**（含 `src/pages/` 50 件、`src/layouts/` 18 件等上游演示业务代码）。
- * 这里只列**结构与骨架条目**，供 `--manifest` 人工核对。
+ * `-temp all`：2026-09-13 曾计 193 个文件。2026-10-04 用同一 `tdesign-starter-cli@0.5.3` 复跑，
+ * `find -type f` 为 **173 个文件**，且**不再生成** `.husky/`、`.vscode/`。
+ * 这里只列**结构与骨架条目**，供 `--manifest` 人工核对；条目数不等于文件总数。
  */
 export const CLI_PRODUCTS_ALL = [
   '.editorconfig',
@@ -62,8 +63,6 @@ export const CLI_PRODUCTS_ALL = [
   '.cnb.yml',
   '.cnb/',
   '.github/',
-  '.husky/',
-  '.vscode/',
   'commitlint.config.js',
   'eslint.config.js',
   'stylelint.config.js',
@@ -99,8 +98,8 @@ export const CLI_PRODUCTS_ALL = [
   'src/utils/',
 ];
 
-/** all 产物总件数（不含 node_modules / dist / .git） */
-export const CLI_PRODUCTS_ALL_COUNT = 193;
+/** all 产物文件总数（不含 node_modules / dist / .git）。2026-10-04 复跑 CLI 0.5.3 的 `find -type f`，不是上面结构清单的条数。 */
+export const CLI_PRODUCTS_ALL_COUNT = 173;
 
 /** all 基线「工程骨架」——目标工程**必须存在**，缺一即 FAIL */
 const MUST_KEEP_ALL = [
@@ -124,8 +123,6 @@ const TOOLCHAIN_ALL = [
   '.npmrc',
   '.prettierrc.js',
   '.stylelintignore',
-  '.husky/',
-  '.vscode/',
   'commitlint.config.js',
   'eslint.config.js',
   'stylelint.config.js',
@@ -415,7 +412,8 @@ function tsEq(k, a, b) {
  * 依据（均为 2026-09-13 本机实测）：
  *   lite 产物（13 件）必带 `tsconfig.node.json` + `src/vite-env.d.ts` + `pkg.private: true`，
  *     `tsconfig.json` 有 `references: [{path:'./tsconfig.node.json'}]`；
- *   all 产物（193 件）**不含** `tsconfig.node.json`、**不含** `src/vite-env.d.ts`、**不含** `pkg.private`，
+ *   all 产物（2026-10-04 复跑 173 个文件）**不含** `tsconfig.node.json`、**不含** `src/vite-env.d.ts`、**不含** `pkg.private`，
+ *     也不再生成 `.husky/`、`.vscode/`（缺这两项目录不是 WARN），
  *     环境类型由 `src/types/env.d.ts` + `src/types/globals.d.ts` 承担，`tsconfig.json` 无 `references`。
  *
  * @returns {{lineage:'all'|'lite', evidence:string[]}}

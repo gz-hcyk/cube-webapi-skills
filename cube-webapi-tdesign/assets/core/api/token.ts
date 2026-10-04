@@ -62,7 +62,12 @@ export function getTokenExpire(): number {
   return Number(read(EXPIRE_KEY)) || 0
 }
 
-/** 写访问/刷新令牌（含过期时间戳）。无 expireIn 时不更新过期时间。 */
+/**
+ * 写访问/刷新令牌。
+ * NewLife.Cube 6.15.2026.901 的登录响应 `expire_in` 实测为 0，而 JWT 的 exp-iat 仍是 7200 秒。
+ * 0 与未返回都不是登录失败，也不表示令牌已过期：此处不写本地过期时间，避免把「未知有效期」记成「立刻过期」。
+ * 是否已登录只看 access token 是否存在（`isAuthed`）；过期以 JWT `exp` 或下一次请求的 401 为准。
+ */
 export function setTokens(access: string, refresh: string, expireIn?: number): void {
   write(TOKEN_KEY, access)
   write(REFRESH_KEY, refresh)
