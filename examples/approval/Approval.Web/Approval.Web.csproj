@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NewLife.Cube" Version="6.15.2026.901" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Approval.Data\Approval.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Config\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

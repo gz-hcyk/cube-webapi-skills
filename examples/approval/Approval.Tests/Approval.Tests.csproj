@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.11" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Approval.Data\Approval.Data.csproj" />
+    <ProjectReference Include="..\Approval.Web\Approval.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Approval.Web\Config\**\*" CopyToOutputDirectory="PreserveNewest" Link="Config\%(Filename)%(Extension)" />
+    <None Include="..\Approval.Web\appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Approval.Web\appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

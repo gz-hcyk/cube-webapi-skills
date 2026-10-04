@@ -1,0 +1,481 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using NewLife;
+using XCode;
+using XCode.Membership;
+
+namespace Approval.Data.Entities;
+
+/// <summary>审批运行时。发起、同意、驳回和办理人解析都在实例上。</summary>
+public partial class ApprovalInstance
+{
+    /// <summary>本人发起或代发起，进入同一条已发布流程。</summary>
+    public static ApprovalInstance Start(StartArgs args)
+    {
+        if (args.RequestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        var existed = ApprovalHistory.FindAllByRequestId(args.RequestId);
+        if (existed.Count > 0)
+        {
+            var old = FindById(existed[0].InstanceId);
+            if (old != null) return old;
+        }
+
+        var process = ApprovalProcess.FindById(args.ProcessId)
+            ?? throw new ApprovalException(4041, "流程不存在");
+        if (!process.Enable || process.PublishedVersionId <= 0)
+            throw new ApprovalException(4091, "流程未启用或尚未发布");
+        var version = ApprovalProcessVersion.FindById(process.PublishedVersionId)
+            ?? throw new ApprovalException(4041, "已发布的流程版本不存在");
+        if (version.Status != VersionStatus.Published)
+            throw new ApprovalException(4091, "流程版本不是已发布状态");
+
+        var op = User.FindByID(args.OperatorUserId)
+            ?? throw new ApprovalException(4041, "当前用户不存在");
+        if (!op.Enable) throw new ApprovalException(4031, "当前用户已停用");
+
+        User subject;
+        User? proxy = null;
+        if (!args.Proxy)
+        {
+            subject = op;
+        }
+        else
+        {
+            if (args.SubjectUserId <= 0) throw new ApprovalException(4001, "代发起必须选择学生");
+            if (args.SubjectUserId == op.ID) throw new ApprovalException(4001, "代发起不能选择自己");
+            subject = User.FindByID(args.SubjectUserId)
+                ?? throw new ApprovalException(4041, "学生不存在");
+            if (!subject.Enable) throw new ApprovalException(4221, "学生已停用");
+            proxy = op;
+        }
+
+        var nodes = ApprovalNode.FindAllByProcessVersionId(version.Id).OrderBy(e => e.Sort).ToList();
+        var transitions = ApprovalTransition.FindAllByProcessVersionId(version.Id);
+        if (nodes.Count == 0) throw new ApprovalException(4222, "已发布流程没有节点");
+        var needsCounselor = nodes.Any(e => e.AssigneeType == "subjectCounselor");
+        var data = NormalizeForm(args.Data, args.Proxy, subject.ID, out var counselorId);
+        if (needsCounselor)
+        {
+            var counselor = counselorId > 0 ? User.FindByID(counselorId) : null;
+            if (counselor == null || !counselor.Enable)
+                throw new ApprovalException(4223, "该生辅导员没有可用用户");
+        }
+
+        var dept = Department.FindByID(op.DepartmentID);
+        var now = DateTime.Now;
+        var subjectName = Display(subject);
+        var proxyName = proxy == null ? null : Display(proxy);
+        var title = proxy == null
+            ? $"{subjectName}的{process.Name}"
+            : $"{proxyName}代{subjectName}发起的{process.Name}";
+        if (title.Length > 200) title = title[..200];
+
+        ApprovalInstance? created = null;
+        Run(() =>
+        {
+            var inst = new ApprovalInstance
+            {
+                No = NextNo(now),
+                Title = title,
+                ProcessId = process.Id,
+                ProcessVersionId = version.Id,
+                FormVersionId = version.FormVersionId,
+                ProcessName = process.Name,
+                CategoryId = process.CategoryId,
+                UserId = op.ID,
+                UserName = Display(op),
+                DepartmentId = op.DepartmentID,
+                DepartmentName = dept?.Name,
+                SubjectUserId = subject.ID,
+                SubjectName = subjectName,
+                ProxyUserId = proxy?.ID ?? 0,
+                ProxyName = proxyName,
+                CounselorUserId = counselorId,
+                Status = InstanceStatus.Running,
+                Round = 1,
+                StartTime = now,
+                LastActionTime = now,
+                Version = 1,
+            };
+            inst.Insert();
+
+            var body = data.ToJsonString();
+            new ApprovalFormData
+            {
+                Id = inst.Id,
+                FormVersionId = version.FormVersionId,
+                Data = body,
+                DataSize = System.Text.Encoding.UTF8.GetByteCount(body),
+                UpdateUser = Display(op),
+                UpdateUserID = op.ID,
+                UpdateTime = now,
+            }.Insert();
+
+            WriteHistory(inst, null, null, proxy == null ? "submit" : "submit", proxy == null ? "提交" : "代发起",
+                proxy == null ? null : $"代发起人：{proxyName}，业务主体：{subjectName}",
+                InstanceStatus.Draft, InstanceStatus.Running, args.RequestId, args.ClientIp, op, now);
+
+            var start = nodes.FirstOrDefault(e => e.NodeType == "start")
+                ?? throw new ApprovalException(4222, "流程没有开始节点");
+            Enter(inst, start, nodes, transitions, now);
+            inst.Update();
+            created = inst;
+        });
+
+        return FindById(created!.Id) ?? created;
+    }
+
+    /// <summary>或签同意。任一人同意后取消其余待办并前进。</summary>
+    public static ApprovalInstance Agree(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp)
+    {
+        if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        ApprovalInstance? result = null;
+        Run(() =>
+        {
+            var task = ApprovalTask.FindById(taskId) ?? throw new ApprovalException(4041, "任务不存在");
+            var inst = FindById(task.InstanceId) ?? throw new ApprovalException(4041, "审批单不存在");
+            var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
+            if (dup != null)
+            {
+                result = inst;
+                return;
+            }
+
+            EnsureHandle(task, inst, operatorUserId, instanceVersion);
+            var op = User.FindByID(operatorUserId)!;
+            var now = DateTime.Now;
+            var claimed = ApprovalTask.Update(
+                ["Status", "HandleTime", "Comment", "UpdateTime"],
+                [TaskStatus.Agreed, now, comment ?? "", now],
+                ["Id", "Status"],
+                [task.Id, TaskStatus.Pending]);
+            if (claimed != 1) throw new ApprovalException(4092, "该任务已由他人处理");
+
+            ClearTaskCache();
+            CancelOthers(inst.Id, task, "他人已处理", now);
+
+            var nodes = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId);
+            var transitions = ApprovalTransition.FindAllByProcessVersionId(inst.ProcessVersionId);
+            var edge = transitions.Where(e => e.FromKey == task.NodeKey).OrderBy(e => e.Sort).FirstOrDefault()
+                ?? throw new ApprovalException(4222, "当前节点没有出线");
+            var next = nodes.FirstOrDefault(e => e.NodeKey == edge.ToKey)
+                ?? throw new ApprovalException(4222, "出线指向了不存在的节点");
+            var before = inst.Status;
+            Enter(inst, next, nodes, transitions, now);
+            inst.LastActionTime = now;
+            inst.Version++;
+            inst.Update();
+            WriteHistory(inst, task, nodes.First(e => e.NodeKey == task.NodeKey), "agree", "同意", comment,
+                before, inst.Status, requestId, clientIp, op, now);
+            result = inst;
+        });
+        return FindById(result!.Id) ?? result;
+    }
+
+    /// <summary>驳回给发起人。发起人在代发起时是代发人。</summary>
+    public static ApprovalInstance Reject(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp)
+    {
+        if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        if (comment.IsNullOrEmpty()) throw new ApprovalException(4001, "驳回意见必填");
+        ApprovalInstance? result = null;
+        Run(() =>
+        {
+            var task = ApprovalTask.FindById(taskId) ?? throw new ApprovalException(4041, "任务不存在");
+            var inst = FindById(task.InstanceId) ?? throw new ApprovalException(4041, "审批单不存在");
+            var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
+            if (dup != null)
+            {
+                result = inst;
+                return;
+            }
+
+            EnsureHandle(task, inst, operatorUserId, instanceVersion);
+            var op = User.FindByID(operatorUserId)!;
+            var now = DateTime.Now;
+            var claimed = ApprovalTask.Update(
+                ["Status", "HandleTime", "Comment", "UpdateTime"],
+                [TaskStatus.Rejected, now, comment, now],
+                ["Id", "Status"],
+                [task.Id, TaskStatus.Pending]);
+            if (claimed != 1) throw new ApprovalException(4092, "该任务已由他人处理");
+
+            ClearTaskCache();
+            CancelOthers(inst.Id, task, "单据已驳回", now);
+
+            var before = inst.Status;
+            inst.Status = InstanceStatus.Rejected;
+            inst.CurrentNodes = "";
+            inst.EndTime = now;
+            inst.LastActionTime = now;
+            inst.Version++;
+            inst.Update();
+            var node = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId).FirstOrDefault(e => e.NodeKey == task.NodeKey);
+            var note = $"已退回发起人：{inst.UserName}。{comment}";
+            WriteHistory(inst, task, node, "reject", "驳回", note, before, inst.Status, requestId, clientIp, op, now);
+            result = inst;
+        });
+        return FindById(result!.Id) ?? result;
+    }
+
+    private static void EnsureHandle(ApprovalTask task, ApprovalInstance inst, Int32 operatorUserId, Int32 instanceVersion)
+    {
+        if (task.AssigneeId != operatorUserId) throw new ApprovalException(4031, "您不是该任务的处理人");
+        if (task.Status != TaskStatus.Pending) throw new ApprovalException(4092, "该任务已由他人处理");
+        if (inst.Status != InstanceStatus.Running) throw new ApprovalException(4091, "当前状态不允许该操作");
+        if (instanceVersion > 0 && inst.Version != instanceVersion)
+            throw new ApprovalException(4093, "单据已变化，请刷新后重试");
+        if (task.Mode is ApproveMode.All or ApproveMode.Sequential)
+            throw new ApprovalException(4222, "本切片不执行会签或依次审批");
+    }
+
+    /// <summary>进入节点。或签为每个办理人生成待办；会签和依次审批只保存、不执行。</summary>
+    private static void Enter(ApprovalInstance inst, ApprovalNode node, IList<ApprovalNode> nodes, IList<ApprovalTransition> transitions, DateTime now)
+    {
+        if (node.NodeType == "end")
+        {
+            inst.Status = InstanceStatus.Approved;
+            inst.CurrentNodes = node.Name;
+            inst.EndTime = now;
+            return;
+        }
+
+        if (node.NodeType == "start")
+        {
+            var edge = transitions.Where(e => e.FromKey == node.NodeKey).OrderBy(e => e.Sort).FirstOrDefault()
+                ?? throw new ApprovalException(4222, "开始节点没有出线");
+            var next = nodes.FirstOrDefault(e => e.NodeKey == edge.ToKey)
+                ?? throw new ApprovalException(4222, "开始节点的出线没有目标");
+            Enter(inst, next, nodes, transitions, now);
+            return;
+        }
+
+        if (node.NodeType != "approve")
+            throw new ApprovalException(4222, "本切片不执行该节点类型：" + node.NodeType);
+        if (node.ApproveMode is ApproveMode.All or ApproveMode.Sequential)
+            throw new ApprovalException(4222, "本切片不执行会签或依次审批");
+
+        var users = ResolveAssignees(inst, node);
+        if (users.Count == 0) throw new ApprovalException(4223, $"节点“{node.Name}”没有可用审批人");
+        foreach (var user in users)
+        {
+            new ApprovalTask
+            {
+                InstanceId = inst.Id,
+                Round = inst.Round,
+                ProcessId = inst.ProcessId,
+                NodeKey = node.NodeKey,
+                NodeName = node.Name,
+                Kind = TaskKind.Approve,
+                Mode = ApproveMode.Any,
+                Seq = 1,
+                Source = TaskSource.Rule,
+                AssigneeId = user.ID,
+                AssigneeName = Display(user),
+                Status = TaskStatus.Pending,
+                Title = inst.Title,
+                ApplicantId = inst.UserId,
+                ApplicantName = inst.UserName,
+                ReceiveTime = now,
+                CreateTime = now,
+                UpdateTime = now,
+            }.Insert();
+        }
+
+        inst.CurrentNodes = node.Name;
+        inst.Status = InstanceStatus.Running;
+    }
+
+    /// <summary>
+    /// 解析办理人。指定成员、指定角色、部门负责人按发起人；
+    /// 「该生辅导员」只读业务单上的辅导员用户，不读代发人。
+    /// </summary>
+    public static IList<User> ResolveAssignees(ApprovalInstance inst, ApprovalNode node)
+    {
+        var rule = ParseAssignee(node.AssigneeJson);
+        var found = new List<User>();
+        switch (node.AssigneeType)
+        {
+            case "user":
+                foreach (var id in rule.UserIds.Distinct())
+                {
+                    var user = User.FindByID(id);
+                    if (user != null && user.Enable) found.Add(user);
+                }
+                break;
+            case "role":
+                foreach (var user in User.FindAll())
+                {
+                    if (user == null || !user.Enable) continue;
+                    if (rule.RoleIds.Any(roleId => HasRole(user, roleId))) found.Add(user);
+                }
+                break;
+            case "deptManager":
+                var manager = FindManager(inst.DepartmentId, rule.Level <= 0 ? 1 : rule.Level);
+                if (manager != null) found.Add(manager);
+                break;
+            case "subjectCounselor":
+                // 辅导员编号在发起时从业务主体的表单值抄到实例上，这里不再看操作者或代发人。
+                var counselor = inst.CounselorUserId > 0 ? User.FindByID(inst.CounselorUserId) : null;
+                if (counselor != null && counselor.Enable) found.Add(counselor);
+                break;
+            default:
+                throw new ApprovalException(4222, "未知的办理人规则：" + node.AssigneeType);
+        }
+
+        return found.GroupBy(e => e.ID).Select(e => e.First()).ToList();
+    }
+
+    private static User? FindManager(Int32 departmentId, Int32 level)
+    {
+        var dept = Department.FindByID(departmentId);
+        for (var i = 1; i < level && dept != null; i++)
+            dept = dept.ParentID > 0 ? Department.FindByID(dept.ParentID) : null;
+        if (dept == null || dept.ManagerId <= 0) return null;
+        var manager = User.FindByID(dept.ManagerId);
+        return manager != null && manager.Enable ? manager : null;
+    }
+
+    private static Boolean HasRole(User user, Int32 roleId)
+    {
+        if (user.RoleID == roleId) return true;
+        var raw = user.RoleIds;
+        if (raw.IsNullOrEmpty()) return false;
+        var wrapped = raw.StartsWith(',') ? raw : "," + raw;
+        if (!wrapped.EndsWith(',')) wrapped += ",";
+        return wrapped.Contains("," + roleId + ",");
+    }
+
+    private static FlowAssignee ParseAssignee(String? json)
+    {
+        if (json.IsNullOrEmpty()) return new FlowAssignee();
+        return JsonSerializer.Deserialize<FlowAssignee>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? new FlowAssignee();
+    }
+
+    /// <summary>
+    /// 本人发起时学生字段强制为当前用户。代发起时必须等于所选学生。
+    /// 辅导员字段写入表单值，供实例保存。
+    /// </summary>
+    private static JsonObject NormalizeForm(String? data, Boolean proxy, Int32 subjectUserId, out Int32 counselorId)
+    {
+        JsonObject obj;
+        try
+        {
+            obj = JsonNode.Parse(data.IsNullOrEmpty() ? "{}" : data!) as JsonObject
+                ?? throw new ApprovalException(4001, "表单值必须是对象");
+        }
+        catch (ApprovalException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new ApprovalException(4001, "表单值无法解析：" + ex.Message);
+        }
+
+        var postedStudent = ReadInt(obj, "studentUserId");
+        if (!proxy)
+        {
+            if (postedStudent > 0 && postedStudent != subjectUserId)
+                throw new ApprovalException(4221, "本人发起时学生字段不可修改");
+        }
+        else if (postedStudent != subjectUserId)
+        {
+            throw new ApprovalException(4221, "代发起时学生字段必须是所选学生");
+        }
+
+        obj["studentUserId"] = subjectUserId;
+        counselorId = ReadInt(obj, "counselorUserId");
+        return obj;
+    }
+
+    private static Int32 ReadInt(JsonObject obj, String key)
+    {
+        if (!obj.TryGetPropertyValue(key, out var node) || node == null) return 0;
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue<Int32>(out var number)) return number;
+            if (value.TryGetValue<Int64>(out var wide)) return (Int32)wide;
+            if (Int32.TryParse(value.ToString(), out var parsed)) return parsed;
+        }
+
+        return Int32.TryParse(node.ToString(), out var text) ? text : 0;
+    }
+
+    private static void CancelOthers(Int64 instanceId, ApprovalTask kept, String comment, DateTime now)
+    {
+        var pending = ApprovalTask.FindPending(instanceId);
+        foreach (var item in pending)
+        {
+            if (item.Id == kept.Id || item.NodeKey != kept.NodeKey || item.Round != kept.Round) continue;
+            item.Status = TaskStatus.Canceled;
+            item.Comment = comment;
+            item.HandleTime = now;
+            item.UpdateTime = now;
+            item.Update();
+        }
+    }
+
+    private static void WriteHistory(ApprovalInstance inst, ApprovalTask? task, ApprovalNode? node, String action, String actionName, String? comment, InstanceStatus from, InstanceStatus to, String requestId, String? ip, User op, DateTime now)
+    {
+        var dept = Department.FindByID(op.DepartmentID);
+        new ApprovalHistory
+        {
+            InstanceId = inst.Id,
+            Round = inst.Round,
+            TaskId = task?.Id ?? 0,
+            NodeKey = node?.NodeKey ?? task?.NodeKey,
+            NodeName = node?.Name ?? task?.NodeName,
+            Action = action,
+            ActionName = actionName,
+            OperatorId = op.ID,
+            OperatorName = Display(op),
+            OperatorDept = dept?.Name,
+            Comment = comment,
+            FromStatus = (Int32)from,
+            ToStatus = (Int32)to,
+            RequestId = requestId,
+            CreateTime = now,
+            CreateIP = ip,
+        }.Insert();
+    }
+
+    private static String NextNo(DateTime now)
+    {
+        var prefix = "SP" + now.ToString("yyyyMMdd");
+        var count = FindCount(_.No.StartsWith(prefix));
+        return prefix + (count + 1).ToString("0000");
+    }
+
+    private static String Display(User user) =>
+        user.DisplayName.IsNullOrEmpty() ? user.Name : user.DisplayName;
+
+    private static void Run(Action action)
+    {
+        Meta.BeginTrans();
+        try
+        {
+            action();
+            Meta.Commit();
+        }
+        catch
+        {
+            Meta.Rollback();
+            throw;
+        }
+        finally
+        {
+            ClearTaskCache();
+            Meta.Cache?.Clear("runtime", true);
+            Meta.SingleCache.Clear("runtime");
+        }
+    }
+
+    private static void ClearTaskCache()
+    {
+        ApprovalTask.Meta.Cache?.Clear("runtime", true);
+        ApprovalTask.Meta.SingleCache.Clear("runtime");
+        ApprovalHistory.Meta.Cache?.Clear("runtime", true);
+        ApprovalHistory.Meta.SingleCache.Clear("runtime");
+    }
+}

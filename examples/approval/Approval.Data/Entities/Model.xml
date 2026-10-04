@@ -1,0 +1,294 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<EntityModel xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:schemaLocation="https://newlifex.com https://newlifex.com/Model202509.xsd" ModelVersion="2.0.2026.130" Document="https://newlifex.com/xcode/model" xmlns="https://newlifex.com/Model202509.xsd">
+  <Option>
+    <!--类名模板。其中{name}替换为Table.Name，如{name}Model/I{name}Dto等-->
+    <ClassNameTemplate />
+    <!--显示名模板。其中{displayName}替换为Table.DisplayName-->
+    <DisplayNameTemplate />
+    <!--基类。可能包含基类和接口，其中{name}替换为Table.Name-->
+    <BaseClass>Entity</BaseClass>
+    <!--命名空间-->
+    <Namespace>Approval.Data.Entities</Namespace>
+    <!--引用命名空间-->
+    <ExtendNameSpace />
+    <!--输出目录-->
+    <Output>.\</Output>
+    <!--是否使用中文文件名。默认false-->
+    <ChineseFileName>False</ChineseFileName>
+    <!--用于生成Copy函数的参数类型。例如{name}或I{name}-->
+    <ModelNameForCopy />
+    <!--带有索引器。实现IModel接口-->
+    <HasIModel>False</HasIModel>
+    <!--可为null上下文。生成String?等-->
+    <Nullable>True</Nullable>
+    <!--数据库连接名-->
+    <ConnName>Approval</ConnName>
+    <!--模型类模版。设置后生成模型类，用于接口数据传输，例如{name}Model-->
+    <ModelClass />
+    <!--模型类输出目录。默认当前目录的Models子目录-->
+    <ModelsOutput>.\Models\</ModelsOutput>
+    <!--模型接口模版。设置后生成模型接口，用于约束模型类和实体类，例如I{name}-->
+    <ModelInterface />
+    <!--模型接口输出目录。默认当前目录的Interfaces子目录-->
+    <InterfacesOutput>.\Interfaces\</InterfacesOutput>
+    <!--用户实体转为模型类的模型类。例如{name}或{name}DTO-->
+    <ModelNameForToModel />
+    <!--命名格式。Default/Upper/Lower/Underline-->
+    <NameFormat>Default</NameFormat>
+    <!--魔方区域显示名-->
+    <DisplayName />
+    <!--魔方控制器输出目录-->
+    <CubeOutput />
+  </Option>
+  <Tables>
+    <Table Name="ApprovalFormDefinition" Description="表单定义。可发布为不可变版本">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="Code" DataType="String" Nullable="False" Description="编码" />
+        <Column Name="Name" DataType="String" Master="True" Length="100" Nullable="False" Description="名称" />
+        <Column Name="CategoryId" DataType="Int32" Description="分类" />
+        <Column Name="Enable" DataType="Boolean" Description="启用" />
+        <Column Name="PublishedVersionId" DataType="Int32" Description="已发布版本" />
+        <Column Name="PublishedVersion" DataType="Int32" Description="已发布版本号" />
+        <Column Name="CreateUser" DataType="String" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateUserID" DataType="Int32" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" Model="False" Category="扩展" />
+        <Column Name="CreateIP" DataType="String" Description="创建地址" Model="False" Category="扩展" />
+        <Column Name="UpdateUser" DataType="String" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" Model="False" Category="扩展" />
+        <Column Name="UpdateIP" DataType="String" Description="更新地址" Model="False" Category="扩展" />
+        <Column Name="Remark" DataType="String" Length="500" Description="备注" />
+      </Columns>
+      <Indexes>
+        <Index Columns="Code" Unique="True" />
+        <Index Columns="CategoryId" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalFormVersion" Description="表单版本。发布后结构不可变">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="FormId" DataType="Int32" Description="表单" />
+        <Column Name="Version" DataType="Int32" Description="版本号。草稿固定为0" />
+        <Column Name="Status" DataType="Int32" Description="状态" Type="Approval.Data.Entities.VersionStatus" />
+        <Column Name="Schema" DataType="String" Length="-1" Nullable="False" Description="表单结构" />
+        <Column Name="FieldCount" DataType="Int32" Description="字段数" />
+        <Column Name="SearchableKeys" DataType="String" Length="500" Description="可检索字段" />
+        <Column Name="PublishTime" DataType="DateTime" Description="发布时间" />
+        <Column Name="PublishUserId" DataType="Int32" Description="发布人" />
+        <Column Name="PublishUser" DataType="String" Description="发布人姓名" />
+        <Column Name="CreateUser" DataType="String" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateUserID" DataType="Int32" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" Model="False" Category="扩展" />
+        <Column Name="CreateIP" DataType="String" Description="创建地址" Model="False" Category="扩展" />
+        <Column Name="UpdateUser" DataType="String" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" Model="False" Category="扩展" />
+        <Column Name="UpdateIP" DataType="String" Description="更新地址" Model="False" Category="扩展" />
+        <Column Name="Remark" DataType="String" Length="500" Description="版本说明" />
+      </Columns>
+      <Indexes>
+        <Index Columns="FormId,Version" Unique="True" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalFormData" Description="表单值。与实例一对一，定义与值分开存放">
+      <Columns>
+        <Column Name="Id" DataType="Int64" PrimaryKey="True" DataScale="time" Description="编号。等于实例编号" />
+        <Column Name="FormVersionId" DataType="Int32" Description="表单版本" />
+        <Column Name="Data" DataType="String" Length="-1" Nullable="False" Description="表单值" />
+        <Column Name="DataSize" DataType="Int32" Description="字节数" />
+        <Column Name="UpdateUser" DataType="String" Description="最后修改人" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="最后修改人" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="最后修改时间" />
+      </Columns>
+    </Table>
+    <Table Name="ApprovalProcess" Description="流程定义。绑定表单，发布后按版本运行">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="Code" DataType="String" Nullable="False" Description="编码" />
+        <Column Name="Name" DataType="String" Master="True" Length="100" Nullable="False" Description="名称" />
+        <Column Name="CategoryId" DataType="Int32" Description="分类" />
+        <Column Name="FormId" DataType="Int32" Description="表单" />
+        <Column Name="Icon" DataType="String" Description="图标" />
+        <Column Name="Sort" DataType="Int32" Description="排序" />
+        <Column Name="Enable" DataType="Boolean" Description="启用" />
+        <Column Name="PublishedVersionId" DataType="Int32" Description="已发布版本" />
+        <Column Name="PublishedVersion" DataType="Int32" Description="已发布版本号" />
+        <Column Name="StarterScope" DataType="String" Length="2000" Description="可发起范围" />
+        <Column Name="AdminUserIds" DataType="String" Length="500" Description="流程管理员" />
+        <Column Name="CreateUser" DataType="String" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateUserID" DataType="Int32" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" Model="False" Category="扩展" />
+        <Column Name="CreateIP" DataType="String" Description="创建地址" Model="False" Category="扩展" />
+        <Column Name="UpdateUser" DataType="String" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" Model="False" Category="扩展" />
+        <Column Name="UpdateIP" DataType="String" Description="更新地址" Model="False" Category="扩展" />
+        <Column Name="Remark" DataType="String" Length="500" Description="说明" />
+      </Columns>
+      <Indexes>
+        <Index Columns="Code" Unique="True" />
+        <Index Columns="CategoryId,Sort" />
+        <Index Columns="FormId" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalProcessVersion" Description="流程版本。发布后定义不可变，并固化节点与连线">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="ProcessId" DataType="Int32" Description="流程" />
+        <Column Name="Version" DataType="Int32" Description="版本号。草稿固定为0" />
+        <Column Name="Status" DataType="Int32" Description="状态" Type="Approval.Data.Entities.VersionStatus" />
+        <Column Name="FormVersionId" DataType="Int32" Description="表单版本" />
+        <Column Name="Definition" DataType="String" Length="-1" Nullable="False" Description="流程图" />
+        <Column Name="NodeCount" DataType="Int32" Description="节点数" />
+        <Column Name="PublishTime" DataType="DateTime" Description="发布时间" />
+        <Column Name="PublishUserId" DataType="Int32" Description="发布人" />
+        <Column Name="PublishUser" DataType="String" Description="发布人姓名" />
+        <Column Name="CreateUser" DataType="String" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateUserID" DataType="Int32" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" Model="False" Category="扩展" />
+        <Column Name="CreateIP" DataType="String" Description="创建地址" Model="False" Category="扩展" />
+        <Column Name="UpdateUser" DataType="String" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" Model="False" Category="扩展" />
+        <Column Name="UpdateIP" DataType="String" Description="更新地址" Model="False" Category="扩展" />
+        <Column Name="Remark" DataType="String" Length="500" Description="版本说明" />
+      </Columns>
+      <Indexes>
+        <Index Columns="ProcessId,Version" Unique="True" />
+        <Index Columns="FormVersionId" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalNode" Description="流程节点。随流程版本发布后不可变">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="ProcessVersionId" DataType="Int32" Description="流程版本" />
+        <Column Name="NodeKey" DataType="String" Nullable="False" Description="节点键" />
+        <Column Name="Name" DataType="String" Master="True" Length="100" Nullable="False" Description="名称" />
+        <Column Name="NodeType" DataType="String" Length="20" Nullable="False" Description="节点类型" />
+        <Column Name="ApproveMode" DataType="Int32" Description="处理方式" Type="Approval.Data.Entities.ApproveMode" />
+        <Column Name="AssigneeType" DataType="String" Length="30" Description="办理人规则" />
+        <Column Name="AssigneeJson" DataType="String" Length="2000" Description="办理人参数" />
+        <Column Name="Sort" DataType="Int32" Description="排序" />
+      </Columns>
+      <Indexes>
+        <Index Columns="ProcessVersionId,NodeKey" Unique="True" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalTransition" Description="流程连线。随流程版本发布后不可变">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="ProcessVersionId" DataType="Int32" Description="流程版本" />
+        <Column Name="EdgeKey" DataType="String" Nullable="False" Description="连线键" />
+        <Column Name="FromKey" DataType="String" Nullable="False" Description="起点" />
+        <Column Name="ToKey" DataType="String" Nullable="False" Description="终点" />
+        <Column Name="IsDefault" DataType="Boolean" Description="默认出线" />
+        <Column Name="Priority" DataType="Int32" Description="优先级" />
+        <Column Name="Sort" DataType="Int32" Description="排序" />
+      </Columns>
+      <Indexes>
+        <Index Columns="ProcessVersionId,EdgeKey" Unique="True" />
+        <Index Columns="ProcessVersionId,FromKey" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalInstance" Description="审批实例。请假单携带业务主体与可选代发人">
+      <Columns>
+        <Column Name="Id" DataType="Int64" PrimaryKey="True" DataScale="time" Description="编号" />
+        <Column Name="No" DataType="String" Length="30" Description="实例编号" />
+        <Column Name="Title" DataType="String" Master="True" Length="200" Nullable="False" Description="标题" />
+        <Column Name="ProcessId" DataType="Int32" Description="流程" />
+        <Column Name="ProcessVersionId" DataType="Int32" Description="流程版本" />
+        <Column Name="FormVersionId" DataType="Int32" Description="表单版本" />
+        <Column Name="ProcessName" DataType="String" Length="100" Nullable="False" Description="流程名" />
+        <Column Name="CategoryId" DataType="Int32" Description="分类" />
+        <Column Name="UserId" DataType="Int32" Description="发起人" />
+        <Column Name="UserName" DataType="String" Nullable="False" Description="发起人姓名" />
+        <Column Name="DepartmentId" DataType="Int32" Description="发起部门" />
+        <Column Name="DepartmentName" DataType="String" Length="100" Description="部门名" />
+        <Column Name="SubjectUserId" DataType="Int32" Description="业务主体。学生" />
+        <Column Name="SubjectName" DataType="String" Nullable="False" Description="业务主体姓名" />
+        <Column Name="ProxyUserId" DataType="Int32" Description="代发人。0表示本人发起" />
+        <Column Name="ProxyName" DataType="String" Description="代发人姓名" />
+        <Column Name="CounselorUserId" DataType="Int32" Description="该生辅导员。存在业务单上" />
+        <Column Name="Status" DataType="Int32" Description="状态" Type="Approval.Data.Entities.InstanceStatus" />
+        <Column Name="Round" DataType="Int32" Description="轮次" />
+        <Column Name="CurrentNodes" DataType="String" Length="500" Description="当前节点" />
+        <Column Name="StartTime" DataType="DateTime" Description="提交时间" />
+        <Column Name="EndTime" DataType="DateTime" Description="结束时间" />
+        <Column Name="LastActionTime" DataType="DateTime" Description="最后动作时间" />
+        <Column Name="Version" DataType="Int32" Description="乐观锁" />
+        <Column Name="IsAbnormal" DataType="Boolean" Description="异常" />
+        <Column Name="CreateUser" DataType="String" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateUserID" DataType="Int32" Description="创建者" Model="False" Category="扩展" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" Model="False" Category="扩展" />
+        <Column Name="CreateIP" DataType="String" Description="创建地址" Model="False" Category="扩展" />
+        <Column Name="UpdateUser" DataType="String" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateUserID" DataType="Int32" Description="更新者" Model="False" Category="扩展" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" Model="False" Category="扩展" />
+        <Column Name="UpdateIP" DataType="String" Description="更新地址" Model="False" Category="扩展" />
+      </Columns>
+      <Indexes>
+        <Index Columns="No" Unique="True" />
+        <Index Columns="UserId,Status,Id" />
+        <Index Columns="ProcessId,Status,Id" />
+        <Index Columns="SubjectUserId" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalTask" Description="审批任务。办理人在到达节点时解析并固定">
+      <Columns>
+        <Column Name="Id" DataType="Int64" PrimaryKey="True" DataScale="time" Description="编号" />
+        <Column Name="InstanceId" DataType="Int64" Description="实例" />
+        <Column Name="Round" DataType="Int32" Description="轮次" />
+        <Column Name="ProcessId" DataType="Int32" Description="流程" />
+        <Column Name="NodeKey" DataType="String" Nullable="False" Description="节点键" />
+        <Column Name="NodeName" DataType="String" Length="100" Nullable="False" Description="节点名" />
+        <Column Name="Kind" DataType="Int32" Description="任务类型" Type="Approval.Data.Entities.TaskKind" />
+        <Column Name="Mode" DataType="Int32" Description="处理方式" Type="Approval.Data.Entities.ApproveMode" />
+        <Column Name="Seq" DataType="Int32" Description="顺序号" />
+        <Column Name="Source" DataType="Int32" Description="来源" Type="Approval.Data.Entities.TaskSource" />
+        <Column Name="AssigneeId" DataType="Int32" Description="处理人" />
+        <Column Name="AssigneeName" DataType="String" Nullable="False" Description="处理人姓名" />
+        <Column Name="Status" DataType="Int32" Description="状态" Type="Approval.Data.Entities.TaskStatus" />
+        <Column Name="Comment" DataType="String" Length="2000" Description="意见" />
+        <Column Name="Title" DataType="String" Master="True" Length="200" Nullable="False" Description="标题" />
+        <Column Name="ApplicantId" DataType="Int32" Description="发起人" />
+        <Column Name="ApplicantName" DataType="String" Nullable="False" Description="发起人姓名" />
+        <Column Name="ReceiveTime" DataType="DateTime" Description="到达时间" />
+        <Column Name="HandleTime" DataType="DateTime" Description="处理时间" />
+        <Column Name="CreateTime" DataType="DateTime" Description="创建时间" />
+        <Column Name="UpdateTime" DataType="DateTime" Description="更新时间" />
+      </Columns>
+      <Indexes>
+        <Index Columns="AssigneeId,Kind,Status,ReceiveTime" />
+        <Index Columns="InstanceId,Round,NodeKey,Status" />
+        <Index Columns="ProcessId,Status" />
+      </Indexes>
+    </Table>
+    <Table Name="ApprovalHistory" Description="审批历史。只追加" InsertOnly="True">
+      <Columns>
+        <Column Name="Id" DataType="Int64" PrimaryKey="True" DataScale="time" Description="编号" />
+        <Column Name="InstanceId" DataType="Int64" Description="实例" />
+        <Column Name="Round" DataType="Int32" Description="轮次" />
+        <Column Name="TaskId" DataType="Int64" Description="任务" />
+        <Column Name="NodeKey" DataType="String" Description="节点键" />
+        <Column Name="NodeName" DataType="String" Length="100" Description="节点名" />
+        <Column Name="Action" DataType="String" Length="20" Nullable="False" Description="动作" />
+        <Column Name="ActionName" DataType="String" Length="20" Nullable="False" Description="动作名称" />
+        <Column Name="OperatorId" DataType="Int32" Description="操作人" />
+        <Column Name="OperatorName" DataType="String" Nullable="False" Description="操作人姓名" />
+        <Column Name="OperatorDept" DataType="String" Length="100" Description="操作人部门" />
+        <Column Name="Comment" DataType="String" Length="2000" Description="意见" />
+        <Column Name="FromStatus" DataType="Int32" Description="动作前状态" />
+        <Column Name="ToStatus" DataType="Int32" Description="动作后状态" />
+        <Column Name="RequestId" DataType="String" Nullable="False" Description="请求号" />
+        <Column Name="CreateTime" DataType="DateTime" Description="时间" />
+        <Column Name="CreateIP" DataType="String" Description="地址" />
+      </Columns>
+      <Indexes>
+        <Index Columns="InstanceId,Id" />
+        <Index Columns="InstanceId,RequestId" Unique="True" />
+        <Index Columns="RequestId" />
+      </Indexes>
+    </Table>
+  </Tables>
+</EntityModel>
