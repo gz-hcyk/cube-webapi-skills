@@ -41,9 +41,9 @@ dotnet publish MyBlog.Web/MyBlog.Web.csproj -c Release -r linux-x64 --no-self-co
 - `-r linux-x64`：跨平台出 Linux 包（本机 Win 也无妨）。产物 `publish/backend/MyBlog.Web.dll` 即主程序。
 - 0 错误即成功；若报 `MSB3027/3021 文件被锁定` → `taskkill /F /IM dotnet.exe` 杀旧进程再 publish（代码本身 0 错误，勿误判）。
 
-**连接串必须跨平台（§十二同源，部署前最后核对）**：`appsettings.json` 的 `ConnectionStrings` 用**正斜杠** + `Data Source=`（带空格）+ **删 `Provider=sqlite`** + `Busy Timeout=15000`：
+**连接串必须跨平台（§十二同源，部署前最后核对）**：`appsettings.json` 的 `ConnectionStrings` 用**正斜杠** + `Data Source=`（带空格）+ `Provider=sqlite` + `Journal Mode=Wal` + `Busy Timeout=30000`。相对路径基准是 `AppContext.BaseDirectory`，不是进程 CWD：
 ```json
-"MyBlog": "Data Source=Data/MyBlog.db;Busy Timeout=15000"
+"MyBlog": "Data Source=Data/MyBlog.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000"
 ```
 Windows 的 `Data\*.db`（反斜杠）/ `DataSource=`（无空格）/ `:memory:` 覆盖 / 启动并发写锁 busy timeout 不足，都会让 Linux 上建表错乱或接口 500，详见 §十二。
 
@@ -56,10 +56,10 @@ Windows 的 `Data\*.db`（反斜杠）/ `DataSource=`（无空格）/ `:memory:`
   "Logging": { "LogLevel": { "Default": "Warning", "Microsoft.AspNetCore": "Warning" } },
   "AllowedHosts": "your-domain.com,www.your-domain.com",
   "ConnectionStrings": {
-    "Membership": "Data Source=Data/Membership.db;Busy Timeout=15000",
-    "Cube": "Data Source=Data/Cube.db;Busy Timeout=15000",
-    "Log": "Data Source=Data/Log.db;Busy Timeout=15000",
-    "MyBlog": "Data Source=Data/MyBlog.db;Busy Timeout=15000"
+    "Membership": "Data Source=Data/Membership.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "Cube": "Data Source=Data/Cube.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "Log": "Data Source=Data/Log.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "MyBlog": "Data Source=Data/MyBlog.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000"
   },
   "Cube": {
     "JwtSecret": "CHANGE-ME-REPLACE-WITH-32-BYTE-RANDOM-SECRET",

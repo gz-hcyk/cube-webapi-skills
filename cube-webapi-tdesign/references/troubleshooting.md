@@ -107,7 +107,7 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 
 - **`extractListPayload` 绝不读 `list` 键，`loadSchema` 绝不取内联数据（固定契约：GetPage 只返回元数据，数据行在其他接口）**：契约固定——**GetPage 返回的只有字段描述符（元数据），不含数据行**；数据行一律由列表接口（裸 GET / Search / GetList / Index）返回，载体只可能是 `rows` / `page.rows` / `Page.Rows` / `data`。因此：① `extractListPayload` **只从四个数据载体取行、不读 `list` 键**，无数据载体一律返回空数组（否则当某端点只返回 `{ list:[字段] }` 时，字段描述符被当行数据，`t-table` 的 `name` 列渲染出 `row.name`=字段名如 `ClassName`/`parentID`，即“表格行显示字段 name”）；② `loadSchema` **不要尝试从 GetPage 提取内联首页数据**（`embeddedRows` 兜底是错误假设，已删除），schema 就只解析字段元数据。`assets/core/api/useEntityResource.ts`（`extractListPayload` 已删 `list` 兜底、`loadSchema` 已删内联提取）已落地。
 
-- **`rawHttp` 端点一律无 `/api` 前缀，且 dev 代理须显式转发，否则登录/菜单 404（高频坑，2026-09-13 口径修正）**：`http.ts` 同时导出**两个独立 Axios 实例**：`rawHttp`（非实体端点：`/Auth/LoginConfig`/`Challenge`/`Login`/`Refresh`、`/Mfa/Verify`、菜单树 `/Admin/Index/GetMenuTree`、字典 `/Cube/Lookup`）与实体 `http`（`baseURL` 已含 `/api`，实体路径**只写 `/{area}/{ctrl}`**）。`rawHttp.baseURL === SERVER_BASE`（默认空串=同源根），故其路径**不带 `/api`**——`/Auth/*`、`/Mfa/*`、`/Admin/Index/*`、`/Cube/*` 全部挂后端根路径。若 `vite.config.ts` 只配 `/api` 转发，`rawHttp` 的 `/Auth/*` 请求被 Vite 当 SPA 路由 → 返回 `index.html` 或 404，表现为「登录页拉不到 `LoginConfig`、登录直接失败」；菜单树 `/Admin/Index/GetMenuTree` 同理 → **菜单静默为空**。正确做法：代理含 `/api`、**`'^/Admin/Index/'`（正则）**、`/Auth`、`/Mfa`、`/Sso`、`/Cube`、`/cube`、`/Content`（目标统一指后端/Mock）；见 §4.3 与 §4.15。
+- **根族 `rawHttp` 不带 `/api`，区域族菜单必须带 `/api`（2026-10-04 复测推翻同文件旧句）**：`http.ts` 同时导出两个 Axios 实例。`rawHttp`（`baseURL` 为后端根）上：`/Auth/LoginConfig`、`/Auth/Login`、`/Mfa/Verify`、`/Cube/Lookup` **不带** `/api`；菜单是区域族，必须 `getRaw('/api/Admin/Index/GetMenuTree')`。NewLife.Cube 6.15.2026.901 实测：`GET /api/Admin/Index/GetMenuTree` → **200**，`GET /Admin/Index/GetMenuTree` → **404**。代理只要 `/api`、`/Auth`、`/Mfa`、`/Sso`、`/Cube`、`/cube`、`/Content`。**不要再加 `'^/Admin/Index/'`**。`'/api'` 已经覆盖菜单。若只代理 `/api` 而漏了 `/Auth`，登录会落到 SPA 的 `index.html`。
 
 
 ## G3 字段映射与组件选型（mapField / typeName / lookups）
@@ -269,7 +269,7 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 
 - **`security.mfaAvailable` / `passwordComplexity` 等同理严格以 LoginConfig 返回值为准（高频坑：页面/校验与后端开关脱节）**：`LoginConfig.security` 下的每个布尔开关都必须**直接驱动**页面与登录逻辑，禁止硬编码默认开启或「缺省即开」。① `mfaAvailable===true` 才允许进入二步验证步骤（即便后端误返回 `mfa_required` 也按失败提示，不进 MFA）；`false`/缺省不渲染 MFA。② `passwordComplexity===true` 且后端给出 `passwordStrength` 正则时，注册/重置密码**才**套该正则（TDesign 内置 `pattern`，R2 优先内置），同时仅在二者皆有时才显示复杂度提示文案（避免 config 缺 `passwordStrength` 时显示不匹配的提示）；`false`/缺省不强制复杂度（仅非空）。③ 登录方式/找回密码渠道同样严格：`login.sendCode===true` 或 `login.sms/mail===true` 才显示「忘记密码」入口与对应渠道（单选 radio 按 `channels` 动态生成，无可用渠道则禁用并回登录）；`login.captcha===true` 才渲染图形验证码；`register.enabled!==true` 直接回登录、不渲染注册表单；`register.requireMailVerify/requireMobileVerify===true` 才出现邮箱/手机字段。`assets/core/pages/LoginView.vue`（**全特性登录页**，含 MFA / Challenge / OAuth / 短信邮件码 / 图形码 / AuthCategory）、`（已归档）lite-demo/src/pages/RegisterView.vue`、`（已归档）lite-demo/src/pages/ForgotPasswordView.vue`（后两页为 demo 独占，`DEMO-ONLY`，scaffold/core 不提供）均已按上述开关驱动。
 
-- **`MenuSidebar` 菜单请求必须 `try/catch`，401 不可抛到外层（高频坑，Uncaught AxiosError）**：侧边栏 `onMounted` 调 `getRaw('/Admin/Index/GetMenuTree')` 拉菜单，**必须包 `try/catch`**——该请求 401（未登录/令牌失效）时，Axios 拒绝若无接收方会冒泡成 `Uncaught (in promise) AxiosError: Request failed with status code 401`（控制台红错，且渲染链被打断）。`http.ts` 拦截器本就会处理 401（清 token + 跳 `/login`），故菜单加载器只需 **`catch` 中静默忽略 401、其余异常仅 `console.warn`**，绝不 `throw`。同因：任何 `onMounted`/`watch` 内的 `getRaw`/`getApi` 在未登录即可触发的请求都需 `try/catch`，否则一个未捕获 401 就崩整页。`assets/core/components/cube/MenuSidebar.vue` 已落地（`catch` 静默 401）。
+- **`MenuSidebar` 菜单请求必须 `try/catch`，401 不可抛到外层（高频坑，Uncaught AxiosError）**：侧边栏 `onMounted` 调 `getRaw('/api/Admin/Index/GetMenuTree')` 拉菜单，**必须包 `try/catch`**——该请求 401（未登录/令牌失效）时，Axios 拒绝若无接收方会冒泡成 `Uncaught (in promise) AxiosError: Request failed with status code 401`（控制台红错，且渲染链被打断）。`http.ts` 拦截器本就会处理 401（清 token + 跳 `/login`），故菜单加载器只需 **`catch` 中静默忽略 401、其余异常仅 `console.warn`**，绝不 `throw`。同因：任何 `onMounted`/`watch` 内的 `getRaw`/`getApi` 在未登录即可触发的请求都需 `try/catch`，否则一个未捕获 401 就崩整页。`assets/core/components/cube/MenuSidebar.vue` 已落地（`catch` 静默 401）。
 
 - **401 自动刷新令牌须排除认证端点 + 单飞守卫（高频坑：刷新死循环 / 并发重复刷新）**：`accessToken` 过期后前端应自动用 `refreshToken` 调 `POST /Auth/Refresh` 续期并重放原请求（技能 `assets/core/api/http.ts` 当前为「401 直接清令牌跳登录」，**未内置静默刷新**；若需按文档 §6 开启令牌轮换，请在 `src/api/http.ts` 响应拦截器内自行落地，并遵守本节三处避雷）。三处必避雷：① **`/Auth/Refresh` 本身及全部认证端点（`/Auth/Login`、`/Auth/LoginConfig`、`/Auth/Challenge`、`/Mfa/*`）必须排除在刷新逻辑外**（`isAuthEndpoint` 判定）——否则刷新请求自己 401 又触发刷新，形成死循环；② **并发单飞守卫**（`refreshInFlight` 模块级 Promise）：多个受保护接口同时 401 时只真正刷新一次，其余复用同一结果，避免并发打爆 `/Auth/Refresh`；③ **刷新失败即跳登录**（`handleUnauthorized` 清令牌 + `location.href='/login'`，非 `router.push`、加 `pathname!=='/login'` 防循环），不再无限重试。登录/刷新/MFA 走 `rawHttp`（无 `/api` 前缀），这些端点自动绕开刷新分支。
 
@@ -362,7 +362,7 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 
 - **★（已闭环）历史缺陷：全局 camelize 会把 `InlineEnums` 的"键"也小写，导致 `refLovCode` 列字典翻译恒失效（2026-09 实测 B5 → 同月修复）**：旧版 `http` 响应拦截器对整个信封 camelize 只把**首字母**小写，使内联枚举字典的键 `Enum.Admin.RoleKind` → `enum.Admin.RoleKind`；而字段描述符里 `RefLovCode` 的**值**（`'Enum.Admin.RoleKind'`）是普通字符串、保持原样 → `inlineEnums['Enum.Admin.RoleKind']` 恒 `undefined` → 该列**永远显示原始值**（`1`/`2`）且不报错。**现状（2026-09 口径变更）**：**全局 camelize 已从 `http` 层移除**，键保持原样、缺陷根因消除；同时 `useLov` 保留了「按本次请求规范 lovCode 大小写不敏感复原键」的兜底（`codes.find(c => c.toLowerCase() === rawKey.toLowerCase()) ?? rawKey`），双保险。**验收**：任何 `refLovCode` 列必须实测出中文（LovListField 的 `textOf` 走同一字典）。注意：LovListField **不需要**改（它按 `col.refLovCode` 原值查字典，字典键复原后即命中）。
 
-- **★（2026-09-13 口径反转）非实体端点 `GetMenuTree` **不带** `/api` 前缀；写成带前缀 / Mock 只匹配带前缀路径 → 404 → 侧栏恒空**：前端唯一 HTTP 层调 `getRaw('/Admin/Index/GetMenuTree')`（**无 `/api`**），实测 `GET /api/Admin/Index/GetMenuTree` → **404**、`GET /Admin/Index/GetMenuTree` → **200**（9475 字节 / 3 个一级菜单）。若 Mock 写成 `if (path === '/api/Admin/Index/GetMenuTree')`，则该请求不命中 → 落入实体路由正则 `^/api/([^/]+)/([^/]+)(?:/([^/]+))?$`（解析成 `area=Admin, ctrl=Index, id=GetMenuTree`）→ `handleGetPage` 404 → `MenuSidebar` 静默忽略 → **DOM 里没有任何菜单项**（`document.querySelectorAll('.t-menu__item').length === 0`）。另有一类**更隐蔽**的失败：**vite 漏配 `'^/Admin/Index/'` 代理** → 请求落 SPA 兜底、返回 `text/html` 的 index.html → axios 解析失败但**无 401/404**，菜单同样静默为空。**修复**：前端路径去掉 `/api`；Mock/代理两种前缀都接受（便于对照）；vite 加正则代理。**排障口诀**：菜单空且控制台无红错 → ① curl 后端根路径（200 就对了）② curl 前端 5173 该路径看 `Content-Type`（`text/html` = 代理没配上；`application/json` = 代理 OK）③ 401 是令牌头问题 ④ 200 且 CT 正确但 DOM 空才是渲染/配色问题。
+- **菜单路径以 6.15.2026.901 为准：必须带 `/api`（2026-09-13「不带 `/api`」已作废）**：2026-10-04 对运行中的 Cube 复测，`GET /api/Admin/Index/GetMenuTree` → **200**，`GET /Admin/Index/GetMenuTree` → **404**。前端写 `getRaw('/api/Admin/Index/GetMenuTree')`。不要把菜单改回无前缀，也不要为它再加 vite 正则 `'^/Admin/Index/'`（`'/api'` 已覆盖）。菜单空且控制台无红错时：① curl 带 `/api` 的后端路径 ② 看 vite 代理有没有 `/api` 与 `/Auth` ③ 401 是令牌头 ④ 200 但 DOM 空才查配色。
 
 - **LIST 型值集模板已有：`assets/core/components/cube/LovListField.vue`（TDesign 版，勿再手搓）**：移植自 NewLife.Cube 官方 Element Plus 实现 `LovSelectTable.vue`（461 行），保留其全部功能契约（搜索栏 / 单选·多选选择列 / 分页 / 底部「已选 N 项」/ 取消·确定 / `modelValue` 回显 / `refLovCode` 列字典翻译 / **id→名称展示回显**），并按 TDesign 惯例重写。落地：拷到 `src/components/cube/`，配合 `assets/core/api/useLov.ts`，`controlOf` 出 `'lov-list'`、`FormDialog` 挂模板分支（只 import 不挂 = 死代码）。端到端验证走 scaffold 的 DEV 路由 `/lov-demo`（`npm run mock` 起 Mock 后端，已实现 `/api/Admin/Lov/Meta` 与 ListData 代理，24 行数据供跨页验证）。**选中即自关闭**（单选 `pickRow` / 多选 `onConfirm` 都在 emit 后 `close()`；官方实现交由父组件关闭——如需该契约删 `close()`）。
   - **⚠️ 资产分类（2026-09 修订）**：`useLov.ts` 与 `LovListField.vue` 已从 `assets/optional/` **移入 `assets/core/`**——因为 `core` 的 `FormDialog.vue` 对它们**静态 import**，只拷 core 会构建失败（与 `ConfigView`/`DbView` 同一判定标准）。
@@ -713,13 +713,13 @@ description: cube-webapi-tdesign 前端排障手册 —— 契约/渲染/树形/
 | 裁完依赖后 `check-starter-align.mjs` **变红** | 删掉了骨架 keep 清单里的**配置文件**（见下） | 报错直接点名缺哪个文件 |
 
 **★ 正确做法：第④步必须三步都做**
-`assets/core/.`（31 件交付载荷）**＋** `references/scaffold/src/.`（24 件 = 外壳 3 + DEV 页 1 + 上游基础设施 20）
+`assets/core/.`（38 个文件）**＋** `references/scaffold/src/.`（再补 24 个文件）
 **＋** `references/scaffold/` 的**工程根外壳**（`vite.config.ts` / `index.html` / `.env*` / `package.json`），
-最终 `src/` 应为 **55 件 = 31 + 24**，与 `references/scaffold/src/` 同构。命令见 SKILL.md §4.1 步骤 ④。
+最终 `src/` 应为 **62 个文件 = 38 + 24**，与 `references/scaffold/src/` 同构。命令见 SKILL.md §4.1 步骤 ④。2026-09-13 的 55 = 31 + 24 已过时。
 
 **★ 裁依赖 / 换包管理器的红线**
-`check-starter-align.mjs` 要求这些文件**存在**（缺一 FAIL）：`.prettierrc.js` `.stylelintignore` `.husky/`
-`commitlint.config.js` `eslint.config.js` `stylelint.config.js` `package-lock.json`；
+`check-starter-align.mjs` 的工具链清单缺下列文件记 **WARN**（不是 FAIL）：`.prettierrc.js` `.stylelintignore`
+`commitlint.config.js` `eslint.config.js` `stylelint.config.js` `package-lock.json`。`.husky/` 与 `.vscode/` 不在清单里，缺了不要当成未对齐。
 但它**只校验 4 个运行时依赖**。⇒ **只删依赖与相关 scripts，配置文件原地留着**；
 `package-lock.json` 用 `npm install --package-lock-only` 重算对齐。详见 SKILL.md §4.1.1。
 

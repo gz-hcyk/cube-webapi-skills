@@ -317,7 +317,7 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 | `package.json#private` | 无（模板原样）；业务工程建议补 | 有 `true` |
 | 三件套依赖 | **自带** | 需手补 |
 | dev 端口 | `3002` | `5173` |
-| 工具链 | `eslint`/`stylelint`/`commitlint`/`.husky`/`.env*` 齐全 | 仅 3 件配置 |
+| 工具链 | `eslint`/`stylelint`/`commitlint`/`.env*`。`.husky/` 不是 2026-10-04 CLI 产物，缺了不是 WARN | 仅 3 件配置 |
 | **血统判据** | `tsconfig.node.json` **缺失** | `tsconfig.node.json` **存在** |
 
 > 对照基线（2026-09-13 双基线脚本实测）：`references/scaffold/` = **all 血统，0 FAIL / 0 WARN**；~~`references/demo/` = lite 血统，0 FAIL / 1 WARN~~（该基线随 demo 于 2026-09-13 归档移出技能，记录保留供回溯）；两份 `README.md` 均含「已声明偏差」段（demo 那份现随归档）。

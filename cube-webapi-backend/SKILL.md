@@ -58,7 +58,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 ## 铁律：前端菜单必须后端动态下发（不可违反）
 
-- **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /Admin/Index/GetMenuTree` 动态生成，**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
+- **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /api/Admin/Index/GetMenuTree`（区域族，**带 `/api`**）。2026-10-04 复测：带 `/api` 为 HTTP 200，不带 `/api` 为 404。**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
 - 新增某个页面的菜单入口时，**只能在后端产出菜单节点**：实体控制器/自定义 API 控制器被自动扫描后自然会带出（`~/Ctrl` 形态），或显式挂菜单；前端只做「url → 前端路由」的**映射表**（如把 `~/Reconcile` 改写为前端专用路由 `/reconcile`），**映射不算新增菜单**。
 - 例外（允许内置，不视为业务菜单）：登录后默认落地页 **dashboard** 及顶部品牌跳转，作为前端默认首页常驻。
 - **违反判定**：前端代码中出现手工向菜单树 push 业务菜单项/写死业务菜单配置并展示 = 违反；后端已有对应节点却仍需前端手工补 = 后端节点缺失，应补后端而非改前端。
@@ -1320,7 +1320,7 @@ GET /api/School/Student/ExportFile?format=xml
 
 ### 14.5 前端工程落地坑（跨端事实，代码归 tdesign）
 Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualChunks 拆 vendor / base 子路径 / DialogPlugin.confirm / `@submit.prevent` 崩溃——已全部归 `cube-webapi-tdesign`（troubleshooting G8/G6），此处不重复。
-**跨端事实（后端行为，须知）**：SQLite 同页 3+ 并发查询会死锁（busy timeout 不够，前端表现为永久 loading）→ 前端应串行发请求；治本在后端连接串加 `Busy Timeout=15000`（见 `references/troubleshooting.md` `:memory:` 条）。
+**跨端事实（后端行为，须知）**：SQLite 同页 3+ 并发查询会死锁（busy timeout 不够，前端表现为永久 loading）→ 前端应串行发请求；治本在后端连接串加 `Busy Timeout=30000`（与 §1.2 / §14.8 同一条连接串）。
 
 ### 14.6 联调验证清单（冒烟）
 `POST /Auth/Login` 返 `access_token` → 带 Bearer `GET /api/{area}/{ctrl}` 200+`data` 数组 → **不带 token 401**（鉴权链路通）→ 门户 `data` 为对象（分支）→ camelize 后字段对齐（`createUserID`）→ 自定义动作 `code:0` → 多接口串行、无永久 loading。
