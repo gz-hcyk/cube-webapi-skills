@@ -149,7 +149,7 @@ node check-starter-align.mjs --manifest            # 打印**两套**基线清�
 
 **退出码 0 = 无 FAIL，1 = 有 FAIL** —— 可直接进 CI / 收尾自检。
 
-**★ 双基线（2026-09-13 起）**：`all`（`-temp all`，193 件，**当前唯一受支持**）与 `lite`（13 件，**历史形态**，仅用于校验存量工程）。
+**★ 双基线（2026-09-13 起）**：`all`（`-temp all`，**当前唯一受支持**。2026-09-13 计 193 件；2026-10-04 同一 CLI 复跑为 **173** 件，且不再生成 `.husky/`、`.vscode/`）与 `lite`（13 件，**历史形态**，仅用于校验存量工程）。
 脚本按 **`tsconfig.node.json` 是否存在自动判定血统**（存在 ⇒ `lite`；缺失 ⇒ `all`），再按对应基线校验；`--json` 输出的 `lineage` 字段含判据。
 
 **三层判据**（不是一票否决，分级才有用）：
@@ -157,7 +157,7 @@ node check-starter-align.mjs --manifest            # 打印**两套**基线清�
 | 级别 | 含义 | 典型项 |
 |---|---|---|
 | **FAIL** | 工程骨架 / 构建契约被破坏，**必修** | 缺骨架（`all` 7 件：`index.html` `package.json` `tsconfig.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/types/env.d.ts`；`lite` 8 件：另含 `tsconfig.node.json` `src/vite-env.d.ts`）、`build` 无 `vue-tsc`、存在 `scripts.prepare`、缺必需依赖、缺 `@` 别名、血统自相矛盾（`all` 却写了 `references`） |
-| **WARN** | 「工程选择」级偏离：**允许，但须在工程 README 显式声明** | `tsconfig` / `tsconfig.node.json` 的编译策略（`target`/`moduleResolution`/`strict`/`lib`/额外键/`include`）；`all` 工具链件缺失（`eslint.config.js`/`.husky/`/`.env*` 等）；`all` 上游演示业务代码残留；`all` 出现 `src/vite-env.d.ts`；对象式 `manualChunks` |
+| **WARN** | 「工程选择」级偏离：**允许，但须在工程 README 显式声明** | `tsconfig` / `tsconfig.node.json` 的编译策略（`target`/`moduleResolution`/`strict`/`lib`/额外键/`include`）；`all` 工具链件缺失（`eslint.config.js`/`stylelint.config.js`/`commitlint.config.js`/`.env*` 等）。**缺 `.husky/`、`.vscode/` 不是 WARN**（2026-10-04 CLI 不再生成）；`all` 上游演示业务代码残留；`all` 出现 `src/vite-env.d.ts`；对象式 `manualChunks` |
 | **INFO** | CLI 演示件 / 上游文档件去留，**不扣分** | `all`：`README*.md` `LICENSE` `docs/` `.github/` `src/permission.ts` `mock/`；`lite`：`.npmignore` `tdesign-logo.svg` `vite-logo.svg` `App.vue` |
 
 **基线**：

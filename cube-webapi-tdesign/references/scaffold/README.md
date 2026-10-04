@@ -3,10 +3,11 @@
 对接 **NewLife.Cube 魔方 WebApi** 的 TDesign Vue Next 前端**完整可运行工程骨架**。
 
 - **基线来源**：官方 `tdesign-starter-cli@0.5.3` 以 **`-type vue3 -temp all`（完整脚手架）** 生成，
-  在其产物（**193 件**）之上「保留全部基础设施 + 删除上游演示业务代码 + 注入技能 `assets/core/`」。
+  在其产物之上「保留全部基础设施 + 删除上游演示业务代码 + 注入技能 `assets/core/`」。
+  2026-09-13 该 CLI 的 `find -type f` 为 193；**2026-10-04 复跑为 173，且不再生成 `.husky/`、`.vscode/`**。本目录里若仍有 `.husky/`，那是旧产物留存，不是现行 CLI 的必选项。
 - **为什么是 `all` 而不是 `lite`**：`all` 自带 `vue-router` / `pinia` / `axios` / `vue-i18n` / `@vueuse/core`、
   `src/types/{env,globals,interface,router,axios}.d.ts`、`eslint.config.js` + `stylelint.config.js` + `commitlint.config.js`
-  + `.husky/`、`.env*` 多环境文件、`vite-plugin-mock` + `vite-svg-loader` 等完整工具链；
+  + `.env*` 多环境文件、`vite-plugin-mock` + `vite-svg-loader` 等完整工具链；
   `lite` 只有 13 件、三件套依赖都得手补。**本项目只支持 `all` 形态**（2026-09-13 起）。
 - **可校验**：`node ../scripts/check-starter-align.mjs .`（退出码 0 = 仍是 CLI 产物形态，无 FAIL）。
   脚本按 `tsconfig.node.json` 是否存在**自动判定血统**（`all` / `lite`），再按对应基线校验。
