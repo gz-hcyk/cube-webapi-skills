@@ -36,6 +36,7 @@ var app = builder.Build();
 app.UseCube(app.Environment);
 app.UseCubeLov();
 GrantApprovalMenus();
+SeedLeaveSample();
 
 if (app.Environment.IsDevelopment())
 {
@@ -89,6 +90,72 @@ static void GrantApprovalMenus()
     {
         XTrace.WriteException(ex);
     }
+}
+
+/// <summary>
+/// 写入请假样例：已发布表单、只读流程能看到的节点，以及代发起要用的学生和辅导员。
+/// 已有同名编码或用户时跳过。辅导员账号挂在管理员角色上，只为示例里能登录办理。
+/// </summary>
+static void SeedLeaveSample()
+{
+    try
+    {
+        var admin = User.FindByName("admin");
+        var roleId = admin?.RoleID ?? 0;
+        EnsureSampleUser("student", "pass1234", roleId, "学生乙");
+        EnsureSampleUser("counselor", "pass1234", roleId, "该生辅导员");
+
+        var form = ApprovalFormDefinition.FindByCode("leave");
+        if (form == null)
+        {
+            form = new ApprovalFormDefinition
+            {
+                Code = "leave",
+                Name = "请假表单",
+                Enable = true,
+            };
+            form.Insert();
+        }
+
+        if (form.PublishedVersionId <= 0)
+        {
+            form.SaveDraft("""{"fields":[{"key":"studentUserId","label":"学生"},{"key":"counselorUserId","label":"该生辅导员"},{"key":"reason","label":"事由"}]}""");
+            form.Publish(admin?.ID ?? 0);
+        }
+
+        var process = ApprovalProcess.FindByCode("leave");
+        if (process == null)
+        {
+            process = new ApprovalProcess
+            {
+                Code = "leave",
+                Name = "请假",
+                FormId = form.Id,
+                Enable = true,
+            };
+            process.Insert();
+        }
+
+        if (process.PublishedVersionId <= 0)
+        {
+            process.SaveDraft("""
+            {"nodes":[{"key":"s","type":"start","name":"开始"},{"key":"c","type":"approve","name":"该生辅导员","mode":"any","assignee":{"type":"subjectCounselor","field":"counselorUserId"}},{"key":"e","type":"end","name":"结束"}],"edges":[{"key":"e1","from":"s","to":"c"},{"key":"e2","from":"c","to":"e"}]}
+            """);
+            process.Publish(admin?.ID ?? 0);
+        }
+    }
+    catch (Exception ex)
+    {
+        XTrace.WriteException(ex);
+    }
+}
+
+static void EnsureSampleUser(String name, String password, Int32 roleId, String displayName)
+{
+    if (User.FindByName(name) != null) return;
+    var user = User.Add(name, password, roleId, displayName);
+    user.Enable = true;
+    user.Update();
 }
 
 /// <summary>供测试宿主引用入口。</summary>
