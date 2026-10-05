@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using NewLife;
@@ -284,6 +285,8 @@ public sealed class FlowGraph
     private static Boolean Compare(JsonNode left, String? op, JsonNode? right)
     {
         var text = (op ?? "eq").Trim().ToLowerInvariant();
+        if (text == "gte") text = "ge";
+        if (text == "lte") text = "le";
         if (text == "in")
         {
             if (right is not JsonArray array) return false;
@@ -330,7 +333,9 @@ public sealed class FlowGraph
         if (value.TryGetValue<Int32>(out var integer)) return integer;
         if (value.TryGetValue<Int64>(out var wide)) return wide;
         if (value.TryGetValue<Double>(out var real)) return (Decimal)real;
-        return Decimal.TryParse(value.ToString(), out var parsed) ? parsed : null;
+        if (value.TryGetValue<String>(out var text) && Decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+        return null;
     }
 
     /// <summary>从某节点出发的下一条连线。排他网关用 Choose；其余多条出线取得分最低的一条。</summary>

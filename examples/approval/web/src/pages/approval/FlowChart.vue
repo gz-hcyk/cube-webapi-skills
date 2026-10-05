@@ -1,10 +1,26 @@
 <template>
   <div class="flow-chart" data-flow-chart>
-    <div v-if="placed.nodes.length" class="canvas">
+    <div v-if="zoomable && placed.nodes.length" class="zoom-bar">
+      <button type="button" data-zoom="in" @click="zoomBy(0.2)">放大</button>
+      <button type="button" data-zoom="out" @click="zoomBy(-0.2)">缩小</button>
+      <button type="button" data-zoom="reset" @click="resetZoom">还原</button>
+      <span class="zoom-label">{{ zoomText }}</span>
+    </div>
+    <div
+      v-if="placed.nodes.length"
+      ref="canvasRef"
+      class="canvas"
+      :class="{ pannable: zoomable }"
+      :style="zoomable ? { maxHeight: canvasMaxHeight || '480px' } : undefined"
+      @pointerdown="onPanDown"
+      @pointermove="onPanMove"
+      @pointerup="onPanUp"
+      @pointercancel="onPanUp"
+    >
       <svg
         :viewBox="`0 0 ${placed.width} ${placed.height}`"
-        :width="placed.width"
-        :height="placed.height"
+        :width="placed.width * scale"
+        :height="placed.height * scale"
         role="img"
         aria-label="流程图"
       >
@@ -14,7 +30,8 @@
           </marker>
         </defs>
         <g v-for="edge in placed.edges" :key="edge.key">
-          <path :d="edge.d" fill="none" stroke="#c5c8ce" stroke-width="1.5" :marker-end="`url(#${markerId})`" />
+          <path :d="edge.d" class="edge-hit" fill="none" stroke="transparent" stroke-width="12" @click.stop="emit('selectEdge', edge.key)" />
+          <path :d="edge.d" fill="none" stroke="#c5c8ce" stroke-width="1.5" :marker-end="`url(#${markerId})`" :class="{ 'edge-selected': edge.key === selectedEdge }" />
           <g v-if="edge.label">
             <rect
               :x="edge.lx - labelWidth(edge.label) / 2"
@@ -61,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { BOX_H, BOX_W, layoutGraph, shortName, typeLabel, type ChartEdge, type ChartNode, type NodeMark } from './flowChart';
 
 const props = defineProps<{
@@ -69,15 +86,44 @@ const props = defineProps<{
   edges: ChartEdge[];
   states?: Record<string, NodeMark>;
   selected?: string;
+  selectedEdge?: string;
   legend?: boolean;
+  zoomable?: boolean;
+  canvasMaxHeight?: string;
 }>();
 
-const emit = defineEmits<{ select: [key: string] }>();
+const emit = defineEmits<{ select: [key: string]; selectEdge: [key: string] }>();
 
 const boxW = BOX_W;
 const boxH = BOX_H;
 const markerId = `flow-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 const placed = computed(() => layoutGraph(props.nodes || [], props.edges || [], props.states));
+const scale = ref(1);
+const zoomText = computed(() => `${Math.round(scale.value * 100)}%`);
+const canvasRef = ref<HTMLElement | null>(null);
+let panning = false;
+
+function zoomBy(delta: number) {
+  scale.value = Math.min(2.5, Math.max(0.4, Math.round((scale.value + delta) * 10) / 10));
+}
+function resetZoom() {
+  scale.value = 1;
+}
+function onPanDown(event: PointerEvent) {
+  if (!props.zoomable) return;
+  const target = event.target as Element | null;
+  if (target?.closest('.node, .edge-hit')) return;
+  panning = true;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+}
+function onPanMove(event: PointerEvent) {
+  if (!panning || !canvasRef.value) return;
+  canvasRef.value.scrollLeft -= event.movementX;
+  canvasRef.value.scrollTop -= event.movementY;
+}
+function onPanUp() {
+  panning = false;
+}
 
 function pill(type: string) {
   return type === 'start' || type === 'end';
@@ -92,7 +138,13 @@ function onSelect(key: string) {
 
 <style scoped>
 .flow-chart { margin: 8px 0 4px; }
-.canvas { overflow-x: auto; padding-bottom: 4px; }
+.zoom-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.zoom-bar button { border: 1px solid var(--td-component-border); background: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.zoom-label { color: var(--td-text-color-secondary); font-size: 12px; }
+.canvas { overflow: auto; padding-bottom: 4px; }
+.canvas.pannable { cursor: grab; touch-action: none; }
+.edge-hit { cursor: pointer; }
+.edge-selected { stroke: #0052d9; stroke-width: 2.5; }
 .empty { margin: 8px 0; color: var(--td-text-color-secondary); }
 .edge-label { font-size: 11px; fill: #5e6670; }
 .type { font-size: 11px; fill: #5e6670; }

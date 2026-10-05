@@ -7,8 +7,9 @@
       </template>
     </t-table>
 
-    <t-drawer v-model:visible="openEditor" :header="currentName" size="960px" :footer="false">
+    <t-drawer v-model:visible="openEditor" :header="currentName" size="1100px" :close-btn="true">
       <t-alert v-if="errorText" theme="error" class="gap" :close="true" @close="errorText = ''">{{ errorText }}</t-alert>
+      <p class="hint">流程图只展示结构。点节点打开属性，点连线改条件。用工具栏增删后图会立刻刷新。不能在图上拖拽。</p>
       <div class="toolbar">
         <t-button size="small" variant="outline" @click="addNode('approve')">添加审批</t-button>
         <t-button size="small" variant="outline" @click="addNode('cc')">添加抄送</t-button>
@@ -16,22 +17,32 @@
         <t-button size="small" variant="outline" @click="addParallel">添加成对并行</t-button>
         <t-button size="small" variant="outline" @click="addNode('end')">添加结束</t-button>
         <t-button size="small" variant="outline" @click="addNode('start')">添加开始</t-button>
+        <t-button size="small" variant="outline" @click="addEdge">添加连线</t-button>
       </div>
-      <h4 class="block-title">流程图</h4>
-      <p class="hint">只读。点节点后仍用下面的属性编辑；增删、排序和连线不在图上操作。排他的默认出线和条件会标在连线上。</p>
-      <flow-chart :nodes="chartNodes" :edges="chartEdges" :selected="selectedKey" @select="select" />
-      <t-table row-key="key" :data="nodes" :columns="nodeColumns" size="small" hover @row-click="onNode">
-        <template #typeLabel="{ row }">{{ typeLabel(row.type) }}</template>
-        <template #op="{ row }">
-          <button type="button" class="text-btn" :data-name="row.name" data-action="edit" @click.stop="select(row.key)">编辑</button>
-          <button type="button" class="text-btn" :data-name="row.name" data-action="up" @click.stop="move(row.key, -1)">上移</button>
-          <button type="button" class="text-btn" :data-name="row.name" data-action="down" @click.stop="move(row.key, 1)">下移</button>
-          <button type="button" class="text-btn danger" :data-name="row.name" data-action="remove" @click.stop="removeNode(row.key)">移除</button>
-        </template>
-      </t-table>
+      <flow-chart
+        :nodes="chartNodes"
+        :edges="chartEdges"
+        :selected="selectedKey"
+        :selected-edge="edgeKey"
+        zoomable
+        canvas-max-height="560px"
+        @select="select"
+        @select-edge="openEdge"
+      />
+      <div class="compact">
+        <t-select v-model="selectedKey" :options="nodeKeyOptions" placeholder="编辑节点" clearable @change="onPickNode" />
+        <t-select v-model="edgeKey" :options="edgeKeyOptions" placeholder="编辑连线" clearable @change="onPickEdge" />
+      </div>
+      <template #footer>
+        <div class="actions">
+          <t-button theme="primary" :loading="saving" @click="save">保存草稿</t-button>
+          <t-button theme="success" :loading="saving" @click="publish">发布</t-button>
+        </div>
+      </template>
+    </t-drawer>
 
+    <t-drawer v-model:visible="nodeEditorOpen" :header="selected ? `节点 ${selected.name}` : '节点'" size="480px" :footer="false" :close-btn="true">
       <template v-if="selected">
-        <h4 class="block-title">节点 {{ selected.name }}</h4>
         <t-form label-width="108px">
           <t-form-item label="名称"><t-input v-model="selected.name" /></t-form-item>
           <t-form-item label="类型">
@@ -71,33 +82,49 @@
             <t-select v-model="row.access" :options="accessOptions" />
           </template>
         </t-table>
+        <div class="row-actions">
+          <button type="button" class="text-btn" :data-name="selected.name" data-action="up" @click="move(selected.key, -1)">上移</button>
+          <button type="button" class="text-btn" :data-name="selected.name" data-action="down" @click="move(selected.key, 1)">下移</button>
+          <button type="button" class="text-btn danger" :data-name="selected.name" data-action="remove" @click="removeNode(selected.key)">移除</button>
+        </div>
       </template>
-
-      <h4 class="block-title">连线</h4>
-      <div class="toolbar">
-        <t-button size="small" variant="outline" @click="addEdge">添加连线</t-button>
-      </div>
-      <t-table row-key="key" :data="edges" :columns="edgeColumns" size="small">
-        <template #from="{ row }"><t-select v-model="row.from" :options="nodeKeyOptions" /></template>
-        <template #to="{ row }"><t-select v-model="row.to" :options="nodeKeyOptions" /></template>
-        <template #isDefault="{ row }"><t-checkbox v-model="row.isDefault">默认</t-checkbox></template>
-        <template #priority="{ row }"><t-input v-model="row.priority" /></template>
-        <template #field="{ row }"><t-select v-model="row.field" :options="fieldOptions" clearable /></template>
-        <template #op="{ row }"><t-select v-model="row.op" :options="opOptions" /></template>
-        <template #value="{ row }"><t-input v-model="row.value" /></template>
-        <template #edgeOp="{ row }"><t-link theme="danger" @click="removeEdge(row.key)">移除</t-link></template>
-      </t-table>
-      <div class="actions">
-        <t-button theme="primary" :loading="saving" @click="save">保存草稿</t-button>
-        <t-button theme="success" :loading="saving" @click="publish">发布</t-button>
-      </div>
     </t-drawer>
+
+    <t-dialog v-model:visible="edgeEditorOpen" header="连线" :footer="false" width="560px">
+      <template v-if="selectedEdge">
+        <div data-edge-editor>
+        <t-form label-width="96px">
+          <t-form-item label="从"><t-select v-model="selectedEdge.from" :options="nodeKeyOptions" /></t-form-item>
+          <t-form-item label="到"><t-select v-model="selectedEdge.to" :options="nodeKeyOptions" /></t-form-item>
+          <template v-if="edgeFromExclusive">
+            <t-form-item label="默认出线"><t-checkbox v-model="selectedEdge.isDefault">其他条件都不成立时走这条</t-checkbox></t-form-item>
+            <template v-if="!selectedEdge.isDefault">
+              <t-form-item label="表单字段">
+                <t-select v-model="selectedEdge.field" :options="fieldOptions" placeholder="选择流程表单字段" />
+              </t-form-item>
+              <t-form-item label="比较"><t-select v-model="selectedEdge.op" :options="opOptions" /></t-form-item>
+              <t-form-item label="比较值">
+                <t-input v-model="selectedEdge.value" :placeholder="selectedEdge.op === 'in' ? '多个值用逗号分隔' : '例如 3 或 病假'" />
+              </t-form-item>
+              <t-form-item label="优先级"><t-input v-model="selectedEdge.priority" /></t-form-item>
+            </template>
+            <p class="hint" data-edge-label>连线上显示：{{ edgePreview || '（未写条件）' }}</p>
+          </template>
+          <p v-else class="hint">条件只写在排他网关的出线上。先把起点改成排他网关，再选表单字段。</p>
+        </t-form>
+        <div class="actions">
+          <t-button theme="primary" @click="edgeEditorOpen = false">完成</t-button>
+          <t-button theme="danger" variant="outline" @click="removeEdge(selectedEdge.key)">移除</t-button>
+        </div>
+        </div>
+      </template>
+    </t-dialog>
   </t-card>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { MessagePlugin, type RowEventContext, type TableRowData } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { getApi, postApi, type ApiEnvelope } from '@/api/http';
 import FlowChart from './FlowChart.vue';
 import { edgeCaption, type ChartEdge, type ChartNode } from './flowChart';
@@ -136,6 +163,9 @@ const departments = ref<Named[]>([]);
 const currentId = ref(0);
 const currentName = ref('流程');
 const selectedKey = ref('');
+const edgeKey = ref('');
+const nodeEditorOpen = ref(false);
+const edgeEditorOpen = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const openEditor = ref(false);
@@ -148,24 +178,9 @@ const columns = [
   { colKey: 'publishedVersion', title: '已发布版本' },
   { colKey: 'op', title: '操作', cell: 'op' },
 ];
-const nodeColumns = [
-  { colKey: 'name', title: '节点' },
-  { colKey: 'typeLabel', title: '类型', cell: 'typeLabel' },
-  { colKey: 'op', title: '操作', cell: 'op' },
-];
 const fieldColumns = [
   { colKey: 'key', title: '字段' },
   { colKey: 'access', title: '权限', cell: 'access' },
-];
-const edgeColumns = [
-  { colKey: 'from', title: '从', cell: 'from' },
-  { colKey: 'to', title: '到', cell: 'to' },
-  { colKey: 'isDefault', title: '默认出线', cell: 'isDefault' },
-  { colKey: 'priority', title: '优先级', cell: 'priority' },
-  { colKey: 'field', title: '条件字段', cell: 'field' },
-  { colKey: 'op', title: '比较', cell: 'op' },
-  { colKey: 'value', title: '值', cell: 'value' },
-  { colKey: 'edgeOp', title: '操作', cell: 'edgeOp' },
 ];
 const typeOptions = [
   { label: '开始', value: 'start' },
@@ -198,6 +213,7 @@ const opOptions = [
   { label: '大于等于', value: 'ge' },
   { label: '小于', value: 'lt' },
   { label: '小于等于', value: 'le' },
+  { label: '属于', value: 'in' },
 ];
 
 const selected = computed(() => nodes.value.find((node) => node.key === selectedKey.value));
@@ -205,7 +221,14 @@ const userOptions = computed(() => users.value.map((item) => ({ label: item.name
 const roleOptions = computed(() => roles.value.map((item) => ({ label: item.name, value: item.id })));
 const deptOptions = computed(() => departments.value.map((item) => ({ label: item.name, value: item.id })));
 const fieldOptions = computed(() => formFields.value.map((item) => ({ label: item.label || item.key, value: item.key })));
+const selectedEdge = computed(() => edges.value.find((edge) => edge.key === edgeKey.value));
+const edgeFromExclusive = computed(() => nodes.value.find((node) => node.key === selectedEdge.value?.from)?.type === 'exclusive');
+const edgePreview = computed(() => (selectedEdge.value ? edgeCaption(selectedEdge.value) : ''));
 const nodeKeyOptions = computed(() => nodes.value.map((node) => ({ label: node.name || node.key, value: node.key })));
+const edgeKeyOptions = computed(() => edges.value.map((edge) => ({
+  label: `${nodeName(edge.from)} → ${nodeName(edge.to)}${edgeCaption(edge) ? `（${edgeCaption(edge)}）` : ''}`,
+  value: edge.key,
+})));
 const chartNodes = computed<ChartNode[]>(() => nodes.value.map((node) => ({ key: node.key, type: node.type, name: node.name || node.key })));
 const chartEdges = computed<ChartEdge[]>(() => edges.value.map((edge) => ({
   key: edge.key,
@@ -214,8 +237,8 @@ const chartEdges = computed<ChartEdge[]>(() => edges.value.map((edge) => ({
   label: edgeCaption(edge),
 })));
 
-function typeLabel(type: string) {
-  return typeOptions.find((item) => item.value === type)?.label || type;
+function nodeName(key: string) {
+  return nodes.value.find((node) => node.key === key)?.name || key;
 }
 function blankAssignee(): AssigneeRow {
   return { type: 'applicant', userIds: [], roleIds: [], level: '1', departmentId: undefined, field: '' };
@@ -288,10 +311,13 @@ function loadGraph(definition: string) {
     isDefault: !!edge.default,
     priority: String(edge.priority || 0),
     field: edge.condition?.field || '',
-    op: edge.condition?.op || 'eq',
-    value: edge.condition?.value == null ? '' : String(edge.condition.value),
+    op: normalizeOp(edge.condition?.op),
+    value: storedValue(edge.condition?.value),
   }));
-  selectedKey.value = nodes.value[0]?.key || '';
+  selectedKey.value = '';
+  edgeKey.value = '';
+  nodeEditorOpen.value = false;
+  edgeEditorOpen.value = false;
 }
 async function open(row: ProcessRow) {
   errorText.value = '';
@@ -309,9 +335,35 @@ async function open(row: ProcessRow) {
     fail(error);
   }
 }
-function select(key: string) { selectedKey.value = key; }
-function onNode(context: RowEventContext<TableRowData>) {
-  select(String(context.row.key || ''));
+function select(key: string) {
+  if (!key) return;
+  selectedKey.value = key;
+  nodeEditorOpen.value = true;
+  edgeEditorOpen.value = false;
+}
+function onPickNode(value: unknown) {
+  const key = String(value || '');
+  if (!key) {
+    selectedKey.value = '';
+    nodeEditorOpen.value = false;
+    return;
+  }
+  select(key);
+}
+function openEdge(key: string) {
+  if (!key) return;
+  edgeKey.value = key;
+  edgeEditorOpen.value = true;
+  nodeEditorOpen.value = false;
+}
+function onPickEdge(value: unknown) {
+  const key = String(value || '');
+  if (!key) {
+    edgeKey.value = '';
+    edgeEditorOpen.value = false;
+    return;
+  }
+  openEdge(key);
 }
 function addNode(type: string) {
   if (type === 'start' && nodes.value.some((node) => node.type === 'start')) {
@@ -322,7 +374,7 @@ function addNode(type: string) {
   const node = makeNode(type, names[type] || type);
   if (type === 'cc') node.assignee.type = 'user';
   nodes.value.push(node);
-  selectedKey.value = node.key;
+  select(node.key);
 }
 function addExclusive() {
   const node = makeNode('exclusive', '排他');
@@ -331,7 +383,7 @@ function addExclusive() {
   const target = end?.key || node.key;
   edges.value.push({ key: nextKey('e'), from: node.key, to: target, sort: 1, isDefault: false, priority: '1', field: 'days', op: 'ge', value: '3' });
   edges.value.push({ key: nextKey('e'), from: node.key, to: target, sort: 2, isDefault: true, priority: '9', field: '', op: 'eq', value: '' });
-  selectedKey.value = node.key;
+  select(node.key);
 }
 function addParallel() {
   const split = makeNode('parallel', '并行分支');
@@ -339,7 +391,7 @@ function addParallel() {
   nodes.value.push(split, join);
   edges.value.push({ key: nextKey('e'), from: split.key, to: join.key, sort: 1, isDefault: false, priority: '0', field: '', op: 'eq', value: '' });
   edges.value.push({ key: nextKey('e'), from: split.key, to: join.key, sort: 2, isDefault: false, priority: '0', field: '', op: 'eq', value: '' });
-  selectedKey.value = split.key;
+  select(split.key);
 }
 function move(key: string, step: number) {
   const index = nodes.value.findIndex((node) => node.key === key);
@@ -353,21 +405,53 @@ function move(key: string, step: number) {
 function removeNode(key: string) {
   nodes.value = nodes.value.filter((node) => node.key !== key);
   edges.value = edges.value.filter((edge) => edge.from !== key && edge.to !== key);
-  if (selectedKey.value === key) selectedKey.value = nodes.value[0]?.key || '';
+  if (selectedKey.value === key) {
+    selectedKey.value = '';
+    nodeEditorOpen.value = false;
+  }
 }
 function addEdge() {
   const from = nodes.value[0]?.key || '';
   const to = nodes.value[1]?.key || from;
-  edges.value.push({ key: nextKey('e'), from, to, sort: edges.value.length + 1, isDefault: false, priority: '0', field: '', op: 'eq', value: '' });
+  const edge = { key: nextKey('e'), from, to, sort: edges.value.length + 1, isDefault: false, priority: '0', field: '', op: 'eq', value: '' };
+  edges.value.push(edge);
+  openEdge(edge.key);
 }
 function removeEdge(key: string) {
   edges.value = edges.value.filter((edge) => edge.key !== key);
+  if (edgeKey.value === key) {
+    edgeKey.value = '';
+    edgeEditorOpen.value = false;
+  }
 }
-function conditionValue(raw: string) {
-  const text = raw.trim();
+function normalizeOp(op?: string) {
+  if (op === 'gte') return 'ge';
+  if (op === 'lte') return 'le';
+  return op || 'eq';
+}
+function storedValue(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => (item == null ? '' : String(item))).join(',');
+  return value == null ? '' : String(value);
+}
+function conditionValue(edge: EdgeRow) {
+  const text = edge.value.trim();
+  if (edge.op === 'in') {
+    if (text.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        /* 按逗号拆 */
+      }
+    }
+    return text.split(/[,，]/).map((part) => part.trim()).filter(Boolean).map((part) => {
+      const number = Number(part);
+      return !Number.isNaN(number) && String(number) === part ? number : part;
+    });
+  }
   if (text === '') return '';
   const number = Number(text);
-  return Number.isNaN(number) ? text : number;
+  return !Number.isNaN(number) && String(number) === text ? number : text;
 }
 function payload() {
   return JSON.stringify({
@@ -393,7 +477,7 @@ function payload() {
       sort: Number(edge.sort || index + 1),
       default: edge.isDefault,
       priority: Number(edge.priority || 0),
-      condition: !edge.isDefault && edge.field ? { field: edge.field, op: edge.op || 'eq', value: conditionValue(edge.value) } : undefined,
+      condition: !edge.isDefault && edge.field ? { field: edge.field, op: edge.op || 'eq', value: conditionValue(edge) } : undefined,
     })),
   });
 }
@@ -431,8 +515,10 @@ load();
 <style scoped>
 .hint { margin: 0 0 12px; color: var(--td-text-color-secondary); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.compact { display: flex; gap: 8px; margin-top: 12px; max-width: 640px; }
 .block-title { margin: 16px 0 8px; }
-.actions { display: flex; gap: 8px; margin-top: 16px; }
+.actions { display: flex; gap: 8px; }
+.row-actions { display: flex; gap: 8px; margin-top: 16px; }
 .gap { margin-bottom: 12px; }
 .text-btn { border: 0; background: transparent; color: var(--td-brand-color); cursor: pointer; padding: 0 4px; }
 .text-btn.danger { color: var(--td-error-color); }

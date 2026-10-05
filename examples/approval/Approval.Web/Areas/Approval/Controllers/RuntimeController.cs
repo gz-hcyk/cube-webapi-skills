@@ -512,6 +512,7 @@ public class RuntimeController : ControllerBaseX
                 round = h.Round,
                 nodeKey = h.NodeKey ?? "",
                 nodeName = h.NodeName ?? "",
+                createTime = h.CreateTime.Year < 1900 ? "" : h.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
             }),
         };
     }
@@ -542,5 +543,6 @@ public class RuntimeController : ControllerBaseX
         kind = (Int32)t.Kind,
         seq = t.Seq,
         source = (Int32)t.Source,
+        createTime = t.CreateTime.Year < 1900 ? "" : t.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
     };
 }

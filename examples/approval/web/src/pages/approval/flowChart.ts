@@ -46,8 +46,10 @@ const OP_SYMBOL: Record<string, string> = {
   ne: '≠',
   gt: '>',
   ge: '≥',
+  gte: '≥',
   lt: '<',
   le: '≤',
+  lte: '≤',
   in: '∈',
 };
 
@@ -70,7 +72,7 @@ export function edgeCaption(edge: { isDefault?: boolean; default?: boolean; fiel
   if (!field) return '';
   const op = edge.op || edge.condition?.op || 'eq';
   const raw = edge.value != null && edge.value !== '' ? edge.value : edge.condition?.value;
-  const value = raw == null ? '' : String(raw);
+  const value = Array.isArray(raw) ? raw.map((item) => (item == null ? '' : String(item))).join(',') : raw == null ? '' : String(raw);
   return `${field} ${OP_SYMBOL[op] || op} ${value}`.trim();
 }
 

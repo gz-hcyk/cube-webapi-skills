@@ -33,7 +33,7 @@
       @row-click="onRow"
     />
 
-    <t-drawer v-model:visible="detailOpen" :header="detail?.title || '审批详情'" size="640px" :footer="false">
+    <t-drawer v-model:visible="detailOpen" :header="detail?.title || '审批详情'" size="720px" :footer="false" :close-btn="true">
       <template v-if="detail">
         <t-descriptions :column="2" item-layout="horizontal">
           <t-descriptions-item label="状态">{{ instanceStatus(detail.status) }}</t-descriptions-item>
@@ -49,9 +49,6 @@
             <t-input v-else :value="shownValue(field.key)" disabled />
           </t-form-item>
         </t-form>
-        <h4 class="block-title">审批轨迹</h4>
-        <flow-chart :nodes="chart.nodes" :edges="chart.edges" :states="chart.states" legend />
-        <t-table row-key="action" :data="detail.history" :columns="historyColumns" size="small" />
         <div class="actions">
           <t-button v-if="activeTask" theme="primary" @click="agree">同意</t-button>
           <t-button v-if="activeTask" theme="danger" variant="outline" @click="rejectOpen = true">驳回</t-button>
@@ -61,6 +58,22 @@
           <t-button v-if="canWithdraw" variant="outline" @click="withdrawOpen = true">撤回</t-button>
           <t-button v-if="canResubmit" theme="primary" @click="openResubmit">重新提交</t-button>
         </div>
+        <t-tabs v-model="detailTab" class="detail-tabs">
+          <t-tab-panel value="timeline" label="办理过程">
+            <ol v-if="timeline.length" class="timeline" data-timeline>
+              <li v-for="item in timeline" :key="item.id" class="tl-item" :data-action="item.action">
+                <div class="tl-time">{{ item.time || '时间未记录' }}</div>
+                <div class="tl-title">{{ item.actor }} · {{ item.actionName }}</div>
+                <div v-if="item.node" class="tl-node">{{ item.node }}</div>
+                <div v-if="item.comment" class="tl-comment">{{ item.comment }}</div>
+              </li>
+            </ol>
+            <p v-else class="hint">还没有办理记录</p>
+          </t-tab-panel>
+          <t-tab-panel value="flow" label="流程图">
+            <flow-chart v-if="detailTab === 'flow'" :nodes="chart.nodes" :edges="chart.edges" :states="chart.states" legend zoomable />
+          </t-tab-panel>
+        </t-tabs>
       </template>
     </t-drawer>
 
@@ -138,6 +151,7 @@ interface TaskRow {
   status: number;
   title: string;
   kind: number;
+  createTime?: string;
 }
 interface HistoryRow {
   action: string;
@@ -145,6 +159,9 @@ interface HistoryRow {
   comment?: string;
   operatorName?: string;
   nodeKey?: string;
+  nodeName?: string;
+  createTime?: string;
+  round?: number;
 }
 interface FieldRule {
   key: string;
@@ -214,6 +231,7 @@ const drafts = ref<DraftRow[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const detailOpen = ref(false);
+const detailTab = ref('timeline');
 const detail = ref<InstanceView | null>(null);
 const openedTaskId = ref('');
 const startOpen = ref(false);
@@ -261,12 +279,6 @@ const searchColumns = [
   { colKey: 'value', title: '事由' },
   { colKey: 'statusText', title: '状态' },
 ];
-const historyColumns = [
-  { colKey: 'actionName', title: '动作' },
-  { colKey: 'operatorName', title: '操作人' },
-  { colKey: 'comment', title: '意见' },
-];
-
 const displayRows = computed(() => (tab.value === 'drafts'
   ? drafts.value
   : rows.value.map((row) => ({ ...row, statusText: taskStatus(row.status) }))));
@@ -315,6 +327,43 @@ const chart = computed(() => {
   } catch {
     return empty;
   }
+});
+const timeline = computed(() => {
+  const view = detail.value;
+  if (!view) return [];
+  const names = new Map(chart.value.nodes.map((node) => [node.key, node.name]));
+  const items = (view.history || []).map((item, index) => {
+    let comment = item.comment || '';
+    if (item.action === 'choose' && comment) comment = `走向${names.get(comment) || comment}`;
+    return {
+      id: `h-${index}-${item.action}`,
+      time: item.createTime || '',
+      actor: item.operatorName || '系统',
+      action: item.action,
+      actionName: item.actionName || item.action,
+      node: item.nodeName || names.get(item.nodeKey || '') || '',
+      comment,
+      order: index,
+    };
+  });
+  (view.tasks || []).filter((task) => task.status === 0).forEach((task, index) => {
+    items.push({
+      id: `t-${task.id}`,
+      time: task.createTime || '',
+      actor: task.assigneeName || '待定',
+      action: task.kind === 2 ? 'cc-pending' : 'pending',
+      actionName: task.kind === 2 ? '待阅' : '待处理',
+      node: task.nodeName || names.get(task.nodeKey) || '',
+      comment: '',
+      order: 1000 + index,
+    });
+  });
+  return items.sort((left, right) => {
+    if (left.time && right.time && left.time !== right.time) return left.time.localeCompare(right.time);
+    if (left.time && !right.time) return -1;
+    if (!left.time && right.time) return 1;
+    return left.order - right.order;
+  });
 });
 
 function instanceStatus(status: number) {
@@ -370,6 +419,7 @@ function fillEdits(view: InstanceView) {
 }
 function openInstance(instanceId: string, taskId: string) {
   openedTaskId.value = taskId;
+  detailTab.value = 'timeline';
   void unwrap(getApi<InstanceView>('/Approval/Runtime/View', { instanceId }))
     .then((view) => {
       detail.value = view;
@@ -667,7 +717,15 @@ onMounted(loadList);
 
 <style scoped>
 .block-title { margin: 16px 0 8px; }
-.actions { display: flex; gap: 8px; margin-top: 16px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .gap { margin-top: 12px; }
 .search-bar { display: flex; gap: 8px; margin: 12px 0; max-width: 480px; }
+.detail-tabs { margin-top: 16px; }
+.hint { margin: 8px 0; color: var(--td-text-color-secondary); }
+.timeline { list-style: none; margin: 8px 0 0; padding: 0 0 0 4px; }
+.tl-item { position: relative; margin: 0; padding: 0 0 16px 18px; border-left: 2px solid #dcdcdc; }
+.tl-item::before { content: ''; position: absolute; left: -5px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #0052d9; }
+.tl-time { color: #8a8a8a; font-size: 12px; }
+.tl-title { font-weight: 600; margin-top: 2px; }
+.tl-node, .tl-comment { color: #5e6670; margin-top: 2px; }
 </style>
