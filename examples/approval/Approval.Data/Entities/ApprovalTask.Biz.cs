@@ -12,9 +12,13 @@ public partial class ApprovalTask : Entity<ApprovalTask>
     public static IList<ApprovalTask> FindPending(Int64 instanceId) =>
         FindAll(_.InstanceId == instanceId & _.Status == TaskStatus.Pending & _.Kind == TaskKind.Approve);
 
-    /// <summary>当前用户的待办。只看办理人，不受流程监控的数据范围影响。</summary>
+    /// <summary>当前用户的待办。只看办理人，不受流程监控的数据范围影响。抄送另见 <see cref="CcInbox"/>。</summary>
     public static IList<ApprovalTask> Inbox(Int32 userId) =>
         FindAll(_.AssigneeId == userId & _.Kind == TaskKind.Approve & _.Status == TaskStatus.Pending);
+
+    /// <summary>当前用户尚未阅读的抄送。</summary>
+    public static IList<ApprovalTask> CcInbox(Int32 userId) =>
+        FindAll(_.AssigneeId == userId & _.Kind == TaskKind.Cc & _.Status == TaskStatus.Pending);
 
     /// <summary>当前用户的已办：已同意、已驳回、已转办。</summary>
     public static IList<ApprovalTask> Done(Int32 userId) =>

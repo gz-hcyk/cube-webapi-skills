@@ -237,6 +237,90 @@ public class HttpRuntimeTests
     }
 
     [Fact]
+    public async Task Anonymous_and_stranger_cannot_read_another_instance()
+    {
+        var mark = Guid.NewGuid().ToString("N")[..8];
+        var role = Role.Add("r8-http-" + mark, false, "限定查看");
+        role.IsSystem = false;
+        role.DataScope = DataScopes.本部门;
+        role.Update();
+        var owner = User.Add("r8h-owner-" + mark, "pass1234", role.ID, "学生甲");
+        var approver = User.Add("r8h-appr-" + mark, "pass1234", role.ID, "审批人");
+        var stranger = User.Add("r8h-str-" + mark, "pass1234", role.ID, "旁观者");
+        foreach (var user in new[] { owner, approver, stranger })
+        {
+            user.Enable = true;
+            user.Update();
+        }
+
+        var form = new ApprovalFormDefinition { Code = "r8h-" + mark, Name = "限定表单", Enable = true };
+        form.Insert();
+        form.SaveDraft("""{"fields":[{"key":"studentUserId"},{"key":"reason","search":true},{"key":"days"}]}""");
+        form.Publish(0);
+        var process = new ApprovalProcess { Code = "r8hp-" + mark, Name = "限定流程", FormId = form.Id, Enable = true };
+        process.Insert();
+        process.SaveDraft(
+            "{\"nodes\":[" +
+            "{\"key\":\"s\",\"type\":\"start\",\"name\":\"开始\",\"fields\":[{\"key\":\"days\",\"access\":\"hidden\"},{\"key\":\"reason\",\"access\":\"editable\"},{\"key\":\"studentUserId\",\"access\":\"readonly\"}]}," +
+            "{\"key\":\"a\",\"type\":\"approve\",\"name\":\"审批\",\"mode\":\"any\",\"assignee\":{\"type\":\"user\",\"userIds\":[" + approver.ID + "]},\"fields\":[{\"key\":\"days\",\"access\":\"editable\"},{\"key\":\"reason\",\"access\":\"readonly\"},{\"key\":\"studentUserId\",\"access\":\"readonly\"}]}," +
+            "{\"key\":\"e\",\"type\":\"end\",\"name\":\"结束\"}]," +
+            "\"edges\":[{\"key\":\"e1\",\"from\":\"s\",\"to\":\"a\"},{\"key\":\"e2\",\"from\":\"a\",\"to\":\"e\"}]}");
+        process.Publish(0);
+
+        await using var factory = new ApprovalApiFactory(_world);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var anon = await client.GetAsync("/api/Approval/Runtime/View?instanceId=1");
+        Assert.True((Int32)anon.StatusCode == 401 || (Int32)anon.StatusCode == 403, ((Int32)anon.StatusCode).ToString());
+
+        _ = await Login(client, owner.Name, "pass1234");
+        GrantBits(role, (PermissionFlags)(16 | 32 | 128 | 1024));
+        var ownerToken = await Login(client, owner.Name, "pass1234");
+        var approverToken = await Login(client, approver.Name, "pass1234");
+        var strangerToken = await Login(client, stranger.Name, "pass1234");
+        var reason = "r8h-" + mark;
+        var started = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", ownerToken, new
+        {
+            processId = process.Id,
+            proxy = false,
+            data = "{\"studentUserId\":" + owner.ID + ",\"reason\":\"" + reason + "\"}",
+            requestId = "r8h-start-" + mark,
+        }));
+        var instanceId = started["instanceId"]!.GetValue<String>();
+        var task = Pending(started).Single();
+
+        var stolen = await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Agree", strangerToken, new
+        {
+            taskId = task["id"]!.GetValue<String>(),
+            comment = "越权",
+            requestId = "r8h-steal-" + mark,
+            instanceVersion = started["version"]!.GetValue<Int32>(),
+        });
+        Assert.Equal(4031, stolen["code"]!.GetValue<Int32>());
+
+        var denied = await Get(client, "/api/Approval/Runtime/View?instanceId=" + instanceId, strangerToken);
+        Assert.Equal(4031, denied["code"]!.GetValue<Int32>());
+        var searched = Ok(await Get(client, "/api/Approval/Runtime/Search?field=reason&keyword=" + reason, strangerToken));
+        Assert.DoesNotContain(instanceId, searched.ToJsonString());
+
+        var agreed = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Agree", approverToken, new
+        {
+            taskId = task["id"]!.GetValue<String>(),
+            comment = "同意",
+            data = "{\"days\":4}",
+            requestId = "r8h-ok-" + mark,
+            instanceVersion = started["version"]!.GetValue<Int32>(),
+        }));
+        Assert.Equal(2, agreed["status"]!.GetValue<Int32>());
+
+        var ownerView = Ok(await Get(client, "/api/Approval/Runtime/View?instanceId=" + instanceId, ownerToken));
+        Assert.DoesNotContain("days", ownerView["formData"]!.GetValue<String>());
+        var approverView = Ok(await Get(client, "/api/Approval/Runtime/View?instanceId=" + instanceId, approverToken));
+        Assert.Contains("days", approverView["formData"]!.GetValue<String>());
+        var ownerSearch = Ok(await Get(client, "/api/Approval/Runtime/Search?field=reason&keyword=" + reason, ownerToken));
+        Assert.Contains(instanceId, ownerSearch.ToJsonString());
+    }
+
+    [Fact]
     public async Task Resubmit_field_rules_and_category_over_http()
     {
         await using var factory = new ApprovalApiFactory(_world);
@@ -293,6 +377,25 @@ public class HttpRuntimeTests
         Assert.Equal("学工", affair["name"]!.GetValue<String>());
         Assert.Contains(affair["forms"]!.AsArray(), f => f!["code"]!.GetValue<String>() == "leave");
         Assert.Contains(affair["processes"]!.AsArray(), f => f!["code"]!.GetValue<String>() == "leave");
+    }
+
+    private static void GrantBits(Role role, PermissionFlags flags)
+    {
+        var menus = Menu.FindAll();
+        var hits = menus.Where(m =>
+        {
+            var text = (m.FullName ?? "") + " " + (m.Url ?? "") + " " + (m.Name ?? "");
+            return text.Contains("Runtime", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("审批");
+        }).ToList();
+        if (hits.Count == 0) throw new InvalidOperationException("没有审批菜单");
+        foreach (var menu in hits) role.Set(menu.ID, flags);
+        role.Update();
+        Role.Meta.Cache?.Clear("grant8", true);
+        Role.Meta.SingleCache.Clear("grant8");
+        User.Meta.Cache?.Clear("grant8", true);
+        User.Meta.SingleCache.Clear("grant8");
     }
 
     private static void Grant(Role role)

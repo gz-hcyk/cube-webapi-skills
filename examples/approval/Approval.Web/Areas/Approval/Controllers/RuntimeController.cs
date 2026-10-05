@@ -134,19 +134,27 @@ public class RuntimeController : ControllerBaseX
     {
         try
         {
+            var user = Current();
+            var monitorIds = MonitorIds(user);
             var rows = ApprovalFieldValue.FindMatches(field ?? "", keyword ?? "");
-            return Json(0, "ok", rows.Select(row =>
+            var list = new List<Object>();
+            foreach (var row in rows)
             {
                 var inst = ApprovalInstance.FindById(row.InstanceId);
-                return new
+                if (inst == null || !ApprovalAccess.CanView(user, inst, monitorIds)) continue;
+                var full = monitorIds.Contains(inst.Id);
+                if (!full && ApprovalAccess.HiddenFrom(user, inst).Contains(row.FieldKey)) continue;
+                list.Add(new
                 {
                     instanceId = row.InstanceId.ToString(),
                     field = row.FieldKey,
                     value = row.FieldValue,
-                    title = inst?.Title ?? "",
-                    status = inst == null ? 0 : (Int32)inst.Status,
-                };
-            }), null);
+                    title = inst.Title,
+                    status = (Int32)inst.Status,
+                });
+            }
+
+            return Json(0, "ok", list, null);
         }
         catch (ApprovalException ex)
         {
@@ -382,7 +390,24 @@ public class RuntimeController : ControllerBaseX
         }
     }
 
-    /// <summary>查看实例、待办和轨迹。</summary>
+    /// <summary>当前用户尚未阅读的抄送。</summary>
+    [EntityAuthorize((PermissionFlags)4096)]
+    [DisplayName("抄送")]
+    [HttpGet]
+    public ActionResult Cc()
+    {
+        try
+        {
+            var user = Current();
+            return Json(0, "ok", ApprovalTask.CcInbox(user.ID).Select(DescribeTask), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>查看实例、待办和轨迹。不是参与人、也不在本人监控范围内时拒绝。</summary>
     [EntityAuthorize((PermissionFlags)128)]
     [DisplayName("查看单据")]
     [HttpGet]
@@ -390,14 +415,34 @@ public class RuntimeController : ControllerBaseX
     {
         try
         {
-            _ = Current();
+            var user = Current();
             var inst = ApprovalInstance.FindById(instanceId) ?? throw new ApprovalException(4041, "审批单不存在");
-            return Json(0, "ok", Describe(inst), null);
+            var monitorIds = MonitorIds(user);
+            if (!ApprovalAccess.CanView(user, inst, monitorIds))
+                throw new ApprovalException(4031, "无权查看该审批单");
+            var raw = ApprovalFormData.FindById(inst.Id)?.Data;
+            var form = ApprovalAccess.RedactForm(user, inst, raw, monitorIds);
+            return Json(0, "ok", Describe(inst, form), null);
         }
         catch (ApprovalException ex)
         {
             return Json(ex.Code, ex.Message, null, null);
         }
+    }
+
+    /// <summary>有监控权限时返回数据范围内的实例编号，否则为空集。</summary>
+    private static HashSet<Int64> MonitorIds(User user)
+    {
+        if (!HasMonitor(user)) return [];
+        return ApprovalInstance.Monitor(user).Select(inst => inst.Id).ToHashSet();
+    }
+
+    private static Boolean HasMonitor(User user)
+    {
+        var menu = XCode.Membership.Menu.FindAll().FirstOrDefault(item =>
+            (item.FullName ?? "").Contains("Runtime", StringComparison.OrdinalIgnoreCase)
+            || (item.Url ?? "").Contains("Runtime", StringComparison.OrdinalIgnoreCase));
+        return menu != null && user.Has(menu, (PermissionFlags)16384);
     }
 
     private ActionResult Handle(HandleInput? input, Boolean agree)
@@ -425,11 +470,13 @@ public class RuntimeController : ControllerBaseX
         return XCode.Membership.User.FindByID(id) ?? throw new ApprovalException(401, "没有登录或登录超时！");
     }
 
-    private static Object Describe(ApprovalInstance inst)
+    private static Object Describe(ApprovalInstance inst) =>
+        Describe(inst, ApprovalFormData.FindById(inst.Id)?.Data);
+
+    private static Object Describe(ApprovalInstance inst, String? formData)
     {
         var tasks = ApprovalTask.FindAll(ApprovalTask._.InstanceId == inst.Id);
         var history = ApprovalHistory.FindAllByInstanceId(inst.Id);
-        var form = ApprovalFormData.FindById(inst.Id);
         return new
         {
             instanceId = inst.Id.ToString(),
@@ -448,7 +495,7 @@ public class RuntimeController : ControllerBaseX
             round = inst.Round,
             processId = inst.ProcessId,
             processVersionId = inst.ProcessVersionId,
-            formData = form?.Data,
+            formData,
             nodeFields = NodeFields(inst),
             tasks = tasks.Select(DescribeTask),
             history = history.Select(h => new

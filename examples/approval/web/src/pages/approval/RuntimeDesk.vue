@@ -5,6 +5,7 @@
     </template>
     <t-tabs v-model="tab" @change="loadList">
       <t-tab-panel value="inbox" label="待办" />
+      <t-tab-panel value="cc" label="抄送" />
       <t-tab-panel value="done" label="已办" />
       <t-tab-panel value="drafts" label="草稿" />
       <t-tab-panel value="search" label="检索" />
@@ -54,7 +55,9 @@
           <t-button v-if="activeTask" theme="primary" @click="agree">同意</t-button>
           <t-button v-if="activeTask" theme="danger" variant="outline" @click="rejectOpen = true">驳回</t-button>
           <t-button v-if="activeTask" variant="outline" @click="transferOpen = true">转办</t-button>
-          <t-button v-if="canWithdraw" variant="outline" @click="withdraw">撤回</t-button>
+          <t-button v-if="activeTask" variant="outline" @click="addSignOpen = true">加签</t-button>
+          <t-button v-if="ccTask" theme="primary" @click="markRead">已阅</t-button>
+          <t-button v-if="canWithdraw" variant="outline" @click="withdrawOpen = true">撤回</t-button>
           <t-button v-if="canResubmit" theme="primary" @click="openResubmit">重新提交</t-button>
         </div>
       </template>
@@ -102,6 +105,15 @@
     <t-dialog v-model:visible="transferOpen" header="转办" @confirm="transfer">
       <t-select v-model="transferUserId" :options="transferOptions" placeholder="选择另一名用户" />
       <t-textarea v-model="transferComment" class="gap" placeholder="转办说明" />
+    </t-dialog>
+
+    <t-dialog v-model:visible="addSignOpen" header="向后加签" @confirm="addSign">
+      <t-select v-model="addSignUserId" :options="transferOptions" placeholder="选择加签人" />
+      <t-textarea v-model="addSignComment" class="gap" placeholder="加签说明" />
+    </t-dialog>
+
+    <t-dialog v-model:visible="withdrawOpen" header="撤回申请" @confirm="withdraw">
+      <p>撤回后本轮待办取消，单据回到草稿，可以修改后重新提交。</p>
     </t-dialog>
   </t-card>
 </template>
@@ -202,9 +214,13 @@ const fieldValues = ref<Record<string, string>>({});
 const editValues = ref<Record<string, string>>({});
 const rejectOpen = ref(false);
 const transferOpen = ref(false);
+const addSignOpen = ref(false);
+const withdrawOpen = ref(false);
 const rejectComment = ref('');
 const transferComment = ref('');
 const transferUserId = ref<number | undefined>();
+const addSignUserId = ref<number | undefined>();
+const addSignComment = ref('');
 const me = ref<Person | null>(null);
 const people = ref<Person[]>([]);
 const processes = ref<ProcessOption[]>([]);
@@ -247,7 +263,9 @@ const userOptions = computed(() => people.value.map((p) => ({ label: p.displayNa
 const studentOptions = computed(() => userOptions.value.filter((p) => p.value !== me.value?.id));
 const processOptions = computed(() => processes.value.map((p) => ({ label: p.name, value: p.id })));
 const transferOptions = computed(() => userOptions.value.filter((p) => p.value !== activeTask.value?.assigneeId));
-const activeTask = computed(() => detail.value?.tasks.find((t) => t.id === openedTaskId.value && t.status === 0 && t.kind === 1));
+const openedPending = computed(() => detail.value?.tasks.find((t) => t.id === openedTaskId.value && t.status === 0));
+const activeTask = computed(() => (openedPending.value?.kind === 1 ? openedPending.value : undefined));
+const ccTask = computed(() => (openedPending.value?.kind === 2 ? openedPending.value : undefined));
 const handleFields = computed(() => {
   const nodeKey = activeTask.value?.nodeName ? activeTask.value.nodeKey : '';
   const nodes = detail.value?.nodeFields || [];
@@ -286,7 +304,7 @@ async function loadList() {
     if (tab.value === 'drafts') {
       drafts.value = (await unwrap(getApi<DraftRow[]>('/Approval/Runtime/Drafts'))) || [];
     } else {
-      const path = tab.value === 'done' ? '/Approval/Runtime/Done' : '/Approval/Runtime/Inbox';
+      const path = tab.value === 'done' ? '/Approval/Runtime/Done' : tab.value === 'cc' ? '/Approval/Runtime/Cc' : '/Approval/Runtime/Inbox';
       rows.value = (await unwrap(getApi<TaskRow[]>(path))) || [];
     }
   } catch (error) {
@@ -512,6 +530,41 @@ async function submitStart() {
   }
 }
 
+async function markRead() {
+  if (!detail.value || !ccTask.value) return;
+  try {
+    await unwrap(postApi('/Approval/Runtime/Read', {
+      taskId: ccTask.value.id,
+      requestId: requestId(),
+    }));
+    MessagePlugin.success('已阅');
+    await refreshDetail();
+  } catch (error) {
+    tell(error);
+  }
+}
+
+async function addSign() {
+  if (!detail.value || !activeTask.value || !addSignUserId.value) {
+    MessagePlugin.warning('请选择加签人');
+    return;
+  }
+  try {
+    await unwrap(postApi('/Approval/Runtime/AddSign', {
+      taskId: activeTask.value.id,
+      targetUserId: addSignUserId.value,
+      comment: addSignComment.value,
+      requestId: requestId(),
+      instanceVersion: detail.value.version,
+    }));
+    addSignOpen.value = false;
+    MessagePlugin.success('已加签');
+    await refreshDetail();
+  } catch (error) {
+    tell(error);
+  }
+}
+
 async function withdraw() {
   if (!detail.value) return;
   try {
@@ -521,6 +574,7 @@ async function withdraw() {
       requestId: requestId(),
       instanceVersion: detail.value.version,
     }));
+    withdrawOpen.value = false;
     MessagePlugin.success('已撤回');
     detailOpen.value = false;
     tab.value = 'drafts';
