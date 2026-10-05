@@ -148,6 +148,8 @@ public class ProcessController : EntityController<ApprovalProcess>
             "user" => "指定成员",
             "role" => "指定角色",
             "deptManager" => "部门负责人",
+            "applicant" => "相对申请人",
+            "deptMember" => "指定部门成员",
             "subjectCounselor" => "该生辅导员",
             "" => "",
             _ => kind,

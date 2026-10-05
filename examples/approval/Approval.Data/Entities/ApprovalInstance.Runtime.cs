@@ -144,6 +144,7 @@ public partial class ApprovalInstance
             var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
             if (dup != null)
             {
+                LeaveHost.Sync(inst.Id);
                 result = inst;
                 return;
             }
@@ -170,6 +171,7 @@ public partial class ApprovalInstance
             inst.Update();
             WriteHistory(inst, task, node, "agree", "同意", comment,
                 before, inst.Status, requestId, clientIp, op, now);
+            LeaveHost.Sync(inst.Id);
             result = inst;
         });
         return FindById(result!.Id) ?? result;
@@ -188,6 +190,7 @@ public partial class ApprovalInstance
             var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
             if (dup != null)
             {
+                LeaveHost.Sync(inst.Id);
                 result = inst;
                 return;
             }
@@ -216,6 +219,7 @@ public partial class ApprovalInstance
             var node = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId).FirstOrDefault(e => e.NodeKey == task.NodeKey);
             var note = $"已退回发起人：{inst.UserName}。{comment}";
             WriteHistory(inst, task, node, "reject", "驳回", note, before, inst.Status, requestId, clientIp, op, now);
+            LeaveHost.Sync(inst.Id);
             result = inst;
         });
         return FindById(result!.Id) ?? result;
@@ -278,6 +282,7 @@ public partial class ApprovalInstance
             var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
             if (dup != null)
             {
+                LeaveHost.Sync(inst.Id);
                 result = inst;
                 return;
             }
@@ -301,6 +306,7 @@ public partial class ApprovalInstance
             inst.Version++;
             inst.Update();
             WriteHistory(inst, null, null, "withdraw", "撤回", reason, before, inst.Status, requestId, clientIp, op, now);
+            LeaveHost.Sync(inst.Id);
             result = inst;
         });
         return FindById(result!.Id) ?? result;
@@ -320,6 +326,7 @@ public partial class ApprovalInstance
             var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
             if (dup != null)
             {
+                LeaveHost.Sync(inst.Id);
                 result = inst;
                 return;
             }
@@ -366,6 +373,7 @@ public partial class ApprovalInstance
             Enter(inst, start, nodes, transitions, now);
             inst.Update();
             WriteHistory(inst, null, null, "resubmit", "重新提交", null, before, inst.Status, requestId, clientIp, op, now);
+            LeaveHost.Sync(inst.Id);
             result = inst;
         });
         return FindById(result!.Id) ?? result;
@@ -629,6 +637,7 @@ public partial class ApprovalInstance
             var chosen = graph.Choose(node.NodeKey, form?.Data, inst.UserId, inst.DepartmentId);
             var target = nodes.FirstOrDefault(e => e.NodeKey == chosen.To)
                 ?? throw new ApprovalException(4222, "排他网关的出线没有目标");
+            RememberChoice(inst, node, chosen.To, now);
             Enter(inst, target, nodes, transitions, now);
             return;
         }
@@ -661,7 +670,13 @@ public partial class ApprovalInstance
             if (from.NodeType == "approve")
             {
                 var tasks = NodeTasks(inst, key);
-                if (tasks.Count == 0 || tasks.Any(t => t.Status == TaskStatus.Pending)) return false;
+                if (tasks.Count == 0)
+                {
+                    if (!OnActivePath(inst, key)) continue;
+                    return false;
+                }
+
+                if (tasks.Any(t => t.Status == TaskStatus.Pending)) return false;
             }
             else if (from.NodeType == "cc")
             {
@@ -699,8 +714,8 @@ public partial class ApprovalInstance
     }
 
     /// <summary>
-    /// 解析办理人。指定成员、指定角色、部门负责人按发起人；
-    /// 「该生辅导员」只读业务单上的辅导员用户，不读代发人。
+    /// 解析办理人。指定成员、指定角色、部门负责人、相对申请人按发起人；
+    /// 指定部门成员取规则里的部门；「该生辅导员」只读业务单上的辅导员用户，不读代发人。
     /// </summary>
     public static IList<User> ResolveAssignees(ApprovalInstance inst, ApprovalNode node)
     {
@@ -726,6 +741,18 @@ public partial class ApprovalInstance
                 var manager = FindManager(inst.DepartmentId, rule.Level <= 0 ? 1 : rule.Level);
                 if (manager != null) found.Add(manager);
                 break;
+            case "applicant":
+                var applicant = inst.UserId > 0 ? User.FindByID(inst.UserId) : null;
+                if (applicant != null && applicant.Enable) found.Add(applicant);
+                break;
+            case "deptMember":
+                var departments = rule.Departments().ToHashSet();
+                foreach (var user in User.FindAll())
+                {
+                    if (user == null || !user.Enable || user.DepartmentID <= 0) continue;
+                    if (departments.Contains(user.DepartmentID)) found.Add(user);
+                }
+                break;
             case "subjectCounselor":
                 // 辅导员编号在发起时从业务主体的表单值抄到实例上，这里不再看操作者或代发人。
                 var counselor = inst.CounselorUserId > 0 ? User.FindByID(inst.CounselorUserId) : null;
@@ -736,6 +763,38 @@ public partial class ApprovalInstance
         }
 
         return found.GroupBy(e => e.ID).Select(e => e.First()).ToList();
+    }
+
+    /// <summary>记下排他网关选中的出线。汇聚时用它忽略没走进去的分支，不另建令牌表。</summary>
+    private static void RememberChoice(ApprovalInstance inst, ApprovalNode node, String toKey, DateTime now)
+    {
+        var requestId = "choose-" + inst.Round + "-" + node.NodeKey;
+        if (ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId) != null) return;
+        var op = User.FindByID(inst.UserId) ?? throw new ApprovalException(4041, "发起人不存在");
+        WriteHistory(inst, null, node, "choose", "选择分支", toKey, inst.Status, inst.Status, requestId, null, op, now);
+    }
+
+    /// <summary>当前轮次里，这条节点是否还在已选路径上。没选过的排他出线返回 false。</summary>
+    private static Boolean OnActivePath(ApprovalInstance inst, String nodeKey)
+    {
+        try
+        {
+            var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId);
+            if (version == null || version.Definition.IsNullOrEmpty()) return true;
+            var choices = new Dictionary<String, String>(StringComparer.Ordinal);
+            foreach (var row in ApprovalHistory.FindAllByInstanceId(inst.Id))
+            {
+                if (row.Round != inst.Round || row.Action != "choose") continue;
+                if (row.NodeKey.IsNullOrEmpty() || row.Comment.IsNullOrEmpty()) continue;
+                choices[row.NodeKey] = row.Comment;
+            }
+
+            return FlowGraph.Parse(version.Definition).ActiveNodes(choices).Contains(nodeKey);
+        }
+        catch (ApprovalException)
+        {
+            return true;
+        }
     }
 
     private static User? FindManager(Int32 departmentId, Int32 level)

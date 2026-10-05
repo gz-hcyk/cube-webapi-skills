@@ -54,6 +54,19 @@
         <Index Columns="Code" Unique="True" />
       </Indexes>
     </Table>
+    <Table Name="LeaveRequest" Description="请假宿主。只记学生用户编号和审批实例，不建学籍">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="StudentId" DataType="Int32" Description="学生。魔方用户编号" />
+        <Column Name="ApprovalInstanceId" DataType="Int64" Description="审批实例" />
+        <Column Name="Status" DataType="Int32" Description="状态。与审批实例状态相同" />
+        <Column Name="Reason" DataType="String" Length="200" Description="事由" />
+      </Columns>
+      <Indexes>
+        <Index Columns="ApprovalInstanceId" Unique="True" />
+        <Index Columns="StudentId" />
+      </Indexes>
+    </Table>
     <Table Name="ApprovalFormDefinition" Description="表单定义。可发布为不可变版本">
       <Columns>
         <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />

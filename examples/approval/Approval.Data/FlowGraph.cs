@@ -58,8 +58,10 @@ public sealed class FlowGraph
             if (node.Type is "approve" or "cc")
             {
                 var kind = node.Assignee?.Type?.Trim() ?? "";
-                if (kind is not ("user" or "role" or "deptManager" or "subjectCounselor"))
+                if (kind is not ("user" or "role" or "deptManager" or "subjectCounselor" or "applicant" or "deptMember"))
                     throw new ApprovalException(4222, "节点办理人规则不合法：" + node.Key);
+                if (kind == "deptMember" && (node.Assignee?.Departments().Count ?? 0) == 0)
+                    throw new ApprovalException(4222, "指定部门成员必须选择部门：" + node.Key);
                 if (node.Type == "approve") node.ApproveMode = ParseMode(node.Mode);
             }
 
@@ -148,21 +150,86 @@ public sealed class FlowGraph
         }
     }
 
+    /// <summary>
+    /// 沿分支走到汇聚。排他网关的每一条出线都要走到同一个汇聚，不能只看优先级最高的那一条。
+    /// </summary>
     private String WalkToJoin(String key, String splitKey)
     {
-        var guard = 0;
-        while (true)
+        var joins = new HashSet<String>(StringComparer.Ordinal);
+        var seen = new HashSet<String>(StringComparer.Ordinal);
+        var stack = new Stack<String>();
+        stack.Push(key);
+        var steps = 0;
+        while (stack.Count > 0)
         {
-            if (++guard > 50) throw new ApprovalException(4222, "并行分支过长");
-            var node = FindNode(key) ?? throw new ApprovalException(4222, "并行分支指向了不存在的节点");
+            if (++steps > 80) throw new ApprovalException(4222, "并行分支过长");
+            var current = stack.Pop();
+            if (!seen.Add(current)) continue;
+            var node = FindNode(current) ?? throw new ApprovalException(4222, "并行分支指向了不存在的节点");
             if (node.Type == "end") throw new ApprovalException(4222, "并行分支内不能放结束节点");
             if (node.Key == splitKey || (node.Type == "parallel" && Edges.Count(e => e.From == node.Key) >= 2))
                 throw new ApprovalException(4222, "不允许嵌套并行");
-            if (node.Type == "parallel" && Edges.Count(e => e.To == node.Key) >= 2) return node.Key;
-            var next = Edges.Where(e => e.From == key).OrderBy(e => e.Priority).ThenBy(e => e.Sort).FirstOrDefault()
-                ?? throw new ApprovalException(4222, "并行分支没有汇聚：" + key);
-            key = next.To;
+            if (node.Type == "parallel" && Edges.Count(e => e.To == node.Key) >= 2)
+            {
+                joins.Add(node.Key);
+                continue;
+            }
+
+            var nexts = Edges.Where(e => e.From == current).ToList();
+            if (nexts.Count == 0) throw new ApprovalException(4222, "并行分支没有汇聚：" + current);
+            if (node.Type == "exclusive")
+            {
+                foreach (var edge in nexts) stack.Push(edge.To);
+                continue;
+            }
+
+            var one = nexts.OrderBy(e => e.Priority).ThenBy(e => e.Sort).ThenBy(e => e.Key, StringComparer.Ordinal).First();
+            stack.Push(one.To);
         }
+
+        if (joins.Count == 0) throw new ApprovalException(4222, "并行分支没有汇聚：" + key);
+        if (joins.Count > 1) throw new ApprovalException(4222, "并行分支必须汇入同一个汇聚：" + splitKey);
+        return joins.First();
+    }
+
+    /// <summary>
+    /// 按已发生的排他选择，列出运行时还会进入的节点。未选择的排他出线不在其中。
+    /// </summary>
+    public HashSet<String> ActiveNodes(IReadOnlyDictionary<String, String> exclusiveChoices)
+    {
+        var active = new HashSet<String>(StringComparer.Ordinal);
+        var start = Nodes.FirstOrDefault(e => e.Type == "start");
+        if (start == null) return active;
+        var stack = new Stack<String>();
+        stack.Push(start.Key);
+        var steps = 0;
+        while (stack.Count > 0)
+        {
+            if (++steps > 200) break;
+            var key = stack.Pop();
+            if (!active.Add(key)) continue;
+            var node = FindNode(key);
+            if (node == null || node.Type == "end") continue;
+            var outs = Edges.Where(e => e.From == key).ToList();
+            if (outs.Count == 0) continue;
+            if (node.Type == "exclusive" && exclusiveChoices.TryGetValue(key, out var chosen))
+            {
+                var edge = outs.FirstOrDefault(e => e.To == chosen);
+                if (edge != null) stack.Push(edge.To);
+                continue;
+            }
+
+            if (node.Type is "exclusive" or "parallel")
+            {
+                foreach (var edge in outs) stack.Push(edge.To);
+                continue;
+            }
+
+            var next = outs.OrderBy(e => e.Sort).ThenBy(e => e.Priority).ThenBy(e => e.Key, StringComparer.Ordinal).First();
+            stack.Push(next.To);
+        }
+
+        return active;
     }
 
     /// <summary>排他网关按优先级取第一条成立的条件，否则走默认出线。</summary>
@@ -319,7 +386,7 @@ public sealed class FlowFieldRule
 /// <summary>办理人规则。</summary>
 public sealed class FlowAssignee
 {
-    /// <summary>user、role、deptManager、subjectCounselor。</summary>
+    /// <summary>user、role、deptManager、subjectCounselor、applicant、deptMember。</summary>
     public String Type { get; set; } = "";
 
     /// <summary>指定成员。</summary>
@@ -331,8 +398,25 @@ public sealed class FlowAssignee
     /// <summary>部门负责人上溯层级，1 表示发起人部门。</summary>
     public Int32 Level { get; set; } = 1;
 
+    /// <summary>指定部门。和 <see cref="DepartmentIds"/> 合并使用。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public Int32 DepartmentId { get; set; }
+
+    /// <summary>指定部门。成员取这些部门里启用的用户。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public List<Int32>? DepartmentIds { get; set; }
+
     /// <summary>相对业务单的字段名。辅导员用户编号写在实例上，不另建用户表。</summary>
     public String? Field { get; set; }
+
+    /// <summary>这条规则点名的部门。</summary>
+    public List<Int32> Departments()
+    {
+        var ids = new List<Int32>();
+        if (DepartmentId > 0) ids.Add(DepartmentId);
+        if (DepartmentIds != null) ids.AddRange(DepartmentIds.Where(id => id > 0));
+        return ids.Distinct().ToList();
+    }
 }
 
 /// <summary>连线。</summary>
