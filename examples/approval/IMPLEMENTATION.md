@@ -1,6 +1,6 @@
 # 审批运行时切片实现记录
 
-日期：2026-10-04。范围是 `examples/approval`，不包含 TDesign 页面，也不重建魔方的用户、角色、部门、菜单和登录。
+日期：2026-10-05。范围是 `examples/approval`。第 3 轮增加 `examples/approval/web` 的 TDesign 管理端。不重建魔方的用户、角色、部门、菜单和登录。
 
 技能以 main 上的 `cube-webapi-backend/SKILL.md` 为准。PR #2（`cursor/skill-fix-from-ledger-validation-7836`）当时仍是草稿，冲突处采用该分支：`net8.0`、`NewLife.Cube 6.15.2026.901`、`NewLife.XCode 12.2.2026.901`、`Swashbuckle.AspNetCore 6.9.0`，SQLite 连接串使用 `Data Source=...;Provider=sqlite`。
 
@@ -8,7 +8,7 @@
 
 `dotnet build examples/approval/Approval.sln` 成功。第 0 轮 4 个测试通过。第 1 轮补上待办、已办、转办、撤回、会签和依次审批。第 2 轮补上排他网关、成对并行、抄送已阅、向后加签一级和监控数据范围后，`dotnet test` 为 12 个测试、0 失败。Web 项目仍能通过 `WebApplicationFactory` 启动。
 
-第 1 轮和第 2 轮验收都已通过。第 3 轮 TDesign 还没做。
+第 1 轮和第 2 轮验收已通过。第 3 轮 TDesign 管理端已通过：`dotnet test` 为 13 个测试、0 失败；`examples/approval/web` 的 `npm run build`（`vue-tsc --noEmit` 后 `vite build`）成功。第 4 轮没有开始。
 
 ## 已通过
 
@@ -40,6 +40,15 @@
 - 抄送不挡住审批。审批人同意后实例可以通过，抄送仍是待处理，且不出现在审批待办里。接收人标已阅后状态为已阅；别人标已阅返回 4031，重复标已阅返回 4092。已阅不增加实例版本。撤回会把尚未阅读的抄送一并取消。
 - 向后加签只允许一级。加签后原任务变为已同意，同节点出现来源为加签的待办，实例仍在审批中。或签的另一人先同意也不会往下走，要等加签人同意。加签任务再加签返回 4091。加签之后不能撤回。
 - 监控角色的数据范围是本部门，且不是系统角色。外部门发起的单据不出现在监控列表里，但办理人自己的待办仍能看到这张单。本部门发起的单据出现在监控列表里。单条 `FindById` 不受这层过滤影响。
+
+第 3 轮 HTTP（页面实际调用的接口）：
+
+- `GET /api/Admin/Index/GetMenuTree` 含审批办理、表单定义、流程定义。前端不手写业务菜单，侧栏只渲染这棵树。
+- `GET /api/Approval/Runtime/Me`、`Candidates`、`Processes`、`Inbox`、`Done`、`View`。
+- 本人发起把学生改成别人返回 4221。代发起标题、业务主体和辅导员仍按该生解析，辅导员不是代发人。
+- 转办后原办理人进入已办，接任人待办里可以同意并通过。
+- `GET /api/ApprovalAdmin/FormDefinition` 能列出请假表单；`Design` 读出字段；`SaveDesign` 后再次读取能看到新字段。
+- `GET /api/ApprovalAdmin/Process/Design` 返回只读节点，审批节点的办理人规则文案是「该生辅导员」，处理方式是「或签」。
 
 HTTP（`WebApplicationFactory` 启动 `Approval.Web`，关闭 Cookie，只带 Bearer）：
 
@@ -78,6 +87,11 @@ HTTP（`WebApplicationFactory` 启动 `Approval.Web`，关闭 Cookie，只带 Be
 - 实例实现了 `IDataScope`，但没有注册 `DataScopeInterceptor`。只有 `Monitor` 调用 `ApplyScope`。待办和已办仍只按办理人过滤。
 - 非排他节点若有多条出线，仍走 `Sort` 最小的一条。
 - 没有学生信息系统。请假实例用 `SubjectUserId` 和可选的 `ProxyUserId`。
+- 流程设计页只读。节点和办理人规则来自已发布 `Definition`，页面不能改连线。表单设计页可以改字段并发布。
+- 表单还没有按节点做可编辑、只读、隐藏，服务端也还没有按节点强制这些字段。
+- 审批菜单上的自定义权限位超出 `PermissionFlags.All`。Web 启动后把这些位授给名为 `admin` 的用户所属角色，否则管理员打开待办、转办会 403。其他角色仍要在菜单上单独勾选。
+- 前端 `specialControllers.ts` 登记了三张审批页，因此和技能资产不完全一致。这是页面注册，不是另写一套 HTTP。登录页只改了左栏文案。
+- 本次 `tdesign-starter-cli@0.5.3` 没有生成 `.husky/` 和 `.vscode/`。对齐校验对此是提醒，不是失败。
 
 ## 怎样运行
 
@@ -88,13 +102,28 @@ dotnet test Approval.sln
 dotnet run --project Approval.Web
 ```
 
-开发环境监听 `http://127.0.0.1:5052`，Swagger 在 `/Swagger`。`Config/Cube.config` 里的 `JwtSecret` 只给示例，不能用于生产。魔方初始化后的管理员仍是框架种子的 `admin` / `admin`。运行接口要在角色上授予审批运行菜单的对应权限位。
+开发环境监听 `http://127.0.0.1:5052`，Swagger 在 `/Swagger`。`Config/Cube.config` 里的 `JwtSecret` 只给示例，不能用于生产。魔方初始化后的管理员仍是框架种子的 `admin` / `admin`。进程启动时会把审批菜单上声明的全部权限位授给该管理员的角色。
+
+管理端和 API 一起开：
+
+```bash
+cd examples/approval/web
+npm install --no-audit --no-fund --engine-strict=false
+npm run dev
+```
+
+前端开发服务器是 `http://127.0.0.1:3002`。`/api`、`/Auth` 等请求代理到 `http://127.0.0.1:5052`（不要写成 localhost）。当前环境的 Node 是 22.14，脚手架里的 `lint-staged` 要求 22.22.1 以上，`.npmrc` 又打开了 `engine-strict`，所以安装时要加上 `--engine-strict=false`。生产构建是 `npm run build`。
+
+登录后侧栏来自 `GetMenuTree`：审批办理（待办、已办、同意、驳回、转办、本人发起或代发起）、表单定义、流程定义。流程定义只读。本人发起时学生锁定为当前用户；代发起必须选择学生；辅导员按该生选择，不会自动填成代发人。
+
+审批办理菜单上的权限位：16 发起、32 同意、64 驳回、128 查看单据、256 转办、512 撤回、1024 待办、2048 已办、4096 已阅、8192 加签、16384 监控。拉候选人用的是 128。表单和流程的「读取设计」用各自菜单上的查看位，保存设计是 32，发布是 16。
 
 生成实体里的可空警告来自 xcode 输出，本轮没有手改 `*.cs`。
 
 ## 下一步
 
+- 表单按节点可编辑、只读、隐藏，并在服务端强制。
 - 撤回后的重新提交（轮次 +1）。
 - 其余办理人规则，以及 DBDD 里的分类、字段值、令牌。
 - 并行分支内部的排他网关还没有按全部分支出线校验。
-- 第 3 轮才做 TDesign 页面。本轮没有开始。
+- 第 4 轮的学生业务宿主还没做。

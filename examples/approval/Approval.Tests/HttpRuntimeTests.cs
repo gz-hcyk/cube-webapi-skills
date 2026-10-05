@@ -118,6 +118,123 @@ public class HttpRuntimeTests
         Assert.Equal(2, agreed["status"]!.GetValue<Int32>());
     }
 
+    [Fact]
+    public async Task Ui_apis_cover_inbox_transfer_design_and_menu()
+    {
+        var mark = Guid.NewGuid().ToString("N")[..8];
+        var role = Role.Add("审批页面-" + mark, false, "HTTP 页面");
+        var student = User.Add("ui-stu-" + mark, "pass1234", role.ID, "学生乙");
+        var proxy = User.Add("ui-proxy-" + mark, "pass1234", role.ID, "辅导员丙");
+        var counselor = User.Add("ui-coa-" + mark, "pass1234", role.ID, "该生辅导员");
+        var target = User.Add("ui-to-" + mark, "pass1234", role.ID, "接任人");
+        foreach (var user in new[] { student, proxy, counselor, target })
+        {
+            user.Enable = true;
+            user.Update();
+        }
+
+        var process = Publish(mark);
+        await using var factory = new ApprovalApiFactory(_world);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        _ = await Login(client, student.Name, "pass1234");
+        GrantFull(role);
+
+        var studentToken = await Login(client, student.Name, "pass1234");
+        var me = Ok(await Get(client, "/api/Approval/Runtime/Me", studentToken));
+        Assert.Equal(student.ID, me["id"]!.GetValue<Int32>());
+        var processes = Ok(await Get(client, "/api/Approval/Runtime/Processes", studentToken));
+        Assert.Contains(processes.AsArray(), p => p!["id"]!.GetValue<Int32>() == process.Id);
+        var people = Ok(await Get(client, "/api/Approval/Runtime/Candidates", studentToken));
+        Assert.Contains(people.AsArray(), p => p!["id"]!.GetValue<Int32>() == student.ID);
+        Assert.Contains(people.AsArray(), p => p!["displayName"]!.GetValue<String>() == "该生辅导员");
+
+        var menu = Ok(await Get(client, "/api/Admin/Index/GetMenuTree", studentToken));
+        Assert.Contains("Runtime", menu.ToJsonString());
+        Assert.Contains("FormDefinition", menu.ToJsonString());
+        Assert.Contains("Process", menu.ToJsonString());
+
+        var wrong = await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", studentToken, new
+        {
+            processId = process.Id,
+            proxy = false,
+            data = Form(proxy.ID, counselor.ID),
+            requestId = "ui-bad-" + mark,
+        });
+        Assert.Equal(4221, wrong["code"]!.GetValue<Int32>());
+
+        var started = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", studentToken, new
+        {
+            processId = process.Id,
+            proxy = false,
+            data = Form(student.ID, counselor.ID),
+            requestId = "ui-self-" + mark,
+        }));
+        var task = Pending(started).Single();
+        var counselorToken = await Login(client, counselor.Name, "pass1234");
+        var inbox = Ok(await Get(client, "/api/Approval/Runtime/Inbox", counselorToken));
+        Assert.Contains(inbox.AsArray(), t => t!["id"]!.GetValue<String>() == task["id"]!.GetValue<String>());
+        var viewed = Ok(await Get(client, "/api/Approval/Runtime/View?instanceId=" + started["instanceId"]!.GetValue<String>(), counselorToken));
+        Assert.Contains(viewed["history"]!.AsArray(), h => h!["action"]!.GetValue<String>() == "submit");
+
+        var moved = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Transfer", counselorToken, new
+        {
+            taskId = task["id"]!.GetValue<String>(),
+            targetUserId = target.ID,
+            comment = "请你看",
+            requestId = "ui-tr-" + mark,
+            instanceVersion = started["version"]!.GetValue<Int32>(),
+        }));
+        Assert.Equal(1, moved["status"]!.GetValue<Int32>());
+        var done = Ok(await Get(client, "/api/Approval/Runtime/Done", counselorToken));
+        Assert.Contains(done.AsArray(), t => t!["id"]!.GetValue<String>() == task["id"]!.GetValue<String>() && t["status"]!.GetValue<Int32>() == 3);
+        var targetToken = await Login(client, target.Name, "pass1234");
+        var targetInbox = Ok(await Get(client, "/api/Approval/Runtime/Inbox", targetToken));
+        var movedTask = targetInbox.AsArray().Single(t => t!["instanceId"]!.GetValue<String>() == started["instanceId"]!.GetValue<String>());
+        var agreed = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Agree", targetToken, new
+        {
+            taskId = movedTask!["id"]!.GetValue<String>(),
+            comment = "同意",
+            requestId = "ui-ag-" + mark,
+            instanceVersion = moved["version"]!.GetValue<Int32>(),
+        }));
+        Assert.Equal(2, agreed["status"]!.GetValue<Int32>());
+
+        var proxyToken = await Login(client, proxy.Name, "pass1234");
+        var proxyStarted = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", proxyToken, new
+        {
+            processId = process.Id,
+            proxy = true,
+            subjectUserId = student.ID,
+            data = Form(student.ID, counselor.ID),
+            requestId = "ui-proxy-" + mark,
+        }));
+        Assert.Equal("辅导员丙代学生乙发起的请假", proxyStarted["title"]!.GetValue<String>());
+        Assert.Equal(student.ID, proxyStarted["subjectUserId"]!.GetValue<Int32>());
+        Assert.Equal(counselor.ID, proxyStarted["counselorUserId"]!.GetValue<Int32>());
+        Assert.NotEqual(proxy.ID, proxyStarted["counselorUserId"]!.GetValue<Int32>());
+
+        var form = ApprovalFormDefinition.FindByCode(process.Code + "-form")!;
+        var forms = await Get(client, "/api/ApprovalAdmin/FormDefinition?pageIndex=1&pageSize=20", studentToken);
+        Assert.Equal(0, forms["code"]!.GetValue<Int32>());
+        Assert.Contains(form.Code, forms.ToJsonString());
+        var design = Ok(await Get(client, "/api/ApprovalAdmin/FormDefinition/Design?id=" + form.Id, studentToken));
+        Assert.Contains("studentUserId", design["schema"]!.GetValue<String>());
+        var saved = await Send(client, HttpMethod.Post, "/api/ApprovalAdmin/FormDefinition/SaveDesign", studentToken, new
+        {
+            id = form.Id,
+            content = """{"fields":[{"key":"studentUserId","label":"学生"},{"key":"counselorUserId","label":"辅导员"},{"key":"reason","label":"事由"},{"key":"days","label":"天数"}]}""",
+        });
+        Assert.Equal(0, saved["code"]!.GetValue<Int32>());
+        var edited = Ok(await Get(client, "/api/ApprovalAdmin/FormDefinition/Design?id=" + form.Id, studentToken));
+        Assert.Contains("days", edited["schema"]!.GetValue<String>());
+
+        var flow = Ok(await Get(client, "/api/ApprovalAdmin/Process/Design?id=" + process.Id, studentToken));
+        Assert.True(flow["readOnly"]!.GetValue<Boolean>());
+        var nodes = flow["nodes"]!.AsArray();
+        Assert.Contains(nodes, n => n!["typeLabel"]!.GetValue<String>() == "审批" && n["assigneeLabel"]!.GetValue<String>() == "该生辅导员");
+        Assert.Contains(nodes, n => n!["modeLabel"]!.GetValue<String>() == "或签");
+    }
+
     private static void Grant(Role role)
     {
         var flags = PermissionFlags.All;
@@ -138,6 +255,37 @@ public class HttpRuntimeTests
         foreach (var menu in hits)
             role.Set(menu.ID, flags);
         // Set 只改内存里的权限字典，要保存后鉴权重新加载才能看见。
+        role.Update();
+        Role.Meta.Cache?.Clear("grant", true);
+        Role.Meta.SingleCache.Clear("grant");
+        User.Meta.Cache?.Clear("grant", true);
+        User.Meta.SingleCache.Clear("grant");
+    }
+
+    private static void GrantFull(Role role)
+    {
+        var menus = Menu.FindAll();
+        var hits = menus.Where(m =>
+        {
+            var text = (m.FullName ?? "") + " " + (m.Url ?? "") + " " + (m.Name ?? "");
+            return text.Contains("Runtime", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("Approval", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("审批");
+        }).ToList();
+        if (hits.Count == 0)
+            throw new InvalidOperationException("没有审批菜单");
+        foreach (var menu in hits)
+        {
+            var mask = 0;
+            foreach (var part in (menu.Permission ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var head = part.Split('#')[0];
+                if (Int32.TryParse(head, out var bit)) mask |= bit;
+            }
+
+            role.Set(menu.ID, (PermissionFlags)mask);
+        }
+
         role.Update();
         Role.Meta.Cache?.Clear("grant", true);
         Role.Meta.SingleCache.Clear("grant");
@@ -185,6 +333,16 @@ public class HttpRuntimeTests
         var token = data?["access_token"]?.GetValue<String>() ?? data?["accessToken"]?.GetValue<String>();
         Assert.False(String.IsNullOrEmpty(token), body);
         return token!;
+    }
+
+    private static async Task<JsonNode> Get(HttpClient client, String url, String token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, (Int32)response.StatusCode + " " + text);
+        return JsonNode.Parse(text)!;
     }
 
     private static async Task<JsonNode> Send(HttpClient client, HttpMethod method, String url, String token, Object body)

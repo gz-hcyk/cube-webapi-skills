@@ -2,17 +2,96 @@ using System.ComponentModel;
 using Approval.Data;
 using Approval.Data.Entities;
 using Microsoft.AspNetCore.Mvc;
+using NewLife;
 using NewLife.Cube;
 using XCode.Membership;
 
 namespace Approval.Web.Areas.Approval.Controllers;
 
 /// <summary>审批运行。发起、同意、驳回都调用实例上的业务方法。</summary>
-[DisplayName("审批运行")]
-[Menu(0, false)]
+[DisplayName("审批办理")]
+[Menu(10, true, Icon = "task")]
 [ApprovalArea]
 public class RuntimeController : ControllerBaseX
 {
+    /// <summary>当前登录人。发起页用它锁定本人发起的学生。</summary>
+    [EntityAuthorize((PermissionFlags)16)]
+    [DisplayName("当前用户")]
+    [HttpGet]
+    public ActionResult Me()
+    {
+        try
+        {
+            var user = Current();
+            var dept = Department.FindByID(user.DepartmentID);
+            var display = user.DisplayName.IsNullOrEmpty() ? user.Name : user.DisplayName;
+            return Json(0, "ok", new
+            {
+                id = user.ID,
+                name = user.Name,
+                displayName = display,
+                departmentId = user.DepartmentID,
+                departmentName = dept?.Name,
+            }, null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>可选用户。本人锁定、代发起选学生、转办选接任人都用这份名单。</summary>
+    [EntityAuthorize((PermissionFlags)128)]
+    [DisplayName("候选人")]
+    [HttpGet]
+    public ActionResult Candidates()
+    {
+        try
+        {
+            _ = Current();
+            var list = XCode.Membership.User.FindAll()
+                .Where(user => user != null && user.Enable)
+                .Select(user => new
+                {
+                    id = user.ID,
+                    name = user.Name,
+                    displayName = user.DisplayName.IsNullOrEmpty() ? user.Name : user.DisplayName,
+                    departmentId = user.DepartmentID,
+                });
+            return Json(0, "ok", list, null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>可以发起的已发布流程。</summary>
+    [EntityAuthorize((PermissionFlags)16)]
+    [DisplayName("可发起流程")]
+    [HttpGet]
+    public ActionResult Processes()
+    {
+        try
+        {
+            _ = Current();
+            var list = ApprovalProcess.FindAll()
+                .Where(process => process.Enable && process.PublishedVersionId > 0)
+                .Select(process => new
+                {
+                    id = process.Id,
+                    code = process.Code,
+                    name = process.Name,
+                    formId = process.FormId,
+                });
+            return Json(0, "ok", list, null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
     /// <summary>发起。本人发起与代发起进入同一条已发布流程。</summary>
     [EntityAuthorize((PermissionFlags)16)]
     [DisplayName("发起")]
