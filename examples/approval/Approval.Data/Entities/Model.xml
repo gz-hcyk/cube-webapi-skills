@@ -54,6 +54,18 @@
         <Index Columns="Code" Unique="True" />
       </Indexes>
     </Table>
+    <Table Name="ApprovalFieldValue" Description="可检索字段值。按表单版本的 SearchableKeys 为每个实例维护">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="InstanceId" DataType="Int64" Description="审批实例" />
+        <Column Name="FieldKey" DataType="String" Length="50" Nullable="False" Description="字段键" />
+        <Column Name="FieldValue" DataType="String" Length="200" Description="字段值。字符串原文，超长截断" />
+      </Columns>
+      <Indexes>
+        <Index Columns="InstanceId,FieldKey" Unique="True" />
+        <Index Columns="FieldKey" />
+      </Indexes>
+    </Table>
     <Table Name="LeaveRequest" Description="请假宿主。只记学生用户编号和审批实例，不建学籍">
       <Columns>
         <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />

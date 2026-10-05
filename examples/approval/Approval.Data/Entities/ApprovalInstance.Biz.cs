@@ -38,5 +38,11 @@ public partial class ApprovalInstance : Entity<ApprovalInstance>, IDataScope
 
         /// <summary>客户端地址。</summary>
         public String? ClientIp { get; set; }
+
+        /// <summary>
+        /// 发起人自选。JSON 对象，键是节点 key，值是用户编号或编号数组。
+        /// 写入表单值的 <c>_starterPicks</c>，不是表单结构里的字段。
+        /// </summary>
+        public String? AssigneePicks { get; set; }
     }
 }

@@ -61,6 +61,7 @@ public partial class ApprovalInstance
             ?? throw new ApprovalException(4222, "流程没有开始节点");
         FieldRules.GuardStart(posted, FieldRules.ForNode(graph, startNode.Key), FormSchema.Keys(schema));
         var data = NormalizeForm(posted.ToJsonString(), args.Proxy, subject.ID, out var counselorId);
+        AttachPicks(data, args.AssigneePicks);
         if (needsCounselor)
         {
             var counselor = counselorId > 0 ? User.FindByID(counselorId) : null;
@@ -77,6 +78,7 @@ public partial class ApprovalInstance
             : $"{proxyName}代{subjectName}发起的{process.Name}";
         if (title.Length > 200) title = title[..200];
 
+        ApprovalFieldValue.EnsureReady();
         ApprovalInstance? created = null;
         Run(() =>
         {
@@ -117,6 +119,7 @@ public partial class ApprovalInstance
                 UpdateUserID = op.ID,
                 UpdateTime = now,
             }.Insert();
+            ApprovalFieldValue.Rebuild(inst.Id, version.FormVersionId, body);
 
             WriteHistory(inst, null, null, proxy == null ? "submit" : "submit", proxy == null ? "提交" : "代发起",
                 proxy == null ? null : $"代发起人：{proxyName}，业务主体：{subjectName}",
@@ -136,6 +139,7 @@ public partial class ApprovalInstance
     public static ApprovalInstance Agree(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp, String? data = null)
     {
         if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        ApprovalFieldValue.EnsureReady();
         ApprovalInstance? result = null;
         Run(() =>
         {
@@ -182,6 +186,7 @@ public partial class ApprovalInstance
     {
         if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
         if (comment.IsNullOrEmpty()) throw new ApprovalException(4001, "驳回意见必填");
+        ApprovalFieldValue.EnsureReady();
         ApprovalInstance? result = null;
         Run(() =>
         {
@@ -316,9 +321,10 @@ public partial class ApprovalInstance
     /// 撤回后的重新提交。轮次加一，仍走这张单当初绑定的流程版本，不跟随后来发布的新版本。
     /// 代发起时只有发起人可以重提，学生字段仍必须是业务主体。
     /// </summary>
-    public static ApprovalInstance Resubmit(Int64 instanceId, Int32 operatorUserId, String? data, String requestId, Int32 instanceVersion, String? clientIp)
+    public static ApprovalInstance Resubmit(Int64 instanceId, Int32 operatorUserId, String? data, String requestId, Int32 instanceVersion, String? clientIp, String? assigneePicks = null)
     {
         if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        ApprovalFieldValue.EnsureReady();
         ApprovalInstance? result = null;
         Run(() =>
         {
@@ -350,6 +356,7 @@ public partial class ApprovalInstance
             var posted = data.IsNullOrEmpty() ? null : FieldRules.ParseObject(data);
             var merged = FieldRules.Merge(current, posted, FieldRules.ForNode(graph, startNode.Key), FormSchema.Keys(schema), inst.SubjectUserId);
             var normalized = NormalizeForm(merged.ToJsonString(), inst.ProxyUserId > 0, inst.SubjectUserId, out var counselorId);
+            AttachPicks(normalized, assigneePicks);
             if (nodes.Any(e => e.AssigneeType == "subjectCounselor"))
             {
                 var counselor = counselorId > 0 ? User.FindByID(counselorId) : null;
@@ -715,7 +722,9 @@ public partial class ApprovalInstance
 
     /// <summary>
     /// 解析办理人。指定成员、指定角色、部门负责人、相对申请人按发起人；
-    /// 指定部门成员取规则里的部门；「该生辅导员」只读业务单上的辅导员用户，不读代发人。
+    /// 指定部门成员取规则里的部门；发起人自选读表单里的 <c>_starterPicks</c>；
+    /// 表单内联系人读规则指定的字段；角色与部门取两者交集。
+    /// 「该生辅导员」只读业务单上的辅导员用户，不读代发人，也不读表单联系人字段。
     /// </summary>
     public static IList<User> ResolveAssignees(ApprovalInstance inst, ApprovalNode node)
     {
@@ -751,6 +760,23 @@ public partial class ApprovalInstance
                 {
                     if (user == null || !user.Enable || user.DepartmentID <= 0) continue;
                     if (departments.Contains(user.DepartmentID)) found.Add(user);
+                }
+                break;
+            case "starterPick":
+                AddEnabled(found, PicksFor(inst, node.NodeKey));
+                break;
+            case "formContact":
+                if (!rule.Field.IsNullOrEmpty())
+                    AddEnabled(found, ReadUserIds(FormObject(inst), rule.Field));
+                break;
+            case "roleDept":
+                var roleSet = rule.RoleIds;
+                var deptSet = rule.Departments().ToHashSet();
+                foreach (var user in User.FindAll())
+                {
+                    if (user == null || !user.Enable || user.DepartmentID <= 0) continue;
+                    if (!deptSet.Contains(user.DepartmentID)) continue;
+                    if (roleSet.Any(roleId => HasRole(user, roleId))) found.Add(user);
                 }
                 break;
             case "subjectCounselor":
@@ -847,6 +873,88 @@ public partial class ApprovalInstance
         row.UpdateUserID = op.ID;
         row.UpdateTime = now;
         row.Update();
+        ApprovalFieldValue.Rebuild(inst.Id, inst.FormVersionId, body);
+    }
+
+    /// <summary>把发起人自选挂到表单值上。这一键不在表单结构里，发起校验不会把它当成未知字段。</summary>
+    private static void AttachPicks(JsonObject data, String? picks)
+    {
+        if (picks.IsNullOrEmpty()) return;
+        JsonObject obj;
+        try
+        {
+            obj = JsonNode.Parse(picks!) as JsonObject
+                ?? throw new ApprovalException(4001, "发起人自选必须是对象");
+        }
+        catch (ApprovalException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new ApprovalException(4001, "发起人自选无法解析：" + ex.Message);
+        }
+
+        data["_starterPicks"] = JsonNode.Parse(obj.ToJsonString());
+    }
+
+    private static JsonObject FormObject(ApprovalInstance inst)
+    {
+        ApprovalFormData.Meta.Cache?.Clear("resolve", true);
+        ApprovalFormData.Meta.SingleCache.Clear("resolve");
+        return FieldRules.ParseObject(ApprovalFormData.FindById(inst.Id)?.Data);
+    }
+
+    /// <summary>发起人自选在当前节点上点名的用户。没选过则空。</summary>
+    private static List<Int32> PicksFor(ApprovalInstance inst, String nodeKey)
+    {
+        var form = FormObject(inst);
+        if (!form.TryGetPropertyValue("_starterPicks", out var bag) || bag is not JsonObject map) return [];
+        return map.TryGetPropertyValue(nodeKey, out var chosen) ? ReadUserIds(chosen) : [];
+    }
+
+    private static List<Int32> ReadUserIds(JsonObject form, String field)
+    {
+        return form.TryGetPropertyValue(field, out var node) ? ReadUserIds(node) : [];
+    }
+
+    private static List<Int32> ReadUserIds(JsonNode? node)
+    {
+        var ids = new List<Int32>();
+        if (node == null) return ids;
+        if (node is JsonArray array)
+        {
+            foreach (var item in array)
+            {
+                var id = OneId(item);
+                if (id > 0) ids.Add(id);
+            }
+        }
+        else
+        {
+            var id = OneId(node);
+            if (id > 0) ids.Add(id);
+        }
+
+        return ids.Distinct().ToList();
+    }
+
+    private static Int32 OneId(JsonNode? node)
+    {
+        if (node is not JsonValue value) return 0;
+        if (value.TryGetValue<Int32>(out var number)) return number;
+        if (value.TryGetValue<Int64>(out var wide)) return (Int32)wide;
+        if (value.TryGetValue<String>(out var text) && Int32.TryParse(text, out var parsed)) return parsed;
+        return 0;
+    }
+
+    private static void AddEnabled(List<User> found, IEnumerable<Int32> ids)
+    {
+        foreach (var id in ids.Distinct())
+        {
+            var user = User.FindByID(id);
+            if (user != null && user.Enable) found.Add(user);
+        }
     }
 
     private static String SchemaOf(Int32 formVersionId)
@@ -995,5 +1103,7 @@ public partial class ApprovalInstance
         ApprovalTask.Meta.SingleCache.Clear("runtime");
         ApprovalHistory.Meta.Cache?.Clear("runtime", true);
         ApprovalHistory.Meta.SingleCache.Clear("runtime");
+        ApprovalFieldValue.Meta.Cache?.Clear("runtime", true);
+        ApprovalFieldValue.Meta.SingleCache.Clear("runtime");
     }
 }

@@ -58,10 +58,16 @@ public sealed class FlowGraph
             if (node.Type is "approve" or "cc")
             {
                 var kind = node.Assignee?.Type?.Trim() ?? "";
-                if (kind is not ("user" or "role" or "deptManager" or "subjectCounselor" or "applicant" or "deptMember"))
+                if (kind is not ("user" or "role" or "deptManager" or "subjectCounselor" or "applicant" or "deptMember" or "starterPick" or "formContact" or "roleDept"))
                     throw new ApprovalException(4222, "节点办理人规则不合法：" + node.Key);
                 if (kind == "deptMember" && (node.Assignee?.Departments().Count ?? 0) == 0)
                     throw new ApprovalException(4222, "指定部门成员必须选择部门：" + node.Key);
+                if (kind == "formContact" && node.Assignee?.Field.IsNullOrEmpty() != false)
+                    throw new ApprovalException(4222, "表单内联系人必须指定字段：" + node.Key);
+                if (kind == "roleDept" && (node.Assignee?.RoleIds.Count(id => id > 0) ?? 0) == 0)
+                    throw new ApprovalException(4222, "角色与部门交集必须选择角色：" + node.Key);
+                if (kind == "roleDept" && (node.Assignee?.Departments().Count ?? 0) == 0)
+                    throw new ApprovalException(4222, "角色与部门交集必须选择部门：" + node.Key);
                 if (node.Type == "approve") node.ApproveMode = ParseMode(node.Mode);
             }
 
@@ -386,7 +392,7 @@ public sealed class FlowFieldRule
 /// <summary>办理人规则。</summary>
 public sealed class FlowAssignee
 {
-    /// <summary>user、role、deptManager、subjectCounselor、applicant、deptMember。</summary>
+    /// <summary>user、role、deptManager、subjectCounselor、applicant、deptMember、starterPick、formContact、roleDept。</summary>
     public String Type { get; set; } = "";
 
     /// <summary>指定成员。</summary>
@@ -406,7 +412,7 @@ public sealed class FlowAssignee
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public List<Int32>? DepartmentIds { get; set; }
 
-    /// <summary>相对业务单的字段名。辅导员用户编号写在实例上，不另建用户表。</summary>
+    /// <summary>表单内联系人读取的字段名。值是用户编号或编号数组。该生辅导员不走这个字段，仍读实例上的辅导员。</summary>
     public String? Field { get; set; }
 
     /// <summary>这条规则点名的部门。</summary>
@@ -531,7 +537,7 @@ public static class FormSchema
         return keys;
     }
 
-    /// <summary>标记了 search 的字段键，逗号分隔。模型没有字段值索引表，可检索信息只记在版本上。</summary>
+    /// <summary>标记了 search 的字段键，逗号分隔。发布时写入表单版本，运行时按这些键维护字段值索引。</summary>
     public static String SearchableKeys(String? schema)
     {
         if (schema.IsNullOrEmpty()) return "";

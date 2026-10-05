@@ -68,7 +68,7 @@ public class Round5Tests
         var mark = Mark();
         var process = Create(mark, "缺部门");
         Throws(4222, () => process.SaveDraft(DeptGraph(0)));
-        Throws(4222, () => process.SaveDraft(ApplicantGraph().Replace("applicant", "starterPick")));
+        Throws(4222, () => process.SaveDraft(ApplicantGraph().Replace("applicant", "notARule")));
     }
 
     [Fact]

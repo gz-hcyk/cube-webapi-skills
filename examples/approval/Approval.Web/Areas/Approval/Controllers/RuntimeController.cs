@@ -123,6 +123,28 @@ public class RuntimeController : ControllerBaseX
         }
     }
 
+    /// <summary>按可检索字段的值查找实例。关键字按原文包含匹配，例如「回家」能命中「回家一天」。</summary>
+    [EntityAuthorize((PermissionFlags)128)]
+    [DisplayName("检索")]
+    [HttpGet]
+    public ActionResult Search(String? field, String? keyword)
+    {
+        try
+        {
+            var rows = ApprovalFieldValue.FindMatches(field ?? "", keyword ?? "");
+            return Json(0, "ok", rows.Select(row => new
+            {
+                instanceId = row.InstanceId.ToString(),
+                field = row.FieldKey,
+                value = row.FieldValue,
+            }), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
     /// <summary>发起。本人发起与代发起进入同一条已发布流程。</summary>
     [EntityAuthorize((PermissionFlags)16)]
     [DisplayName("发起")]
@@ -141,6 +163,7 @@ public class RuntimeController : ControllerBaseX
                 Data = input?.Data,
                 RequestId = input?.RequestId,
                 ClientIp = UserHost,
+                AssigneePicks = input?.AssigneePicks,
             });
             return Json(0, "ok", Describe(inst), null);
         }
@@ -222,7 +245,7 @@ public class RuntimeController : ControllerBaseX
             var user = Current();
             if (input == null || !Int64.TryParse(input.InstanceId, out var instanceId) || instanceId <= 0)
                 throw new ApprovalException(4001, "缺少实例编号");
-            var inst = ApprovalInstance.Resubmit(instanceId, user.ID, input.Data, input.RequestId ?? "", input.InstanceVersion, UserHost);
+            var inst = ApprovalInstance.Resubmit(instanceId, user.ID, input.Data, input.RequestId ?? "", input.InstanceVersion, UserHost, input.AssigneePicks);
             return Json(0, "ok", Describe(inst), null);
         }
         catch (ApprovalException ex)

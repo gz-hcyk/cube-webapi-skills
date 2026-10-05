@@ -28,6 +28,7 @@ public static class LeaveHost
             Data = data,
             RequestId = args.RequestId,
             ClientIp = args.ClientIp,
+            AssigneePicks = args.AssigneePicks,
         });
 
         var existing = LeaveRequest.FindByApprovalInstanceId(inst.Id);
@@ -84,4 +85,7 @@ public sealed class LeaveSubmit
 
     /// <summary>客户端地址。</summary>
     public String? ClientIp { get; set; }
+
+    /// <summary>发起人自选。交给审批发起，请假单本身不保存这份名单。</summary>
+    public String? AssigneePicks { get; set; }
 }

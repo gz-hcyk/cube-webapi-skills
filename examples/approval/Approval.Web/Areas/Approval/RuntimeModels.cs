@@ -17,6 +17,9 @@ public class StartInput
 
     /// <summary>幂等请求号。</summary>
     public String? RequestId { get; set; }
+
+    /// <summary>发起人自选。JSON 对象，键是节点 key，值是用户编号或编号数组。</summary>
+    public String? AssigneePicks { get; set; }
 }
 
 /// <summary>同意或驳回。任务编号用字符串，避免雪花编号在 JSON 数字里丢精度。</summary>
@@ -71,6 +74,9 @@ public class ResubmitInput
 
     /// <summary>实例乐观锁版本。0 表示不校验。</summary>
     public Int32 InstanceVersion { get; set; }
+
+    /// <summary>重新提交时改选的办理人。空表示沿用撤回前的选择。</summary>
+    public String? AssigneePicks { get; set; }
 }
 
 /// <summary>撤回。实例编号用字符串，避免雪花编号在 JSON 数字里丢精度。</summary>
