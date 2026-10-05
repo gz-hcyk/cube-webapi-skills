@@ -110,7 +110,7 @@ public enum TaskSource
     ToAdmin = 5,
 }
 
-/// <summary>多人处理方式。本切片只执行或签，会签和依次审批只保存。</summary>
+/// <summary>多人处理方式。或签、会签、依次审批都会执行。</summary>
 public enum ApproveMode
 {
     /// <summary>未指定。</summary>

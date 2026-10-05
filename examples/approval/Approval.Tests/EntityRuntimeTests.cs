@@ -32,16 +32,6 @@ public class EntityRuntimeTests
         var node = nodes.First(e => e.NodeKey == "all");
         node.Name = "改名";
         Throws(4091, () => node.Update());
-
-        var before = ApprovalInstance.FindCount();
-        Throws(4222, () => ApprovalInstance.Start(new ApprovalInstance.StartArgs
-        {
-            ProcessId = process.Id,
-            OperatorUserId = AnyUser().ID,
-            Data = "{}",
-            RequestId = "and-" + mark,
-        }));
-        Assert.Equal(before, ApprovalInstance.FindCount());
     }
 
     [Fact]

@@ -52,6 +52,80 @@ public class RuntimeController : ControllerBaseX
     [HttpPost]
     public ActionResult Reject([FromBody] HandleInput input) => Handle(input, false);
 
+    /// <summary>转办给另一名魔方用户。</summary>
+    [EntityAuthorize((PermissionFlags)256)]
+    [DisplayName("转办")]
+    [HttpPost]
+    public ActionResult Transfer([FromBody] TransferInput input)
+    {
+        try
+        {
+            var user = Current();
+            if (input == null || !Int64.TryParse(input.TaskId, out var taskId) || taskId <= 0)
+                throw new ApprovalException(4001, "缺少任务编号");
+            var inst = ApprovalInstance.Transfer(taskId, user.ID, input.TargetUserId, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost);
+            return Json(0, "ok", Describe(inst), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>发起人撤回。代发起时发起人是代发人。</summary>
+    [EntityAuthorize((PermissionFlags)512)]
+    [DisplayName("撤回")]
+    [HttpPost]
+    public ActionResult Withdraw([FromBody] WithdrawInput input)
+    {
+        try
+        {
+            var user = Current();
+            if (input == null || !Int64.TryParse(input.InstanceId, out var instanceId) || instanceId <= 0)
+                throw new ApprovalException(4001, "缺少实例编号");
+            var inst = ApprovalInstance.Withdraw(instanceId, user.ID, input.Reason, input.RequestId ?? "", input.InstanceVersion, UserHost);
+            return Json(0, "ok", Describe(inst), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>当前用户的待办。</summary>
+    [EntityAuthorize((PermissionFlags)1024)]
+    [DisplayName("待办")]
+    [HttpGet]
+    public ActionResult Inbox()
+    {
+        try
+        {
+            var user = Current();
+            return Json(0, "ok", ApprovalTask.Inbox(user.ID).Select(DescribeTask), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>当前用户的已办。</summary>
+    [EntityAuthorize((PermissionFlags)2048)]
+    [DisplayName("已办")]
+    [HttpGet]
+    public ActionResult Done()
+    {
+        try
+        {
+            var user = Current();
+            return Json(0, "ok", ApprovalTask.Done(user.ID).Select(DescribeTask), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
     /// <summary>查看实例、待办和轨迹。</summary>
     [EntityAuthorize((PermissionFlags)128)]
     [DisplayName("查看单据")]
@@ -116,17 +190,7 @@ public class RuntimeController : ControllerBaseX
             counselorUserId = inst.CounselorUserId,
             departmentId = inst.DepartmentId,
             formData = form?.Data,
-            tasks = tasks.Select(t => new
-            {
-                id = t.Id.ToString(),
-                assigneeId = t.AssigneeId,
-                assigneeName = t.AssigneeName,
-                nodeKey = t.NodeKey,
-                nodeName = t.NodeName,
-                status = (Int32)t.Status,
-                mode = (Int32)t.Mode,
-                title = t.Title,
-            }),
+            tasks = tasks.Select(DescribeTask),
             history = history.Select(h => new
             {
                 action = h.Action,
@@ -139,4 +203,20 @@ public class RuntimeController : ControllerBaseX
             }),
         };
     }
+
+    private static Object DescribeTask(ApprovalTask t) => new
+    {
+        id = t.Id.ToString(),
+        instanceId = t.InstanceId.ToString(),
+        assigneeId = t.AssigneeId,
+        assigneeName = t.AssigneeName,
+        nodeKey = t.NodeKey,
+        nodeName = t.NodeName,
+        status = (Int32)t.Status,
+        mode = (Int32)t.Mode,
+        title = t.Title,
+        kind = (Int32)t.Kind,
+        seq = t.Seq,
+        source = (Int32)t.Source,
+    };
 }

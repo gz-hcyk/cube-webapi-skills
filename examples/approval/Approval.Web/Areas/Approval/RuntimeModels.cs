@@ -35,6 +35,41 @@ public class HandleInput
     public Int32 InstanceVersion { get; set; }
 }
 
+/// <summary>转办。</summary>
+public class TransferInput
+{
+    /// <summary>任务编号。</summary>
+    public String? TaskId { get; set; }
+
+    /// <summary>接任人。</summary>
+    public Int32 TargetUserId { get; set; }
+
+    /// <summary>意见。</summary>
+    public String? Comment { get; set; }
+
+    /// <summary>幂等请求号。</summary>
+    public String? RequestId { get; set; }
+
+    /// <summary>实例乐观锁版本。0 表示不校验。</summary>
+    public Int32 InstanceVersion { get; set; }
+}
+
+/// <summary>撤回。实例编号用字符串，避免雪花编号在 JSON 数字里丢精度。</summary>
+public class WithdrawInput
+{
+    /// <summary>实例编号。</summary>
+    public String? InstanceId { get; set; }
+
+    /// <summary>撤回原因。</summary>
+    public String? Reason { get; set; }
+
+    /// <summary>幂等请求号。</summary>
+    public String? RequestId { get; set; }
+
+    /// <summary>实例乐观锁版本。0 表示不校验。</summary>
+    public Int32 InstanceVersion { get; set; }
+}
+
 /// <summary>保存表单或流程草稿。</summary>
 public class DesignInput
 {
