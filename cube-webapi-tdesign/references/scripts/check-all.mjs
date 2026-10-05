@@ -21,8 +21,10 @@
  *   `sync-assets` 红 → `node sync-assets.mjs`（把真相源 scaffold/src 单向派生到镜像 assets/core）。
  *   其余闸门只报告、不自动修，需人工裁决。
  *
- * ★ 路径口径：`<工程目录>` 用 **Windows 风格**且传**含 `src/` 的 frontend 那一层**
- *   （正确 `C:/proj/frontend`；错误 `/c/proj/frontend` 会被 Git-Bash 拼成 `C:\c\proj\frontend`）。
+ * ★ 路径口径：`<工程目录>` 传**含 `src/` 的 frontend 那一层**。
+ *   Linux / macOS 用绝对路径（`/home/me/proj/frontend`）即可。
+ *   Windows 用盘符路径（`C:/proj/frontend`）。Git-Bash 的 `/c/proj/frontend`
+ *   会被拼成 `C:\c\proj\frontend`，不要用这种写法。
  *
  * 退出码：0 = 全部闸门 PASS；1 = 有任一 FAIL；2 = 用法错误。
  */
@@ -117,13 +119,13 @@ const GATES = [
 /** 没传工程时给出显式提醒，避免「以为跑了全部、其实只跑了一半」 */
 if (!proj && !asJson) {
   console.log('提示：未传工程目录 → 只跑技能自身维护类闸门。')
-  console.log('      收尾自检请传工程目录： node check-all.mjs C:/path/to/proj/frontend')
+  console.log('      收尾自检请传工程目录： node check-all.mjs /path/to/proj/frontend   （Windows：C:/path/to/proj/frontend）')
   console.log('')
 }
 
 if (proj && !existsSync(join(proj, 'src'))) {
   console.error(`FAIL  工程目录无效：${proj}`)
-  console.error('      应传**含 src/ 的那一层**（通常是 <工程>/frontend），且用 Windows 风格路径。')
+  console.error('      应传**含 src/ 的那一层**（通常是 <工程>/frontend）。Linux 用绝对路径；Windows 用 C:/ 盘符路径，不要用 Git-Bash 的 /c/ 前缀。')
   process.exit(1)
 }
 
@@ -142,6 +144,8 @@ for (const g of GATES) {
   const r = spawnSync(process.execPath, argv, {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
+    // 技能根 = references/scripts 的上两级。子脚本默认已按自身位置解析；这里显式传入，避免再落到作者本机路径。
+    env: { ...process.env, SKILL_DIR: process.env.SKILL_DIR || join(HERE, '..', '..') },
   })
   const out = (r.stdout || '') + (r.stderr || '')
   const code = r.status === null ? 1 : r.status

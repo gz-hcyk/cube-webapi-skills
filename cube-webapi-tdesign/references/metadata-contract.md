@@ -3,7 +3,7 @@
 > 本文件是 `cube-webapi-tdesign` 的权威契约参考。后端实现细节见 `cube-webapi-backend` 技能（第四节、第五节）。
 > 所有响应经 `ApiFilter` 统一序列化：**Int64 以字符串传输**（避免 JS 精度丢失）。
 >
-> ⚠️ **字段命名大小写（易错，务必注意）**：本技能早期版本曾称「统一 CamelCase 命名」，**与真实 NewLife.Cube WebApi 不符**——实测真实后端字段名是 **PascalCase**（`ID`/`ParentID`/`Name`/`CreateTime`/`CreateUserID`），仅已归档的 lite demo（`.archive/cube-webapi-tdesign--demo-lite/`）的 Mock 后端为 camelCase 演示方便。前端**必须**在取数处用 `useEntityResource.normalizeRows` 把行 key 归一到 camelCase（`camel('ID')→id`、`camel('ParentID')→parentID`，纯大写缩写 `ID/URL/IP` 整词小写），否则 `row-key`、列回显、`buildTree` 父子链接、外键字典全部错位（详见 SKILL.md §七「后端字段命名是 PascalCase」陷阱）。渲染器对大小写做兜底，但**不要假设后端一定 camelCase**。
+> ⚠️ **两层大小写，不要写成一种（6.15.2026.901，2026-10-04）**：`GET /api/{area}/{controller}` 的**行 JSON 键**是 camelCase（`id`/`categoryID`/`purchasedDate`/`createTime`）。`GetFields`/`GetPage` 列定义的 **`name` 取值**仍是 PascalCase（`Id`/`Name`/`CategoryName`，`mapField` 如 `CategoryID`；本版是 `Id` 不是 `ID`）。更早版本的行键可能仍是 PascalCase。`normalizeRows` 对已经是 camelCase 的行是幂等兜底（`ID→id`、`ParentID→parentID`），不要为了迁就旧句去改 6.15 的接口。详见 SKILL.md「字段命名归一」。
 
 ## 1. 统一响应信封
 

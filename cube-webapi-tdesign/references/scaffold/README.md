@@ -3,10 +3,11 @@
 对接 **NewLife.Cube 魔方 WebApi** 的 TDesign Vue Next 前端**完整可运行工程骨架**。
 
 - **基线来源**：官方 `tdesign-starter-cli@0.5.3` 以 **`-type vue3 -temp all`（完整脚手架）** 生成，
-  在其产物（**193 件**）之上「保留全部基础设施 + 删除上游演示业务代码 + 注入技能 `assets/core/`」。
+  在其产物之上「保留全部基础设施 + 删除上游演示业务代码 + 注入技能 `assets/core/`」。
+  2026-09-13 该 CLI 的 `find -type f` 为 193；**2026-10-04 复跑为 173，且不再生成 `.husky/`、`.vscode/`**。本目录里若仍有 `.husky/`，那是旧产物留存，不是现行 CLI 的必选项。
 - **为什么是 `all` 而不是 `lite`**：`all` 自带 `vue-router` / `pinia` / `axios` / `vue-i18n` / `@vueuse/core`、
   `src/types/{env,globals,interface,router,axios}.d.ts`、`eslint.config.js` + `stylelint.config.js` + `commitlint.config.js`
-  + `.husky/`、`.env*` 多环境文件、`vite-plugin-mock` + `vite-svg-loader` 等完整工具链；
+  + `.env*` 多环境文件、`vite-plugin-mock` + `vite-svg-loader` 等完整工具链；
   `lite` 只有 13 件、三件套依赖都得手补。**本项目只支持 `all` 形态**（2026-09-13 起）。
 - **可校验**：`node ../scripts/check-starter-align.mjs .`（退出码 0 = 仍是 CLI 产物形态，无 FAIL）。
   脚本按 `tsconfig.node.json` 是否存在**自动判定血统**（`all` / `lite`），再按对应基线校验。
@@ -76,7 +77,7 @@ rm -rf .git .github .cnb .cnb.yml .gitattributes \
 # 3) 目录归一（all 用单数 store/style，本项目统一为复数）
 mkdir -p src/stores src/styles
 
-# 4) 注入技能资产（31 件，含全部配方件）
+# 4) 注入技能资产（38 个文件，含全部配方件；2026-09-13 曾计 31）
 cp -r <skill>/assets/core/. src/
 
 # 5) 删 prepare、修 index.html（lang/title/埋点）
@@ -130,7 +131,7 @@ references/scaffold/
     specialControllers.ts       非实体控制器显式注册表（ConfigController<T> / ControllerBaseX）
 ```
 
-> **本目录 vs `assets/core/`**：脚手架 = `assets/core/`（**31 件，必拷**）+ 工程外壳
+> **本目录 vs `assets/core/`**：脚手架 = `assets/core/`（**38 个文件，必拷**；2026-09-13 曾计 31）+ 工程外壳
 > （`main.ts`/`App.vue`/`router/index.ts`，`td-starter(all)` 生成并改造）+ DEV 验证页 1 件
 > （`pages/LovDemoView.vue`）+ `all` 保留的基础设施（`types/`、`locales/`、`config/`、`constants/`、`hooks/`、`*.less`）。
 > **后三者恒不在 `core` 内**，`tri-diff` 对它们必然报 `ALL-DIFF`（外壳）或 `SCAFFOLD-DRIFT`（demo 页）
@@ -193,12 +194,12 @@ node ../scripts/check-starter-align.mjs .               # CLI 基线体检（退
 - **表单集成（lov-list）已落地**：Mock 的 `Admin/User` 实体带两个 LIST 型字段——`roleLovID`（单选）、
   `roleIds`（多选，名以 `IDs` 结尾）——用于端到端验证「列表 → 新增表单 → 值集弹窗 → 回填」。
   到 `/entity/Admin/User` 点「新增」即可复现；组件行为 / FR / 验证清单见 `references/lov-list-field.md`。
-- **并入既有工程**：用 `cp -r assets/core/. <工程>/src/` 拷贝核心（31 件，含全部配方件，一次到位）；
+- **并入既有工程**：用 `cp -r assets/core/. <工程>/src/` 拷贝核心（38 个文件，含全部配方件，一次到位）；
   或对照把 `BasicLayout` / `EntityPage` / `LoginView` / `router` / `main.ts` 的编排逻辑迁移过去，不重复造轮子。
 
 ## 契约要点（实测，详见 SKILL.md §4.8 / §六）
 
-- 登录 `POST /Auth/Login`，body `{ username, password }`（**不是 `userName`**），令牌键名 snake_case，
+- 登录 `POST /Auth/Login`，body 用 `username` 或 `userName` 均可（6.15 模型绑定不区分大小写，2026-10-04 两条都 HTTP 200）。前端表单字段用 `username`。令牌键名 snake_case，
   统一走 `token.ts` 的 `normToken` 三向兜底。
 - 请求头只认 **`Authorization: Bearer <jwt>`**（发 `Authentication` 或只带 Cookie 均 401）。
 - 实体接口 `/api/{area}/{controller}/{action}`；**菜单 `/api/Admin/Index/GetMenuTree`（区域族必带 `/api`；漏前缀 → SPA 兜底、菜单静默为空）**；

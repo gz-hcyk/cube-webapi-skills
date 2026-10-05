@@ -14,7 +14,7 @@
 |---|---|---|
 | 框架程序集 XML 文档 `NewLife.Cube.xml` | **控制器/动作签名**的权威（包内 `lib/net8.0/NewLife.Cube.xml`） | 查「有哪些控制器、每个控制器有哪些动作、形参是什么」 |
 | `GET /Cube/Apis` | **运行时接口清单**的权威（框架自省端点） | 确认某部署实际暴露了哪些接口 |
-| `GET /api/Admin/Index/GetMenuTree`（或 `/Cube/MenuTree`） | **菜单/页面可见性**的权威 | 前端菜单与路由落地的唯一依据；**不要在前端硬编码菜单** |
+| `GET /api/Admin/Index/GetMenuTree` | **菜单/页面可见性**的权威 | 前端菜单与路由落地的唯一依据；**不要在前端硬编码菜单**。`/Cube/MenuTree` 在 6.15 上是 **HTTP 302**（跳到登录页），不是菜单 JSON |
 | `GET /api/{area}/{controller}/GetPage` 是否 200 | **「是不是实体页」**的判定探针 | 404 ⇒ 非实体 ⇒ 必须走专用页（配置页 / 工具页），进 ListPage 会空白 |
 
 ⚠️ **反例症状（最难查）**：把区域族端点的 `/api` 漏掉时**不报错**——会落到 SPA 兜底返回
@@ -29,10 +29,10 @@
 | 族 | 判据 | 前缀 | 例子 |
 |---|---|---|---|
 | **区域族** | 控制器带 `[Area]` | **必须带 `/api`** | 业务实体 `/api/{area}/{controller}/GetPage`；框架区 `/api/Admin/User/...`、`/api/Cube/Widget/Index`、`/api/Admin/Index/GetMenuTree` |
-| **根族** | `NewLife.Cube.Controllers.*`（无 Area） | **不带 `/api`** | `/Auth/Login`、`/Auth/Register`、`/Mfa/Verify`、`/Sso/*`、`/Cube/Apis`、`/Cube/MenuTree`、`/Cube/Lookup` |
+| **根族** | `NewLife.Cube.Controllers.*`（无 Area） | **不带 `/api`** | `/Auth/Login`、`/Auth/Register`、`/Mfa/Verify`、`/Sso/*`、`/Cube/Apis`、`/Cube/Lookup`。`/Cube/MenuTree` 会 **302**，不要拿它当菜单接口 |
 
-落地到 HTTP 层：`http` 实例（baseURL 已含 `/api`）服务区域族；`rawHttp` 服务根族。
-调用方写区域族路径时**不要再写 `/api`**（双重前缀 → 404）。
+落地到 HTTP 层：`http` 实例（baseURL 已含 `/api`）服务区域族；`rawHttp` 服务根族，也负责菜单。
+走 `http` 时区域族路径**不要再写 `/api`**（双重前缀 → 404）。走 `rawHttp` 时菜单必须写全路径 `getRaw('/api/Admin/Index/GetMenuTree')`，漏掉 `/api` 在后端是 404，在 Vite 里会落到 SPA 的 `index.html`（200 + `text/html`）。
 
 ---
 

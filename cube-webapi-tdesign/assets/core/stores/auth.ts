@@ -151,6 +151,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = d.accessToken || '';
     refreshToken.value = d.refreshToken || '';
     // 唯一写入点：src/api/token.ts（键名 assets_token / assets_refresh_token / assets_token_expire）
+    // expireIn === 0 不是登录失败（6.15.2026.901 的 expire_in 就是 0）。setTokens 会跳过本地过期时间。
     setTokens(token.value, refreshToken.value, d.expireIn);
   }
 

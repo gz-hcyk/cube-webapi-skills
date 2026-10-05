@@ -83,8 +83,8 @@
  *   若出现其他条数，说明各根真的分叉了。
  *
  * ── 各根构成（勿把「预期」读成「漂移」）──
- *   references/scaffold/src/（**55 件**，`-temp all` 血统）
- *                                 = assets/core/（31 件，必拷，镜像源）
+ *   references/scaffold/src/（**62 个文件**，`-temp all` 血统）
+ *                                 = assets/core/（38 个文件，必拷，镜像源）
  *                                 + 工程外壳 3 件（App.vue / main.ts / router/index.ts，
  *                                   由 td-starter 生成，**恒不在 core 内**）
  *                                 + DEV 演示页 1 件（pages/LovDemoView.vue，`/lov-demo` 路由用，生产不注册）

@@ -79,7 +79,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 登录页是**产品门面**，必须像产品、不像脚手架。生成/改写任何项目的登录页时四条必须同时满足（模板：`assets/core/pages/LoginView.vue` = `references/scaffold/src/pages/LoginView.vue`，**全特性版**，342 行 —— MFA / Challenge / OAuth / 短信邮件码 / 图形码 / 注册入口 / 忘记密码入口 / AuthCategory 门控齐备）。
 > ⚠️ **历史校准（2026-09-13，归档后仍值得记）**：曾有一份 lite 血统 demo 也带同名 `pages/LoginView.vue`，但**仅 84 行、只实现 Challenge 一条链路**，属**精简示例**，**不可**当作「更完整的登录页」——完整版**一律取 scaffold/core**。
-> 该 demo 已于 2026-09-13 **归档移出技能**（现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。其历史独立价值在于两页 scaffold/core 完全不提供的页面：`RegisterView.vue`（注册）/ `ForgotPasswordView.vue`（找回密码）；**需要这两页时去归档里取**（技能内已不携带）。
+> 该 demo 已于 2026-09-13 **归档移出技能**（现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。注册页与找回密码页**就在当前脚手架里**：`references/scaffold/src/pages/RegisterView.vue`、`references/scaffold/src/pages/ForgotPasswordView.vue`（路由已引用）。需要这两页时用 scaffold 这份，不要再去归档里取。
 
 - **L1 左栏文案必须按当前项目生成**（不得沿用模板默认值）：模板顶部 `PROJECT` 常量三项 —— `tagline`（一句定位语）/ `highlights`（2~4 条核心能力要点）/ `subtitle`（表单上方一行说明）——**必须按项目业务填写**（留空则该项不渲染，但 `tagline` + `highlights` 至少要给出内容）。生成口径：从**项目名 / 后端 `LoginConfig.title`** 出发，用**业务语言**写；示例（IoTHub 物联网设备管理平台）→ `tagline:'设备接入 · 协议配置 · 运行监控'`、`highlights:['多协议驱动统一接入','设备实例集中管理','运行状态实时监控']`。
   ⚠️ **禁止**左栏出现技术栈/框架话术（`NewLife.Cube · TDesign Vue Next`、`Powered by …`、`Sign in to continue` 等模板残留）；左栏 Logo 走 `LoginConfig.loginLogo || logo`（`/Content` 下，无则回退系统名首字方块），不得写死资源。
@@ -109,12 +109,12 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
   校验脚本按 `tsconfig.node.json` **是否存在自动判定血统**：存在 ⇒ `lite`（历史形态，仅存量工程），缺失 ⇒ `all`（当前形态），再按对应基线校验。`--manifest` 打印两套清单。
 
   **四条实测硬约束**（都是踩过的坑，必须照做）：
-  1. **`-temp all` 是唯一受支持组合**（完整脚手架，**193 件**）；**`lite`（13 件）已废除**。理由：`lite` 连 `vue-router`/`pinia`/`axios` 三件套都不含，`tsconfig`/依赖/工具链全靠手补；`all` 自带三件套 + `vue-i18n` + `@vueuse/core` + `src/types/*.d.ts` + `.env*` 多环境 + `eslint/stylelint/commitlint/.husky` 完整工具链。`all` 会问「选择包含模块」，**回车即选中默认项「全部」**，故 `printf '\n' |` 前缀即可非交互脚本化。
-     > ⚠️ **旧结论已证伪**：早期文档称「`all` 是交互式箭头多选，非 TTY 下必崩（`ERR_USE_AFTER_CLOSE`），不可脚本化」——2026-09-13 实测 `printf '\n' | npx --yes tdesign-starter-cli@0.5.3 init <名> -type vue3 -temp all` → **exit=0，193 件**。该断言作废。
+  1. **`-temp all` 是唯一受支持组合**（完整脚手架；计数是**文件**，不是「项」）。**`lite`（13 个文件）已废除**。理由：`lite` 连 `vue-router`/`pinia`/`axios` 三件套都不含，`tsconfig`/依赖/工具链全靠手补；`all` 自带三件套 + `vue-i18n` + `@vueuse/core` + `src/types/*.d.ts` + `.env*` 多环境 + `eslint/stylelint/commitlint`。`all` 会问「选择包含模块」，**回车即选中默认项「全部」**，故 `printf '\n' |` 前缀即可非交互脚本化。
+     > ⚠️ **旧结论已证伪**：早期文档称「`all` 是交互式箭头多选，非 TTY 下必崩（`ERR_USE_AFTER_CLOSE`），不可脚本化」——2026-09-13 实测 `printf '\n' | npx --yes tdesign-starter-cli@0.5.3 init <名> -type vue3 -temp all` → exit=0。该日 `find -type f` 计为 193 个文件。2026-10-04 用同一 CLI 复跑，`find -type f` 为 **173 个文件**，且**不再生成** `.husky/`、`.vscode/`。缺这两项目录不是 WARN，不要在每个新工程 README 里再解释一遍。
      > ⚠️ `-bt/--buildToolType`（`vite|webpack|farm`）**只对 `lite` 生效**，`all` 下无意义，不要再写。
   2. **必须删掉 CLI 生成的 `scripts.prepare`**：该脚本调 `is-ci`（还有 `husky`），二者**不在 dependencies 中**，实测 `npm run prepare` → **exit=1**。`lite` 下 `npm install` **必然失败**；`all` 下恰好不阻断安装，但仍属必删项（会持续污染安装日志）。生成后**先删它，再 `npm install`**。
   3. **`all` 自带三件套，无需补装**：`vue-router` / `pinia` / `axios` 均在 `dependencies` 里（另有 `vue-i18n` / `@vueuse/core`）。校验脚本对 `all` 的必需依赖清单是 `vue-router` / `pinia` / `axios` / `tdesign-vue-next`。
-  4. **`all` 生成 `.gitignore`**（`lite` 不带）：上游仓库文档件必须删（见下「必删清单」），但 `.gitignore` / `.editorconfig` / `.npmrc` / `.prettierrc.js` / `eslint.config.js` / `stylelint.config.js` / `commitlint.config.js` / `.husky/` / `.vscode/` / `.env*` **要保留**（这就是选 `all` 的意义）。
+  4. **`all` 生成 `.gitignore`**（`lite` 不带）：上游仓库文档件必须删（见下「必删清单」）。`.gitignore` / `.editorconfig` / `.npmrc` / `.prettierrc.js` / `eslint.config.js` / `stylelint.config.js` / `commitlint.config.js` / `.env*` **要保留**。`.husky/` 与 `.vscode/` 在 2026-10-04 的 CLI 0.5.3 产物里已经没有，**缺了不算 WARN**；本技能 `references/scaffold/` 里若仍带着旧副本，留着无妨，不要当成新工程的必选项。
 
   **必删清单（`all` 生成后立刻执行；留着必与技能资产打架）**：
 
@@ -180,7 +180,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | ② | **C3** 暗黑三处接线 | `main.ts` 引 `theme-dark.css` + 调 `setting.load()` + `BasicLayout` 挂 `SettingPanel`，缺一即「等于没做」 | 文件头 |
 | ② | **H1** 唯一 HTTP 层 | 全项目只有 `api/http.ts`（`http` + `rawHttp` 双实例），禁第二套 axios | §4.2 |
 | ② | **H2** 令牌头单向 | 只发 `Authorization: Bearer`（附 `X-Tenant`），禁 `Authentication` | 文件头 |
-| ② | **H3** 代理白名单 | vite 代理只放 `/api` `/Auth` `/Mfa` `/cube` `/Content` `^/Admin/Index/`，**勿代理 SPA 路由** | §六-9 |
+| ② | **H3** 代理白名单 | vite 代理只放 `/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content`，**勿再加** `^/Admin/Index/`，**勿代理 SPA 路由** | §六-9 |
 | ② | **父子表** | 一对多只在父表页呈现，子表不进菜单、无独立路由与独立权限位 | 文件头 |
 | ③ | **M1~M5** 菜单 | 动态菜单树 + 同层互斥展开 + 一级图标分配 | §4.12 |
 | ③ | **L1~L4** 登录页 | 文案按项目生成、不预填账号、不暴露实现细节、无租户选择 | §4.3 |
@@ -222,7 +222,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 ## 二、前置条件
 
-Node ≥ 18；后端已用 `cube-webapi-backend` 暴露标准实体 API。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。
+Node ≥ 22.22.1（与 `references/scaffold/package.json` 的 `engines.node` 相同；`lint-staged@17` 要求这个下限，22.12 会在 `npm install` 上报 EBADENGINE）。后端已用 `cube-webapi-backend` 暴露标准实体 API。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。默认开发端口与后端对齐：`references/scaffold/vite.config.ts` 的 `API_TARGET` 为 `http://127.0.0.1:5052`。
 
 ## 三、第③步的内部顺序（落点索引）
 
@@ -263,8 +263,8 @@ mkdir -p src/stores src/styles          # all 用单数 store/style，本项目�
 node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;p.private=true;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
 # ④ 套用技能资产与工程外壳（**三步，只做第一步工程跑不起来**）
-cp -r <skill>/assets/core/. src/                  # ④-1 交付载荷 31 件（唯一拷贝动作）
-cp -r <skill>/references/scaffold/src/. src/      # ④-2 工程外壳 3 + DEV 验证页 1 + 上游基础设施 20 = 24 件
+cp -r <skill>/assets/core/. src/                  # ④-1 交付载荷 38 个文件（唯一拷贝动作）
+cp -r <skill>/references/scaffold/src/. src/      # ④-2 在 38 个文件之外再补 24 个文件（外壳 + DEV 页 + 上游基础设施）
 cp <skill>/references/scaffold/vite.config.ts \
    <skill>/references/scaffold/index.html \
    <skill>/references/scaffold/.env \
@@ -276,7 +276,7 @@ cp -r <skill>/references/scaffold/backend .       # ④-4 可选：Mock 后端�
 node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));p.name='<项目名>';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
 # ⑤ 装依赖 + 两道校验（缺一不可；包管理器与依赖裁剪见 §4.1.1）
-pnpm install                                      # 或 npm install
+npm install --no-audit --no-fund                  # 默认。pnpm 只在作者机器上试过，链接阶段会挂死，不要当默认
 node <skill>/references/scripts/check-starter-align.mjs .        # 退出码 0 = 对齐
 npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 ```
@@ -288,16 +288,16 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 >   且**没有 H3 代理、没有 R4 分包**；`index.html` 带腾讯 Aegis 埋点且 `lang="en"`。
 >   ⇒ 直接套用 `references/scaffold/` 的**已补丁外壳**才是正解，不要逐条手工打补丁。
 > - ④-2/④-3 与 ④-1 的关系：`scaffold/src/` ⊃ `assets/core/`（逐件同 md5），故 ④-2 只**新增** 24 件、不会与 ④-1 打架；
->   这正是 `check-assets-copied.mjs`（只比对 31 件载荷）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
-> - 最终 `src/` 应为 **55 件 = 31 + 24**（与 `references/scaffold/src/` 同构），可用 `find src -type f | wc -l` 自证。
+>   这正是 `check-assets-copied.mjs`（只比对 `assets/core` 那 38 个文件）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
+> - 最终 `src/` 应为 **62 个文件 = 38 + 24**（与 `references/scaffold/src/` 同构；计数是文件，不是「项」），可用 `find src -type f | wc -l` 自证。2026-09-13 写过的 55 = 31 + 24 已过时。
 ```
 
-**CLI `all` 产物共 193 项**（`--manifest` 可打印两套基线的结构与骨架条目）：
+**CLI `all` 产物文件数**：2026-09-13 为 193，2026-10-04 复跑同一 `tdesign-starter-cli@0.5.3` 为 **173**（`find -type f`，不含 `node_modules`）。`--manifest` 打印的是结构清单，条数不等于文件总数。
 
 | 类别 | 条目 | 去留 |
 |---|---|---|
 | 工程骨架 | `index.html` `package.json` `tsconfig.json` `vite.config.ts` `public/favicon.ico` `src/main.ts` `src/types/env.d.ts` | **必须保留**，删任一 = FAIL |
-| all 工具链 | `eslint.config.js` `stylelint.config.js` `commitlint.config.js` `.husky/` `.editorconfig` `.npmrc` `.prettierrc.js` `.stylelintignore` `.vscode/` `.env` `.env.development` `.env.site` `.env.test` `package-lock.json` | **建议保留**（选 `all` 的意义所在），缺一 = WARN |
+| all 工具链 | `eslint.config.js` `stylelint.config.js` `commitlint.config.js` `.editorconfig` `.npmrc` `.prettierrc.js` `.stylelintignore` `.env` `.env.development` `.env.site` `.env.test` `package-lock.json` | **建议保留**，缺一 = WARN。`.husky/`、`.vscode/` 不再列入（CLI 0.5.3 于 2026-10-04 已不生成） |
 | 上游仓库文档 | `README*.md` `CHANGELOG.md` `LICENSE` `PUBLISH.md` `docs/` `.github/` `.cnb*` `.gitattributes` | **必删**，记 INFO |
 | 上游演示业务代码 | `src/permission.ts` `mock/` `src/{api,components,layouts,pages,assets}/*` `src/router/modules/` `src/store/` `src/style/` `src/utils/*` | **必删**（与 `assets/core/` 同路径打架），残留记 WARN |
 | 保留但零引用 | `src/config/` `src/constants/` `src/hooks/` | 可裁；`src/locales/` `src/types/` **建议保留** |
@@ -309,7 +309,7 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 
 | 维度 | `all`（当前，唯一受支持） | `lite`（历史，存量工程） |
 |---|---|---|
-| 产物件数 | **193** | 13 |
+| 产物文件数 | **173**（2026-10-04；2026-09-13 曾计 193） | 13 |
 | `tsconfig.node.json` | **无** | 有（`references` 指向它） |
 | 环境类型根 | `src/types/env.d.ts` + `globals.d.ts` | `src/vite-env.d.ts` |
 | `tsconfig.moduleResolution` | `bundler` | `Node` |
@@ -317,7 +317,7 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 | `package.json#private` | 无（模板原样）；业务工程建议补 | 有 `true` |
 | 三件套依赖 | **自带** | 需手补 |
 | dev 端口 | `3002` | `5173` |
-| 工具链 | `eslint`/`stylelint`/`commitlint`/`.husky`/`.env*` 齐全 | 仅 3 件配置 |
+| 工具链 | `eslint`/`stylelint`/`commitlint`/`.env*`。`.husky/` 不是 2026-10-04 CLI 产物，缺了不是 WARN | 仅 3 件配置 |
 | **血统判据** | `tsconfig.node.json` **缺失** | `tsconfig.node.json` **存在** |
 
 > 对照基线（2026-09-13 双基线脚本实测）：`references/scaffold/` = **all 血统，0 FAIL / 0 WARN**；~~`references/demo/` = lite 血统，0 FAIL / 1 WARN~~（该基线随 demo 于 2026-09-13 归档移出技能，记录保留供回溯）；两份 `README.md` 均含「已声明偏差」段（demo 那份现随归档）。
@@ -383,12 +383,12 @@ ls -l --time-style=+%H:%M:%S <安装日志>; date +%H:%M:%S         # 日志时�
    同一命令改为**免沙箱**后立刻正常推进（30 秒内 1061 次写入）。安装/构建类长命令**一律免沙箱**。
 
 **★★★ 裁剪依赖 / 换包管理器前必须做的检查（否则等于自己造红灯）**：
-`check-starter-align.mjs` 的骨架 keep 清单要求下列文件**存在**（缺一 → **FAIL**），
+`check-starter-align.mjs` 的工具链清单要求下列文件**存在**（缺一 → **WARN**，须在工程 README 声明；不是 FAIL），
 但它**只校验 4 个运行时依赖**（`vue-router` / `pinia` / `axios` / `tdesign-vue-next`）：
 
 ```
-.prettierrc.js   .stylelintignore   .husky/   commitlint.config.js   eslint.config.js
-stylelint.config.js   package-lock.json          ← 全是「工具链配置文件」，必须保留
+.prettierrc.js   .stylelintignore   commitlint.config.js   eslint.config.js
+stylelint.config.js   package-lock.json          ← 工具链配置文件；缺一按脚本记 WARN（.husky/ 与 .vscode/ 已不在清单里）
 ```
 
 ⇒ **正确做法：只删依赖与相关 npm scripts，配置文件原地留着**（留着但无对应依赖 = 无害）。
@@ -420,7 +420,7 @@ stylelint.config.js   package-lock.json          ← 全是「工具链配置文
 
 - **令牌**：`token.ts` 统一读写 `localStorage['assets_token']`（推荐 API：`getToken/getRefreshToken/setTokens/clearTokens/getTenant/getTenantCode/setTenantCode`；兼容 API：`setToken/clearToken/isAuthed/normToken/getUsernameFromToken/clearTenant`）+ `normToken` 三向兜底 + `getUsernameFromToken`；`http.ts` 请求拦截调 `getToken()`，头写 **`Authorization: Bearer ${token}`**（实测后端只认这一个头，见 H2）。**401 时 `tryRefresh()` 用 `REFRESH_KEY` 的 refreshToken 打 `POST /Auth/Refresh` 并重放原请求一次（`inFlight` 守卫防并发风暴）**。登录/登出/401 清令牌一律经 `token.ts`，**任何组件不得自行 `localStorage.getItem/setItem` 令牌**。
 - **两套实例同一份拦截逻辑（方向相反，务必分清）**：`http`（`baseURL = API_BASE`，**已含 `/api`**，实体接口用）与 `rawHttp`（`baseURL = SERVER_BASE`，默认空串=同源根，登录/菜单等非实体端点用）；拦截器由 `attachInterceptors()` 统一挂载。**调用方写作规则**：实体接口**只写 `/{area}/{controller}`（绝不写 `/api`）**；**根族**端点**一律不带 `/api`**——`/Auth/Login`、`/Mfa/Verify`、`/Cube/Lookup`；而**区域族**端点（如菜单 `getRaw('/api/Admin/Index/GetMenuTree')`）**必须带 `/api`**（见 H2）。基址派生：`SERVER_BASE = (VITE_SERVER_BASE||'').replace(/\/+$/,'')`、`API_BASE = VITE_API_BASE || (SERVER_BASE ? \`${SERVER_BASE}/api\` : '/api')`——★ **`/api` 不是配置项**：旧文档称它由 `CubeSetting.ApiPrefixes` 决定，**该属性根本不存在**（反射 dump + appsettings 双重证伪）；`/api` 是区域路由模板里硬编码的字面量。前端只用 `VITE_API_BASE` 对齐，**勿硬编码散落各处**。
-- **便捷方法**：`getApi/postApi/putApi/deleteApi`（走 `http`，返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw/postRaw`（走 `rawHttp`，用于**根族**端点，**路径自带全路径**，如 `/Auth/Login`、`/Cube/Lookup`；调**区域族**端点时须自带 `/api`，如 `/api/Admin/Index/GetMenuTree`）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 先 `tryRefresh()` 重放、失败则清令牌跳 `/login`**）+ 捕获 `x-tenant` 响应头写 `setTenantCode`。**不含全局 `camelize`**：后端 PascalCase 键原样到达，行数据归一由 `useEntityResource.normalizeRows` 承担（详见 troubleshooting「PascalCase」）。信封字段定义见 `references/metadata-contract.md`。
+- **便捷方法**：`getApi/postApi/putApi/deleteApi`（走 `http`，返回 `ApiEnvelope<T>`，支持泛型）+ `getRaw/postRaw`（走 `rawHttp`，用于**根族**端点，**路径自带全路径**，如 `/Auth/Login`、`/Cube/Lookup`；调**区域族**端点时须自带 `/api`，如 `/api/Admin/Index/GetMenuTree`）。响应拦截统一处理信封 `code`（0 成功/非 0 reject/**401 先 `tryRefresh()` 重放、失败则清令牌跳 `/login`**）+ 捕获 `x-tenant` 响应头写 `setTenantCode`。**不含全局 `camelize`**：NewLife.Cube **6.15.2026.901** 的实体 JSON 已是 camelCase（`id`/`categoryID`/`purchasedDate`）。更早版本若仍是 PascalCase，`useEntityResource.normalizeRows` 会再转一次，camelCase 输入下这次转换是幂等的，不要为了迁就旧文档去改已经是 camelCase 的接口。信封字段定义见 `references/metadata-contract.md`。登录 `expire_in` 可能为 0，不要把它当成令牌已过期（见 `assets/core/api/token.ts`）。
 - **多租户**：请求头 `X-Tenant`（租户 Code，主）+ `X-Tenant-Id`（兼容旧后端），Code 由登录响应头 `X-Tenant` 捕获后持久化（**登录页不设租户选择，见 L4**）。
 - ⚠️ **反面教材（该文件现已不存在，仅作历史记录）**：技能早期版本附带过一套 `api.ts`（另一套 axios 实例）（键名 `cube_token`，`baseURL:'/api'`，双令牌头）。它与 `token.ts` 键名冲突，任何组件误引即产生「请求不带令牌 → 全接口 401 → 菜单树恒空」。**不要再引入它**；如遇老项目残留，删除并全量 `grep "api/api"` 清零引用。
 
@@ -686,7 +686,7 @@ stylelint.config.js   package-lock.json          ← 全是「工具链配置文
 
 `references/scaffold/` 是**完整可运行工程**（不是片段集合），由官方 `tdesign-starter-cli@0.5.3`（`-type vue3 -temp all`，**完整脚手架血统**）生成后，按「必删清单」清掉上游演示业务代码，再注入本技能 `assets/`。**它同时是「CLI 产物形态」的对照基线**：`references/scaffold/src/` 为唯一真相源，`assets/` 为镜像拷贝源。
 
-- **工程文件**：`package.json` / `vite.config.ts`（`@` 别名 + 代理 `/api` `^/Admin/Index/` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content` + `build.rolldownOptions.output.codeSplitting.groups` 分包）/ `tsconfig.json`（含 `paths: {"@/*": ["src/*"]}`；**无 `references`**——`all` 用单一 tsconfig）/ `index.html`（含 `<link rel="icon" href="/favicon.ico" />`）/ `public/favicon.ico` / `src/types/env.d.ts` / `.gitignore` / `eslint.config.js` / `stylelint.config.js` / `commitlint.config.js` / `.husky/` / `.env*`。
+- **工程文件**：`package.json` / `vite.config.ts`（`@` 别名 + 代理 `/api` `/Auth` `/Mfa` `/Sso` `/Cube` `/cube` `/Content`，**不要**再加 `^/Admin/Index/`；分包用 `build.rolldownOptions.output.codeSplitting.groups`）/ `tsconfig.json`（含 `paths: {"@/*": ["src/*"]}`；**无 `references`**——`all` 用单一 tsconfig）/ `index.html`（含 `<link rel="icon" href="/favicon.ico" />`）/ `public/favicon.ico` / `src/types/env.d.ts` / `.gitignore` / `eslint.config.js` / `stylelint.config.js` / `commitlint.config.js` / `.env*`。`.husky/` 可有可无。
   与 CLI `all` 基线的差异**只有白名单六类**（`@` 别名、代理、`codeSplitting`、必删清单、`index.html` 的 `lang`/`<title>`/埋点、`package.json` 的 `private`/`scripts.mock`）；CLI 的 `scripts.prepare` 与上游仓库文档件/演示业务代码已移除 —— 属「已声明偏差」，`check-starter-align.mjs` 记 INFO/WARN。
   > ⚠️ **`all` 血统没有 `tsconfig.node.json`，也没有 `src/vite-env.d.ts`**（环境类型根是 `src/types/env.d.ts`）。校验脚本据此判血统，**不要**再按 `lite` 的 8 件骨架核对 `all` 工程。
   ```bash
@@ -947,7 +947,7 @@ MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolb
 ### ① 骨架 —— 退出条件：`check-starter-align.mjs` 退出码 0
 
 - [ ] **C1** 工程由 `printf '\n' | td-starter init <名> -type vue3 -temp all` 生成（**完整脚手架血统**），且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架齐全、`prepare` 已删、必需依赖在位、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点；脚本自动判 `all`/`lite` 血统）
-- [ ] ★★★ **第④步三步都做了**：`src/` 共 **55 件 = `assets/core` 31 + `references/scaffold/src` 独有 24**（`find src -type f | wc -l` 自证）；
+- [ ] ★★★ **第④步三步都做了**：`src/` 共 **62 个文件 = `assets/core` 38 + `references/scaffold/src` 独有 24**（`find src -type f | wc -l` 自证；计数是文件）；
   **工程根外壳取自 `references/scaffold/`**（`vite.config.ts` / `index.html` / `.env*` / `package.json`），**不是** CLI 的上游版。
   ⚠️ 漏做此步时**上面那个闸门仍会全绿**，但 `src/router/index.ts` 还 import 已删的 `./modules` ⇒ **工程根本跑不起来**（见 troubleshooting G17）
 - [ ] ★ **工程能真的启动**：`npx vite build` 或 `npm run dev` 不报 `Cannot find module './modules'` / `./style/variables.less`；`main.ts` 已引 `tokens.css` + `theme-dark.css` 且调了 `setting.load()`（骨架文件在场 ≠ 接线正确）
@@ -1006,9 +1006,7 @@ MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolb
 > 归档后 `tri-diff.mjs` **默认只跑三根**（scaffold/src ↔ assets/core ↔ 工程 src）；需要时用
 > `--demo <归档>/src` 显式启用第四根。
 
-> **它历史上唯一不可替代的价值**：两页 scaffold/core **完全不提供**的页面 ——
-> 注册 `src/pages/RegisterView.vue` / 找回密码 `src/pages/ForgotPasswordView.vue`（在 `tri-diff` 中报 `DEMO-ONLY`，属预期）。
-> **需要这两页时去归档里取**（技能内已不携带）；**需要登录主页时一律取 scaffold/core** ——
+> 注册页 `references/scaffold/src/pages/RegisterView.vue` 与找回密码页 `references/scaffold/src/pages/ForgotPasswordView.vue` **已经在脚手架里**，不要再当成「只存在于归档 demo」。归档 lite demo 里的同名文件是上一代精简页。**需要登录主页时一律取 scaffold/core** ——
 > scaffold 版 342 行全特性（MFA / Challenge / OAuth / 短信邮件码 / 图形码 / 注册入口 / 忘记密码入口 / AuthCategory），
 > demo 版同名文件**仅 84 行、只实现 Challenge 一条链路**，是精简示例，**不可**当模板。
 > 另：demo 的价值**不是**「更完整的模板」，也**不随包携带 `node_modules`**；拷贝其文件到业务工程前，
@@ -1110,12 +1108,12 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 | **core** | `assets/core/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 · **零引用配方件** |
 | — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
 
-> ★ **2026-09-13：取消 `assets/optional/` 层，改为单层 `core/`（31 件）**。原先「按需拷」的三件
+> ★ **2026-09-13：取消 `assets/optional/` 层，改为单层 `core/`**（该日计 31 个文件；2026-10-04 复数为 **38 个文件**）。原先「按需拷」的三件
 > （`RoleMenuEditor` / `PriceYuanInput` / `ThemeShowcase`）全部并入 `core/`。理由：**分层的唯一判据是
 > 「是否被 core 文件静态 import」，而这判据只对「缺了就构建失败」有意义**；这三件属**零引用配方件**
 > ——不拷不报错、拷了也不构建报错（`vue-tsc` 会编译它们，与主链路无关）——落在两可地带，
 > 导致「拷不拷」全靠使用者记忆，正是历史上 `IconPicker` 被漏拷的事故成因。
-> 收敛为「**一个目录、一次 `cp -r`、31 件全拷**」后，`check-assets-copied.mjs` 的判据也变成单向可验证。
+> 收敛为「**一个目录、一次 `cp -r`、当前 38 个文件全拷**」后，`check-assets-copied.mjs` 的判据也变成单向可验证。
 > 代价（已确认）：`core` 变重；这三件在默认工程里**零引用**（`ThemeShowcase.vue` 仅与同名
 > `pages/ThemeShowcase.vue` DEV 路由巧合重名，**不是**同一个文件）。
 
@@ -1138,7 +1136,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 > **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `index.html` / `tsconfig.json` / `vite.config.ts` / `public/favicon.ico` / `src/types/env.d.ts`）不在 `assets/` 里——它们**由 `td-starter` 生成**、随 `references/scaffold/` 提供；`check-starter-align.mjs` 就是用来守住这条边界的。
 > ⚠️ **外壳清单随血统不同**：`all` 是 `src/types/env.d.ts`（**无** `tsconfig.node.json` / `src/vite-env.d.ts`），`lite` 是 `tsconfig.node.json` + `src/vite-env.d.ts`。
 >
-> ★ **四根构成（2026-09-13 由三根扩为四根；同日 scaffold 由 `lite` 血统重生为 `all`）**：`references/scaffold/src/`（唯一真相源）= `assets/core/`（31 件，必拷）
+> ★ **四根构成（2026-09-13 由三根扩为四根；同日 scaffold 由 `lite` 血统重生为 `all`）**：`references/scaffold/src/`（唯一真相源，2026-10-04 为 **62 个文件**）= `assets/core/`（**38 个文件**，必拷）
 > **+ 工程外壳 `all` 版**（`App.vue` / `main.ts` / `router/index.ts`）**+ DEV 演示页 1 件**
 > （`pages/LovDemoView.vue`，`/lov-demo` 路由用，生产不注册）**+ `all` 保留的上游基础设施**
 > （`src/types/`5 件、`src/locales/`4 件、`src/config/`3 件、`src/constants/`1 件、`src/hooks/`1 件、`src/styles/*.less`5 件）。
@@ -1147,7 +1145,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 > **第四根（可选）：已归档的 lite demo** —— 原 `references/demo/src/`（28 件）已于 2026-09-13 **归档移出技能**
 > （现位于技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。`tri-diff` **默认不再拿它当对照根**，
 > 故默认输出里不会出现任何 `DEMO-*` 行；需要时以 `--demo <归档>/src` 显式启用。**启用后**才适用下列历史判据：
-> 注册（`RegisterView.vue`）/ 找回密码（`ForgotPasswordView.vue`）两页**只此一份**（`core` 与 scaffold 均不提供）→ 报 `DEMO-ONLY`，**属预期**；
+> 注册（`RegisterView.vue`）/ 找回密码（`ForgotPasswordView.vue`）**现位于 `references/scaffold/src/pages/`**，不再是「只在归档 demo」。若仍用 `--demo` 对照归档，归档里的同名精简页与 scaffold 不同 → 报 `DEMO-ONLY` 或分歧，**属预期**；
 > demo 是**精简子集**，`core` 中另有 **14 件**它不收录（缺件≠漂移，启用时 `tri-diff` 单独打印该计数）；
 > 若 demo **有**某文件却与 `scaffold`/`core` 不同，**按白名单二分**：
 >   · `DEMO-DIVERGENT` = 已知层次差异（**12 件**，demo 精简变体 / 上一代认证架构）→ **非漂移，无需同步**，默认不计入失败退出码（`--strict-demo` 才计）；
@@ -1255,7 +1253,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
   - ★ **修漂移也是一条命令**：`node references/scripts/sync-assets.mjs`（把主真相源 `references/scaffold/src/` 单向覆盖到 `assets/core/`）。默认 `--check` 只报不改，避免误覆盖。
   - ⚠️ **这些闸门判据正交，不能互相替代，也不允许只跑其中一个**（D-17 实测踩坑）：
     - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部两镜像之间的漂移；
-    - `scan-assets-refs.mjs` = 「`assets/core/`（31 件） ↔ `references/scaffold/src/`（55 件）」判 `② ⊂ ①` 且逐件同 md5 → **看不见**目标工程；
+    - `scan-assets-refs.mjs` = 「`assets/core/`（38 个文件） ↔ `references/scaffold/src/`（62 个文件）」判子集且逐件同 md5 → **看不见**目标工程；
     - 反面案例：D-15 回补时 `MenuSidebar.vue` 只写了 `assets/core/` 一份，`references/scaffold/src/` 那份漏了 `const route = useRoute();`（但仍在用 `route.path`）→ 脚手架生成出来**编译即失败**；当时只因跑了 `check-assets-copied`（全绿）就以为收工，漂移潜伏了整轮。
     - 这就是 `check-all.mjs` 存在的唯一理由：**把「跑全部」变成一条命令**，从结构上消灭「挑着跑」。
   - ★ **聚合器自身也要过「假全绿自检」**：写完/改完断言类工具，注入一个人造漂移确认它**会变红**。
@@ -1273,8 +1271,8 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
   - ★ **资产的真实结构是「两镜像」（**没有第三份**），不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
     | 层 | 件数 | 角色 | 参与同步？ |
     |---|---|---|---|
-    | `references/scaffold/src/` | **55** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
-    | `assets/core/` | **31** | **① 的严格子集**（= 55 − 24 件骨架/上游件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
+    | `references/scaffold/src/` | **62 个文件** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
+    | `assets/core/` | **38 个文件** | **① 的严格子集**（= 62 − 24 个骨架/上游文件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
     | ~~`references/demo/src/`~~ | 28 | **已于 2026-09-13 归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。它从来不是 ① 的副本，而是 lite 血统的另一代工程（含 7 件 ① 没有的资产） | ❌ **已不参与**：`tri-diff.mjs` 默认不再拿它当对照根，需 `--demo` 显式启用 |
   - 因此：**改一个文件 ＝ 改两处**（主真相源 `references/scaffold/src/` → 派生 `assets/core/`）。
     **不要手工双写**——改完真相源直接 `node references/scripts/sync-assets.mjs` 派生，再跑聚合入口确认 `core/scaffold 差异数: 0`。

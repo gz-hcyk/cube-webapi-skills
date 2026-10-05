@@ -41,9 +41,9 @@ dotnet publish MyBlog.Web/MyBlog.Web.csproj -c Release -r linux-x64 --no-self-co
 - `-r linux-x64`：跨平台出 Linux 包（本机 Win 也无妨）。产物 `publish/backend/MyBlog.Web.dll` 即主程序。
 - 0 错误即成功；若报 `MSB3027/3021 文件被锁定` → `taskkill /F /IM dotnet.exe` 杀旧进程再 publish（代码本身 0 错误，勿误判）。
 
-**连接串必须跨平台（§十二同源，部署前最后核对）**：`appsettings.json` 的 `ConnectionStrings` 用**正斜杠** + `Data Source=`（带空格）+ **删 `Provider=sqlite`** + `Busy Timeout=15000`：
+**连接串必须跨平台（§十二同源，部署前最后核对）**：`appsettings.json` 的 `ConnectionStrings` 用**正斜杠** + `Data Source=`（带空格）+ `Provider=sqlite` + `Journal Mode=Wal` + `Busy Timeout=30000`。相对路径基准是 `AppContext.BaseDirectory`，不是进程 CWD：
 ```json
-"MyBlog": "Data Source=Data/MyBlog.db;Busy Timeout=15000"
+"MyBlog": "Data Source=Data/MyBlog.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000"
 ```
 Windows 的 `Data\*.db`（反斜杠）/ `DataSource=`（无空格）/ `:memory:` 覆盖 / 启动并发写锁 busy timeout 不足，都会让 Linux 上建表错乱或接口 500，详见 §十二。
 
@@ -56,10 +56,10 @@ Windows 的 `Data\*.db`（反斜杠）/ `DataSource=`（无空格）/ `:memory:`
   "Logging": { "LogLevel": { "Default": "Warning", "Microsoft.AspNetCore": "Warning" } },
   "AllowedHosts": "your-domain.com,www.your-domain.com",
   "ConnectionStrings": {
-    "Membership": "Data Source=Data/Membership.db;Busy Timeout=15000",
-    "Cube": "Data Source=Data/Cube.db;Busy Timeout=15000",
-    "Log": "Data Source=Data/Log.db;Busy Timeout=15000",
-    "MyBlog": "Data Source=Data/MyBlog.db;Busy Timeout=15000"
+    "Membership": "Data Source=Data/Membership.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "Cube": "Data Source=Data/Cube.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "Log": "Data Source=Data/Log.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000",
+    "MyBlog": "Data Source=Data/MyBlog.db;Provider=sqlite;Journal Mode=Wal;Busy Timeout=30000"
   },
   "Cube": {
     "JwtSecret": "CHANGE-ME-REPLACE-WITH-32-BYTE-RANDOM-SECRET",
@@ -128,7 +128,7 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 [Install]
 WantedBy=multi-user.target
 ```
-`WorkingDirectory` **必须**指向 backend 目录——SQLite 连接串 `Data/*.db` 相对 **进程 CWD**（见 §十二），非 ContentRoot，错了会建到别的目录/查不到库。
+`WorkingDirectory` 仍指向 backend 目录，便于日志和相对文件。SQLite 连接串 `Data/*.db` 在 XCode 12.2 上相对 **`AppContext.BaseDirectory`**（dll 所在目录），不是进程 CWD，也不是 ContentRoot。`dotnet /var/www/.../MyBlog.Web.dll` 时库落在该 dll 旁边的 `Data/`。
 
 ### 15.7 本地冒烟验证（本机 .NET 10 跑 net8 包）
 
@@ -153,7 +153,7 @@ DOTNET_ROLL_FORWARD=Major ASPNETCORE_ENVIRONMENT=Development \
 - **Production 400 Invalid Hostname**：本地冒烟必须 Development 环境；上线才切 Production + 真实 AllowedHosts。
 - **`--no-self-contained` 忘了装 .NET 8 Runtime**：服务器 `dotnet --version` 非 8.x 则起不来。
 - **端口残留进程**：`fuser -k <port>/tcp` 清理后换端口再起。
-- **SQLite 相对 CWD**：systemd `WorkingDirectory` 必须指向 backend 目录，否则库建错地方。
+- **SQLite 相对 `AppContext.BaseDirectory`**：发布后的 dll 目录就是路径基准，库在该目录的 `Data/`。不要再按「相对 CWD」去改 `WorkingDirectory` 来搬家。
 - **上传上限不一致**：Nginx `client_max_body_size` 与后端 `Kestrel MaxRequestBodySize` 须对齐（本项目 220m）。
 - **测试库污染**：冒烟后清理 `Data/*.db` 再打包，部署即新建干净库。
 - **前端同步坑（跨技能）**：`vite build --outDir` 在后台进程可能清空不写入 → 用默认 `dist` + Python `copytree`，见 tdesign §10.10。
