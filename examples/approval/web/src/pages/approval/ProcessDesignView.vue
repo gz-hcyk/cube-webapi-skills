@@ -17,6 +17,9 @@
         <t-button size="small" variant="outline" @click="addNode('end')">添加结束</t-button>
         <t-button size="small" variant="outline" @click="addNode('start')">添加开始</t-button>
       </div>
+      <h4 class="block-title">流程图</h4>
+      <p class="hint">只读。点节点后仍用下面的属性编辑；增删、排序和连线不在图上操作。排他的默认出线和条件会标在连线上。</p>
+      <flow-chart :nodes="chartNodes" :edges="chartEdges" :selected="selectedKey" @select="select" />
       <t-table row-key="key" :data="nodes" :columns="nodeColumns" size="small" hover @row-click="onNode">
         <template #typeLabel="{ row }">{{ typeLabel(row.type) }}</template>
         <template #op="{ row }">
@@ -96,6 +99,8 @@
 import { computed, ref } from 'vue';
 import { MessagePlugin, type RowEventContext, type TableRowData } from 'tdesign-vue-next';
 import { getApi, postApi, type ApiEnvelope } from '@/api/http';
+import FlowChart from './FlowChart.vue';
+import { edgeCaption, type ChartEdge, type ChartNode } from './flowChart';
 
 defineProps<{ area?: string; controller?: string; title?: string }>();
 
@@ -201,6 +206,13 @@ const roleOptions = computed(() => roles.value.map((item) => ({ label: item.name
 const deptOptions = computed(() => departments.value.map((item) => ({ label: item.name, value: item.id })));
 const fieldOptions = computed(() => formFields.value.map((item) => ({ label: item.label || item.key, value: item.key })));
 const nodeKeyOptions = computed(() => nodes.value.map((node) => ({ label: node.name || node.key, value: node.key })));
+const chartNodes = computed<ChartNode[]>(() => nodes.value.map((node) => ({ key: node.key, type: node.type, name: node.name || node.key })));
+const chartEdges = computed<ChartEdge[]>(() => edges.value.map((edge) => ({
+  key: edge.key,
+  from: edge.from,
+  to: edge.to,
+  label: edgeCaption(edge),
+})));
 
 function typeLabel(type: string) {
   return typeOptions.find((item) => item.value === type)?.label || type;

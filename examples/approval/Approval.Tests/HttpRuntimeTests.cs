@@ -175,6 +175,8 @@ public class HttpRuntimeTests
         Assert.Contains(inbox.AsArray(), t => t!["id"]!.GetValue<String>() == task["id"]!.GetValue<String>());
         var viewed = Ok(await Get(client, "/api/Approval/Runtime/View?instanceId=" + started["instanceId"]!.GetValue<String>(), counselorToken));
         Assert.Contains(viewed["history"]!.AsArray(), h => h!["action"]!.GetValue<String>() == "submit");
+        Assert.Contains("subjectCounselor", viewed["definition"]!.GetValue<String>());
+        Assert.Contains(viewed["history"]!.AsArray(), h => h!["nodeKey"] != null);
 
         var moved = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Transfer", counselorToken, new
         {

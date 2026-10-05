@@ -477,6 +477,7 @@ public class RuntimeController : ControllerBaseX
     {
         var tasks = ApprovalTask.FindAll(ApprovalTask._.InstanceId == inst.Id);
         var history = ApprovalHistory.FindAllByInstanceId(inst.Id);
+        var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId);
         return new
         {
             instanceId = inst.Id.ToString(),
@@ -496,7 +497,8 @@ public class RuntimeController : ControllerBaseX
             processId = inst.ProcessId,
             processVersionId = inst.ProcessVersionId,
             formData,
-            nodeFields = NodeFields(inst),
+            definition = version?.Definition ?? "",
+            nodeFields = NodeFields(inst, version),
             tasks = tasks.Select(DescribeTask),
             history = history.Select(h => new
             {
@@ -508,13 +510,15 @@ public class RuntimeController : ControllerBaseX
                 fromStatus = h.FromStatus,
                 toStatus = h.ToStatus,
                 round = h.Round,
+                nodeKey = h.NodeKey ?? "",
+                nodeName = h.NodeName ?? "",
             }),
         };
     }
 
-    private static Object NodeFields(ApprovalInstance inst)
+    private static Object NodeFields(ApprovalInstance inst, ApprovalProcessVersion? version = null)
     {
-        var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId);
+        version ??= ApprovalProcessVersion.FindById(inst.ProcessVersionId);
         var graph = version == null || version.Definition.IsNullOrEmpty() ? new FlowGraph() : FlowGraph.Parse(version.Definition);
         var schema = inst.FormVersionId > 0 ? ApprovalFormVersion.FindById(inst.FormVersionId)?.Schema : null;
         return graph.Nodes.Select(node => new

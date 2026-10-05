@@ -50,6 +50,7 @@
           </t-form-item>
         </t-form>
         <h4 class="block-title">审批轨迹</h4>
+        <flow-chart :nodes="chart.nodes" :edges="chart.edges" :states="chart.states" legend />
         <t-table row-key="action" :data="detail.history" :columns="historyColumns" size="small" />
         <div class="actions">
           <t-button v-if="activeTask" theme="primary" @click="agree">同意</t-button>
@@ -122,6 +123,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { MessagePlugin, type RowEventContext, type TableRowData } from 'tdesign-vue-next';
 import { getApi, postApi, type ApiEnvelope } from '@/api/http';
+import FlowChart from './FlowChart.vue';
+import { edgeCaption, instanceMarks, type ChartEdge, type ChartNode, type NodeMark } from './flowChart';
 
 defineProps<{ area?: string; controller?: string; title?: string }>();
 
@@ -141,6 +144,7 @@ interface HistoryRow {
   actionName: string;
   comment?: string;
   operatorName?: string;
+  nodeKey?: string;
 }
 interface FieldRule {
   key: string;
@@ -163,9 +167,18 @@ interface InstanceView {
   subjectName: string;
   proxyName?: string;
   formData?: string;
+  definition?: string;
   nodeFields?: NodeFields[];
   tasks: TaskRow[];
   history: HistoryRow[];
+}
+interface RawFlowNode { key: string; type: string; name: string }
+interface RawFlowEdge {
+  key?: string;
+  from: string;
+  to: string;
+  default?: boolean;
+  condition?: { field?: string; op?: string; value?: string | number };
 }
 interface DraftRow {
   instanceId: string;
@@ -277,6 +290,32 @@ const visibleStartFields = computed(() => startFields.value.filter((field) => fi
 const counselorAccess = computed(() => startFields.value.find((field) => field.key === 'counselorUserId')?.access || 'editable');
 const canWithdraw = computed(() => !!detail.value && detail.value.status === 1 && detail.value.userId === me.value?.id);
 const canResubmit = computed(() => !!detail.value && detail.value.status === 0 && detail.value.userId === me.value?.id);
+const chart = computed(() => {
+  const empty = { nodes: [] as ChartNode[], edges: [] as ChartEdge[], states: {} as Record<string, NodeMark> };
+  const view = detail.value;
+  if (!view?.definition) return empty;
+  try {
+    const parsed = JSON.parse(view.definition) as { nodes?: RawFlowNode[]; edges?: RawFlowEdge[] };
+    const nodes = (parsed.nodes || []).map((node) => ({ key: node.key, type: node.type, name: node.name || node.key }));
+    const edges = (parsed.edges || []).map((edge, index) => ({
+      key: edge.key || `e${index + 1}`,
+      from: edge.from,
+      to: edge.to,
+      label: edgeCaption(edge),
+    }));
+    return {
+      nodes,
+      edges,
+      states: instanceMarks({
+        status: view.status,
+        tasks: view.tasks || [],
+        history: (view.history || []).map((item) => ({ action: item.action, nodeKey: item.nodeKey })),
+      }, nodes, edges),
+    };
+  } catch {
+    return empty;
+  }
+});
 
 function instanceStatus(status: number) {
   return ['草稿', '审批中', '已通过', '已驳回', '已取消', '已终止'][status] || String(status);
