@@ -6,3 +6,13 @@ Thumbs.db
 **/references/scripts/_*.txt
 **/references/scripts/_*.mjs
 **/*.report.txt
+
+# examples/equipment-ledger 构建与运行产物（源码入库）
+examples/equipment-ledger/**/bin/
+examples/equipment-ledger/**/obj/
+examples/equipment-ledger/**/node_modules/
+examples/equipment-ledger/**/dist/
+examples/equipment-ledger/**/.vite/
+examples/equipment-ledger/**/*.db
+examples/equipment-ledger/**/*.db-wal
+examples/equipment-ledger/**/*.db-shm
