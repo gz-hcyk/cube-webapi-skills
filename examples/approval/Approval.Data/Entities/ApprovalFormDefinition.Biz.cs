@@ -1,4 +1,5 @@
-﻿using NewLife;
+﻿using Approval.Data;
+using NewLife;
 using XCode;
 using XCode.Membership;
 
@@ -73,6 +74,7 @@ public partial class ApprovalFormDefinition : Entity<ApprovalFormDefinition>
         draft.Version = next;
         draft.Status = VersionStatus.Published;
         draft.FieldCount = count;
+        draft.SearchableKeys = FormSchema.SearchableKeys(draft.Schema);
         draft.PublishTime = DateTime.Now;
         draft.PublishUserId = userId;
         draft.PublishUser = publisher?.DisplayName.IsNullOrEmpty() == false ? publisher.DisplayName : publisher?.Name;

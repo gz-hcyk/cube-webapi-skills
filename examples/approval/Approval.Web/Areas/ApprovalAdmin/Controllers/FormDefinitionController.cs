@@ -26,6 +26,37 @@ public class FormDefinitionController : EntityController<ApprovalFormDefinition>
     /// <summary>按模型做必填校验。</summary>
     protected override Boolean EnableFieldValidation => true;
 
+    /// <summary>按分类列出表单和流程。请假样例挂在学工下面。</summary>
+    [EntityAuthorize(PermissionFlags.Detail)]
+    [DisplayName("按分类")]
+    [HttpGet]
+    public ActionResult ByCategory()
+    {
+        ApprovalCategory.Meta.Cache?.Clear("list", true);
+        var categories = ApprovalCategory.FindAll().Where(e => e.Enable).OrderBy(e => e.Sort).ThenBy(e => e.Id);
+        var forms = ApprovalFormDefinition.FindAll();
+        var processes = ApprovalProcess.FindAll();
+        var list = categories.Select(category => new
+        {
+            id = category.Id,
+            code = category.Code,
+            name = category.Name,
+            forms = forms.Where(form => form.CategoryId == category.Id).Select(form => new
+            {
+                id = form.Id,
+                code = form.Code,
+                name = form.Name,
+            }),
+            processes = processes.Where(process => process.CategoryId == category.Id).Select(process => new
+            {
+                id = process.Id,
+                code = process.Code,
+                name = process.Name,
+            }),
+        });
+        return Json(0, "ok", list, null);
+    }
+
     /// <summary>读取草稿结构。没有草稿时退回已发布结构，供设计页展示字段。</summary>
     [EntityAuthorize(PermissionFlags.Detail)]
     [DisplayName("读取设计")]

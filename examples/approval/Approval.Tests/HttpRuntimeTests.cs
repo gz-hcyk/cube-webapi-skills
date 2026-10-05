@@ -235,6 +235,65 @@ public class HttpRuntimeTests
         Assert.Contains(nodes, n => n!["modeLabel"]!.GetValue<String>() == "或签");
     }
 
+    [Fact]
+    public async Task Resubmit_field_rules_and_category_over_http()
+    {
+        await using var factory = new ApprovalApiFactory(_world);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var token = await Login(client, "admin", "admin");
+        var processes = Ok(await Get(client, "/api/Approval/Runtime/Processes", token)).AsArray();
+        var leave = processes.First(p => p!["code"]!.GetValue<String>() == "leave");
+        var processId = leave["id"]!.GetValue<Int32>();
+        var startForm = Ok(await Get(client, "/api/Approval/Runtime/StartForm?processId=" + processId, token));
+        Assert.Contains(startForm["fields"]!.AsArray(), f => f!["key"]!.GetValue<String>() == "days" && f["access"]!.GetValue<String>() == "hidden");
+
+        var me = Ok(await Get(client, "/api/Approval/Runtime/Me", token));
+        var people = Ok(await Get(client, "/api/Approval/Runtime/Candidates", token)).AsArray();
+        var counselor = people.First(p => p!["name"]!.GetValue<String>() == "counselor");
+        var hidden = await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", token, new
+        {
+            processId,
+            proxy = false,
+            data = "{\"studentUserId\":" + me["id"]!.GetValue<Int32>() + ",\"counselorUserId\":" + counselor["id"]!.GetValue<Int32>() + ",\"reason\":\"回家\",\"days\":1}",
+            requestId = "http-r4-hidden",
+        });
+        Assert.Equal(4221, hidden["code"]!.GetValue<Int32>());
+
+        var started = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Start", token, new
+        {
+            processId,
+            proxy = false,
+            data = "{\"studentUserId\":" + me["id"]!.GetValue<Int32>() + ",\"counselorUserId\":" + counselor["id"]!.GetValue<Int32>() + ",\"reason\":\"回家\"}",
+            requestId = "http-r4-start",
+        }));
+        var versionId = started["processVersionId"]!.GetValue<Int32>();
+        var withdrawn = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Withdraw", token, new
+        {
+            instanceId = started["instanceId"]!.GetValue<String>(),
+            reason = "先撤",
+            requestId = "http-r4-wd",
+            instanceVersion = started["version"]!.GetValue<Int32>(),
+        }));
+        Assert.Equal(0, withdrawn["status"]!.GetValue<Int32>());
+        var again = Ok(await Send(client, HttpMethod.Post, "/api/Approval/Runtime/Resubmit", token, new
+        {
+            instanceId = started["instanceId"]!.GetValue<String>(),
+            data = "{\"reason\":\"改期\"}",
+            requestId = "http-r4-again",
+            instanceVersion = withdrawn["version"]!.GetValue<Int32>(),
+        }));
+        Assert.Equal(2, again["round"]!.GetValue<Int32>());
+        Assert.Equal(versionId, again["processVersionId"]!.GetValue<Int32>());
+        Assert.Contains(again["history"]!.AsArray(), h => h!["action"]!.GetValue<String>() == "resubmit");
+
+        var grouped = Ok(await Get(client, "/api/ApprovalAdmin/FormDefinition/ByCategory", token)).AsArray();
+        var affair = grouped.FirstOrDefault(c => c!["code"]!.GetValue<String>() == "student-affairs");
+        Assert.True(affair != null, grouped.ToJsonString());
+        Assert.Equal("学工", affair["name"]!.GetValue<String>());
+        Assert.Contains(affair["forms"]!.AsArray(), f => f!["code"]!.GetValue<String>() == "leave");
+        Assert.Contains(affair["processes"]!.AsArray(), f => f!["code"]!.GetValue<String>() == "leave");
+    }
+
     private static void Grant(Role role)
     {
         var flags = PermissionFlags.All;

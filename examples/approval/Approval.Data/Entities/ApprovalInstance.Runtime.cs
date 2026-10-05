@@ -54,7 +54,13 @@ public partial class ApprovalInstance
         var transitions = ApprovalTransition.FindAllByProcessVersionId(version.Id);
         if (nodes.Count == 0) throw new ApprovalException(4222, "已发布流程没有节点");
         var needsCounselor = nodes.Any(e => e.AssigneeType == "subjectCounselor");
-        var data = NormalizeForm(args.Data, args.Proxy, subject.ID, out var counselorId);
+        var graph = FlowGraph.Parse(version.Definition);
+        var schema = SchemaOf(version.FormVersionId);
+        var posted = FieldRules.ParseObject(args.Data);
+        var startNode = graph.Nodes.FirstOrDefault(e => e.Type == "start")
+            ?? throw new ApprovalException(4222, "流程没有开始节点");
+        FieldRules.GuardStart(posted, FieldRules.ForNode(graph, startNode.Key), FormSchema.Keys(schema));
+        var data = NormalizeForm(posted.ToJsonString(), args.Proxy, subject.ID, out var counselorId);
         if (needsCounselor)
         {
             var counselor = counselorId > 0 ? User.FindByID(counselorId) : null;
@@ -127,7 +133,7 @@ public partial class ApprovalInstance
     }
 
     /// <summary>同意。或签一人即可；会签要全员同意；依次同意后才产生下一人。</summary>
-    public static ApprovalInstance Agree(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp)
+    public static ApprovalInstance Agree(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp, String? data = null)
     {
         if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
         ApprovalInstance? result = null;
@@ -145,6 +151,7 @@ public partial class ApprovalInstance
             EnsureHandle(task, inst, operatorUserId, instanceVersion);
             var op = User.FindByID(operatorUserId)!;
             var now = DateTime.Now;
+            ApplyHandleData(inst, task.NodeKey, data, now, op);
             var claimed = ApprovalTask.Update(
                 ["Status", "HandleTime", "Comment", "UpdateTime"],
                 [TaskStatus.Agreed, now, comment ?? "", now],
@@ -169,7 +176,7 @@ public partial class ApprovalInstance
     }
 
     /// <summary>驳回给发起人。发起人在代发起时是代发人。</summary>
-    public static ApprovalInstance Reject(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp)
+    public static ApprovalInstance Reject(Int64 taskId, Int32 operatorUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp, String? data = null)
     {
         if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
         if (comment.IsNullOrEmpty()) throw new ApprovalException(4001, "驳回意见必填");
@@ -188,6 +195,7 @@ public partial class ApprovalInstance
             EnsureHandle(task, inst, operatorUserId, instanceVersion);
             var op = User.FindByID(operatorUserId)!;
             var now = DateTime.Now;
+            ApplyHandleData(inst, task.NodeKey, data, now, op);
             var claimed = ApprovalTask.Update(
                 ["Status", "HandleTime", "Comment", "UpdateTime"],
                 [TaskStatus.Rejected, now, comment, now],
@@ -293,6 +301,71 @@ public partial class ApprovalInstance
             inst.Version++;
             inst.Update();
             WriteHistory(inst, null, null, "withdraw", "撤回", reason, before, inst.Status, requestId, clientIp, op, now);
+            result = inst;
+        });
+        return FindById(result!.Id) ?? result;
+    }
+
+    /// <summary>
+    /// 撤回后的重新提交。轮次加一，仍走这张单当初绑定的流程版本，不跟随后来发布的新版本。
+    /// 代发起时只有发起人可以重提，学生字段仍必须是业务主体。
+    /// </summary>
+    public static ApprovalInstance Resubmit(Int64 instanceId, Int32 operatorUserId, String? data, String requestId, Int32 instanceVersion, String? clientIp)
+    {
+        if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        ApprovalInstance? result = null;
+        Run(() =>
+        {
+            var inst = FindById(instanceId) ?? throw new ApprovalException(4041, "审批单不存在");
+            var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
+            if (dup != null)
+            {
+                result = inst;
+                return;
+            }
+
+            if (inst.UserId != operatorUserId) throw new ApprovalException(4031, "只有发起人可以重新提交");
+            if (inst.Status != InstanceStatus.Draft) throw new ApprovalException(4091, "只有撤回后的草稿可以重新提交");
+            if (instanceVersion > 0 && inst.Version != instanceVersion)
+                throw new ApprovalException(4093, "单据已变化，请刷新后重试");
+
+            var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId)
+                ?? throw new ApprovalException(4041, "流程版本不存在");
+            var nodes = ApprovalNode.FindAllByProcessVersionId(version.Id).OrderBy(e => e.Sort).ToList();
+            var transitions = ApprovalTransition.FindAllByProcessVersionId(version.Id);
+            if (nodes.Count == 0) throw new ApprovalException(4222, "已发布流程没有节点");
+
+            var graph = FlowGraph.Parse(version.Definition);
+            var schema = SchemaOf(inst.FormVersionId);
+            var startNode = graph.Nodes.FirstOrDefault(e => e.Type == "start")
+                ?? throw new ApprovalException(4222, "流程没有开始节点");
+            var current = FieldRules.ParseObject(ApprovalFormData.FindById(inst.Id)?.Data);
+            var posted = data.IsNullOrEmpty() ? null : FieldRules.ParseObject(data);
+            var merged = FieldRules.Merge(current, posted, FieldRules.ForNode(graph, startNode.Key), FormSchema.Keys(schema), inst.SubjectUserId);
+            var normalized = NormalizeForm(merged.ToJsonString(), inst.ProxyUserId > 0, inst.SubjectUserId, out var counselorId);
+            if (nodes.Any(e => e.AssigneeType == "subjectCounselor"))
+            {
+                var counselor = counselorId > 0 ? User.FindByID(counselorId) : null;
+                if (counselor == null || !counselor.Enable)
+                    throw new ApprovalException(4223, "该生辅导员没有可用用户");
+            }
+
+            var op = User.FindByID(operatorUserId) ?? throw new ApprovalException(4041, "当前用户不存在");
+            var now = DateTime.Now;
+            SaveForm(inst, normalized, op, now);
+            var before = inst.Status;
+            inst.Round++;
+            inst.Status = InstanceStatus.Running;
+            inst.CounselorUserId = counselorId;
+            inst.EndTime = DateTime.MinValue;
+            inst.LastActionTime = now;
+            inst.Version++;
+            inst.CurrentNodes = "";
+            var start = nodes.FirstOrDefault(e => e.NodeType == "start")
+                ?? throw new ApprovalException(4222, "流程没有开始节点");
+            Enter(inst, start, nodes, transitions, now);
+            inst.Update();
+            WriteHistory(inst, null, null, "resubmit", "重新提交", null, before, inst.Status, requestId, clientIp, op, now);
             result = inst;
         });
         return FindById(result!.Id) ?? result;
@@ -692,9 +765,40 @@ public partial class ApprovalInstance
             ?? new FlowAssignee();
     }
 
+    /// <summary>同意或驳回附带的表单值，按当前节点的字段权限合并。</summary>
+    private static void ApplyHandleData(ApprovalInstance inst, String nodeKey, String? data, DateTime now, User op)
+    {
+        if (data.IsNullOrEmpty()) return;
+        var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId)
+            ?? throw new ApprovalException(4041, "流程版本不存在");
+        var graph = FlowGraph.Parse(version.Definition);
+        var schema = SchemaOf(inst.FormVersionId);
+        var current = FieldRules.ParseObject(ApprovalFormData.FindById(inst.Id)?.Data);
+        var merged = FieldRules.Merge(current, FieldRules.ParseObject(data), FieldRules.ForNode(graph, nodeKey), FormSchema.Keys(schema), inst.SubjectUserId);
+        SaveForm(inst, merged, op, now);
+    }
+
+    private static void SaveForm(ApprovalInstance inst, JsonObject data, User op, DateTime now)
+    {
+        var body = data.ToJsonString();
+        var row = ApprovalFormData.FindById(inst.Id) ?? throw new ApprovalException(4041, "表单值不存在");
+        row.Data = body;
+        row.DataSize = System.Text.Encoding.UTF8.GetByteCount(body);
+        row.UpdateUser = Display(op);
+        row.UpdateUserID = op.ID;
+        row.UpdateTime = now;
+        row.Update();
+    }
+
+    private static String SchemaOf(Int32 formVersionId)
+    {
+        var row = formVersionId > 0 ? ApprovalFormVersion.FindById(formVersionId) : null;
+        return row?.Schema ?? """{"fields":[]}""";
+    }
+
     /// <summary>
     /// 本人发起时学生字段强制为当前用户。代发起时必须等于所选学生。
-    /// 辅导员字段写入表单值，供实例保存。
+    /// 辅导员字段写入表单值，供实例保存。业务主体只是用户编号，见 <see cref="SubjectLink"/>。
     /// </summary>
     private static JsonObject NormalizeForm(String? data, Boolean proxy, Int32 subjectUserId, out Int32 counselorId)
     {

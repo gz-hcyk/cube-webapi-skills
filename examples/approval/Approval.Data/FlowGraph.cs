@@ -62,6 +62,17 @@ public sealed class FlowGraph
                     throw new ApprovalException(4222, "节点办理人规则不合法：" + node.Key);
                 if (node.Type == "approve") node.ApproveMode = ParseMode(node.Mode);
             }
+
+            var fieldKeys = new HashSet<String>(StringComparer.Ordinal);
+            foreach (var field in node.Fields)
+            {
+                if (field.Key.IsNullOrEmpty() || !fieldKeys.Add(field.Key))
+                    throw new ApprovalException(4222, "节点字段权限重复或为空：" + node.Key);
+                var access = (field.Access ?? "").Trim().ToLowerInvariant();
+                if (access is not ("editable" or "readonly" or "hidden"))
+                    throw new ApprovalException(4222, "字段权限不合法：" + field.Key);
+                field.Access = access;
+            }
         }
 
         if (Nodes.Count(e => e.Type == "start") != 1)
@@ -290,6 +301,19 @@ public sealed class FlowNode
     /// <summary>解析后的处理方式，不写入 JSON。</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ApproveMode ApproveMode { get; set; } = ApproveMode.Any;
+
+    /// <summary>本节点上的字段权限。未列出的字段按可编辑。</summary>
+    public List<FlowFieldRule> Fields { get; set; } = [];
+}
+
+/// <summary>节点上的字段权限。</summary>
+public sealed class FlowFieldRule
+{
+    /// <summary>表单字段键。</summary>
+    public String Key { get; set; } = "";
+
+    /// <summary>editable、readonly、hidden。</summary>
+    public String Access { get; set; } = "";
 }
 
 /// <summary>办理人规则。</summary>
@@ -394,5 +418,79 @@ public static class FormSchema
         {
             throw new ApprovalException(4222, "表单结构无法解析：" + ex.Message);
         }
+    }
+
+    /// <summary>字段键。结构不合法时返回空集，调用方再决定是否校验。</summary>
+    public static HashSet<String> Keys(String? schema)
+    {
+        var keys = new HashSet<String>(StringComparer.Ordinal);
+        if (schema.IsNullOrEmpty()) return keys;
+        try
+        {
+            using var doc = JsonDocument.Parse(schema);
+            if (!doc.RootElement.TryGetProperty("fields", out var fields) || fields.ValueKind != JsonValueKind.Array)
+                return keys;
+            foreach (var field in fields.EnumerateArray())
+            {
+                if (field.TryGetProperty("key", out var keyNode))
+                {
+                    var key = keyNode.GetString();
+                    if (!key.IsNullOrEmpty()) keys.Add(key);
+                }
+            }
+        }
+        catch
+        {
+            return keys;
+        }
+
+        return keys;
+    }
+
+    /// <summary>标记了 search 的字段键，逗号分隔。模型没有字段值索引表，可检索信息只记在版本上。</summary>
+    public static String SearchableKeys(String? schema)
+    {
+        if (schema.IsNullOrEmpty()) return "";
+        var keys = new List<String>();
+        using var doc = JsonDocument.Parse(schema);
+        if (!doc.RootElement.TryGetProperty("fields", out var fields) || fields.ValueKind != JsonValueKind.Array)
+            return "";
+        foreach (var field in fields.EnumerateArray())
+        {
+            if (!field.TryGetProperty("key", out var keyNode)) continue;
+            var key = keyNode.GetString();
+            if (key.IsNullOrEmpty()) continue;
+            var search = field.TryGetProperty("search", out var flag) && flag.ValueKind == JsonValueKind.True;
+            if (search) keys.Add(key);
+        }
+
+        return String.Join(",", keys);
+    }
+
+    /// <summary>字段键和显示名。</summary>
+    public static List<(String Key, String Label)> Labels(String? schema)
+    {
+        var list = new List<(String, String)>();
+        if (schema.IsNullOrEmpty()) return list;
+        try
+        {
+            using var doc = JsonDocument.Parse(schema);
+            if (!doc.RootElement.TryGetProperty("fields", out var fields) || fields.ValueKind != JsonValueKind.Array)
+                return list;
+            foreach (var field in fields.EnumerateArray())
+            {
+                if (!field.TryGetProperty("key", out var keyNode)) continue;
+                var key = keyNode.GetString();
+                if (key.IsNullOrEmpty()) continue;
+                var label = field.TryGetProperty("label", out var labelNode) ? labelNode.GetString() : null;
+                list.Add((key, label.IsNullOrEmpty() ? key : label!));
+            }
+        }
+        catch
+        {
+            return list;
+        }
+
+        return list;
     }
 }

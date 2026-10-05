@@ -25,6 +25,7 @@ interface ProcessRow {
   code: string;
   name: string;
   publishedVersion?: number;
+  categoryName?: string;
 }
 interface FlowNodeRow {
   key: string;
@@ -32,6 +33,12 @@ interface FlowNodeRow {
   typeLabel: string;
   modeLabel: string;
   assigneeLabel: string;
+  fields?: { key: string; accessLabel: string }[];
+  fieldsLabel?: string;
+}
+interface CategoryGroup {
+  name: string;
+  processes?: { code: string }[];
 }
 interface DesignBody {
   name: string;
@@ -46,6 +53,7 @@ const loading = ref(false);
 const openView = ref(false);
 
 const columns = [
+  { colKey: 'categoryName', title: '分类' },
   { colKey: 'name', title: '名称' },
   { colKey: 'code', title: '编码' },
   { colKey: 'publishedVersion', title: '已发布版本' },
@@ -56,6 +64,7 @@ const nodeColumns = [
   { colKey: 'typeLabel', title: '类型' },
   { colKey: 'modeLabel', title: '处理方式' },
   { colKey: 'assigneeLabel', title: '办理人规则' },
+  { colKey: 'fieldsLabel', title: '字段权限' },
 ];
 
 async function unwrap<T>(pending: Promise<ApiEnvelope<T>>) {
@@ -71,7 +80,10 @@ async function load() {
   loading.value = true;
   try {
     const data = await unwrap(getApi<ProcessRow[]>('/ApprovalAdmin/Process', { pageIndex: 1, pageSize: 50 }));
-    processes.value = data || [];
+    const grouped = (await unwrap(getApi<CategoryGroup[]>('/ApprovalAdmin/FormDefinition/ByCategory'))) || [];
+    const names = new Map<string, string>();
+    grouped.forEach((group) => (group.processes || []).forEach((process) => names.set(process.code, group.name)));
+    processes.value = (data || []).map((process) => ({ ...process, categoryName: names.get(process.code) || '' }));
   } catch (error) {
     tell(error);
   } finally {
@@ -83,7 +95,10 @@ async function open(row: ProcessRow) {
   try {
     const design = await unwrap(getApi<DesignBody>('/ApprovalAdmin/Process/Design', { id: row.id }));
     currentName.value = (design.name || row.name) + (design.readOnly ? '（只读）' : '');
-    nodes.value = design.nodes || [];
+    nodes.value = (design.nodes || []).map((node) => ({
+      ...node,
+      fieldsLabel: (node.fields || []).map((field) => `${field.key} ${field.accessLabel}`).join('，'),
+    }));
     openView.value = true;
   } catch (error) {
     tell(error);

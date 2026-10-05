@@ -40,10 +40,16 @@ interface FormRow {
   code: string;
   name: string;
   publishedVersion?: number;
+  categoryName?: string;
 }
 interface FieldRow {
   key: string;
   label: string;
+  search?: boolean;
+}
+interface CategoryGroup {
+  name: string;
+  forms?: { id: number; code: string }[];
 }
 interface DesignBody {
   id: number;
@@ -60,6 +66,7 @@ const saving = ref(false);
 const openEditor = ref(false);
 
 const columns = [
+  { colKey: 'categoryName', title: '分类' },
   { colKey: 'name', title: '名称' },
   { colKey: 'code', title: '编码' },
   { colKey: 'publishedVersion', title: '已发布版本' },
@@ -81,8 +88,8 @@ function tell(error: unknown) {
 }
 function readFields(schema: string): FieldRow[] {
   try {
-    const parsed = JSON.parse(schema) as { fields?: { key?: string; label?: string }[] };
-    return (parsed.fields || []).map((field) => ({ key: field.key || '', label: field.label || field.key || '' }));
+    const parsed = JSON.parse(schema) as { fields?: { key?: string; label?: string; search?: boolean }[] };
+    return (parsed.fields || []).map((field) => ({ key: field.key || '', label: field.label || field.key || '', search: field.search }));
   } catch {
     return [];
   }
@@ -92,7 +99,10 @@ async function load() {
   loading.value = true;
   try {
     const data = await unwrap(getApi<FormRow[]>('/ApprovalAdmin/FormDefinition', { pageIndex: 1, pageSize: 50 }));
-    forms.value = data || [];
+    const grouped = (await unwrap(getApi<CategoryGroup[]>('/ApprovalAdmin/FormDefinition/ByCategory'))) || [];
+    const names = new Map<string, string>();
+    grouped.forEach((group) => (group.forms || []).forEach((form) => names.set(form.code, group.name)));
+    forms.value = (data || []).map((form) => ({ ...form, categoryName: names.get(form.code) || '' }));
   } catch (error) {
     tell(error);
   } finally {
@@ -120,7 +130,7 @@ function schemaText() {
   return JSON.stringify({
     fields: fields.value
       .filter((field) => field.key.trim())
-      .map((field) => ({ key: field.key.trim(), label: field.label.trim() || field.key.trim() })),
+      .map((field) => ({ key: field.key.trim(), label: field.label.trim() || field.key.trim(), ...(field.search ? { search: true } : {}) })),
   });
 }
 

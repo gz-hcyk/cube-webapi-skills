@@ -56,6 +56,12 @@ public class ProcessController : EntityController<ApprovalProcess>
                     modeLabel = ModeLabel(node.Type, node.Mode),
                     assigneeType = node.Assignee?.Type,
                     assigneeLabel = AssigneeLabel(node.Assignee),
+                    fields = node.Fields.Select(field => new
+                    {
+                        key = field.Key,
+                        access = field.Access,
+                        accessLabel = AccessLabel(field.Access),
+                    }),
                 }),
             }, null);
         }
@@ -125,6 +131,14 @@ public class ProcessController : EntityController<ApprovalProcess>
             _ => "或签",
         };
     }
+
+    private static String AccessLabel(String? access) => (access ?? "").ToLowerInvariant() switch
+    {
+        "editable" => "可编辑",
+        "readonly" => "只读",
+        "hidden" => "隐藏",
+        _ => access ?? "",
+    };
 
     private static String AssigneeLabel(FlowAssignee? assignee)
     {

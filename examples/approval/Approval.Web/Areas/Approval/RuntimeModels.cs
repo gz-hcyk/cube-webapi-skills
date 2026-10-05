@@ -33,6 +33,9 @@ public class HandleInput
 
     /// <summary>实例乐观锁版本。0 表示不校验。</summary>
     public Int32 InstanceVersion { get; set; }
+
+    /// <summary>按当前节点字段权限合并的表单 JSON。空表示不改表单。</summary>
+    public String? Data { get; set; }
 }
 
 /// <summary>转办。</summary>
@@ -46,6 +49,22 @@ public class TransferInput
 
     /// <summary>意见。</summary>
     public String? Comment { get; set; }
+
+    /// <summary>幂等请求号。</summary>
+    public String? RequestId { get; set; }
+
+    /// <summary>实例乐观锁版本。0 表示不校验。</summary>
+    public Int32 InstanceVersion { get; set; }
+}
+
+/// <summary>撤回后重新提交。仍走原流程版本。</summary>
+public class ResubmitInput
+{
+    /// <summary>实例编号。</summary>
+    public String? InstanceId { get; set; }
+
+    /// <summary>表单 JSON。隐藏字段不要带上。</summary>
+    public String? Data { get; set; }
 
     /// <summary>幂等请求号。</summary>
     public String? RequestId { get; set; }

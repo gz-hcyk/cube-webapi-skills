@@ -92,6 +92,37 @@ public class RuntimeController : ControllerBaseX
         }
     }
 
+    /// <summary>发起页要的开始节点字段权限。</summary>
+    [EntityAuthorize((PermissionFlags)16)]
+    [DisplayName("发起表单")]
+    [HttpGet]
+    public ActionResult StartForm(Int32 processId)
+    {
+        try
+        {
+            _ = Current();
+            var process = ApprovalProcess.FindById(processId)
+                ?? throw new ApprovalException(4041, "流程不存在");
+            if (process.PublishedVersionId <= 0)
+                throw new ApprovalException(4091, "流程尚未发布");
+            var version = ApprovalProcessVersion.FindById(process.PublishedVersionId)
+                ?? throw new ApprovalException(4041, "已发布的流程版本不存在");
+            var graph = FlowGraph.Parse(version.Definition);
+            var start = graph.Nodes.FirstOrDefault(e => e.Type == "start");
+            var schema = version.FormVersionId > 0 ? ApprovalFormVersion.FindById(version.FormVersionId)?.Schema : null;
+            return Json(0, "ok", new
+            {
+                processId = process.Id,
+                name = process.Name,
+                fields = FieldRules.Views(schema, start),
+            }, null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
     /// <summary>发起。本人发起与代发起进入同一条已发布流程。</summary>
     [EntityAuthorize((PermissionFlags)16)]
     [DisplayName("发起")]
@@ -143,6 +174,55 @@ public class RuntimeController : ControllerBaseX
             if (input == null || !Int64.TryParse(input.TaskId, out var taskId) || taskId <= 0)
                 throw new ApprovalException(4001, "缺少任务编号");
             var inst = ApprovalInstance.Transfer(taskId, user.ID, input.TargetUserId, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost);
+            return Json(0, "ok", Describe(inst), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>当前用户撤回后的草稿，用来重新提交。</summary>
+    [EntityAuthorize((PermissionFlags)16)]
+    [DisplayName("我的草稿")]
+    [HttpGet]
+    public ActionResult Drafts()
+    {
+        try
+        {
+            var user = Current();
+            var list = ApprovalInstance.FindAll(ApprovalInstance._.UserId == user.ID & ApprovalInstance._.Status == InstanceStatus.Draft);
+            return Json(0, "ok", list.Select(inst => new
+            {
+                instanceId = inst.Id.ToString(),
+                title = inst.Title,
+                round = inst.Round,
+                status = (Int32)inst.Status,
+                version = inst.Version,
+                processId = inst.ProcessId,
+                subjectName = inst.SubjectName,
+                proxyName = inst.ProxyName,
+                userId = inst.UserId,
+            }), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>撤回后重新提交，轮次加一，流程版本不变。</summary>
+    [EntityAuthorize((PermissionFlags)16)]
+    [DisplayName("重新提交")]
+    [HttpPost]
+    public ActionResult Resubmit([FromBody] ResubmitInput input)
+    {
+        try
+        {
+            var user = Current();
+            if (input == null || !Int64.TryParse(input.InstanceId, out var instanceId) || instanceId <= 0)
+                throw new ApprovalException(4001, "缺少实例编号");
+            var inst = ApprovalInstance.Resubmit(instanceId, user.ID, input.Data, input.RequestId ?? "", input.InstanceVersion, UserHost);
             return Json(0, "ok", Describe(inst), null);
         }
         catch (ApprovalException ex)
@@ -296,8 +376,8 @@ public class RuntimeController : ControllerBaseX
             if (input == null || !Int64.TryParse(input.TaskId, out var taskId) || taskId <= 0)
                 throw new ApprovalException(4001, "缺少任务编号");
             var inst = agree
-                ? ApprovalInstance.Agree(taskId, user.ID, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost)
-                : ApprovalInstance.Reject(taskId, user.ID, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost);
+                ? ApprovalInstance.Agree(taskId, user.ID, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost, input.Data)
+                : ApprovalInstance.Reject(taskId, user.ID, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost, input.Data);
             return Json(0, "ok", Describe(inst), null);
         }
         catch (ApprovalException ex)
@@ -333,7 +413,11 @@ public class RuntimeController : ControllerBaseX
             proxyName = inst.ProxyName,
             counselorUserId = inst.CounselorUserId,
             departmentId = inst.DepartmentId,
+            round = inst.Round,
+            processId = inst.ProcessId,
+            processVersionId = inst.ProcessVersionId,
             formData = form?.Data,
+            nodeFields = NodeFields(inst),
             tasks = tasks.Select(DescribeTask),
             history = history.Select(h => new
             {
@@ -344,8 +428,21 @@ public class RuntimeController : ControllerBaseX
                 operatorName = h.OperatorName,
                 fromStatus = h.FromStatus,
                 toStatus = h.ToStatus,
+                round = h.Round,
             }),
         };
+    }
+
+    private static Object NodeFields(ApprovalInstance inst)
+    {
+        var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId);
+        var graph = version == null || version.Definition.IsNullOrEmpty() ? new FlowGraph() : FlowGraph.Parse(version.Definition);
+        var schema = inst.FormVersionId > 0 ? ApprovalFormVersion.FindById(inst.FormVersionId)?.Schema : null;
+        return graph.Nodes.Select(node => new
+        {
+            nodeKey = node.Key,
+            fields = FieldRules.Views(schema, node),
+        });
     }
 
     private static Object DescribeTask(ApprovalTask t) => new

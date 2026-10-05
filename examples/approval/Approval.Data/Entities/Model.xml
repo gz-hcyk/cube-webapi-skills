@@ -41,6 +41,19 @@
     <CubeOutput />
   </Option>
   <Tables>
+    <Table Name="ApprovalCategory" Description="审批分类。表单和流程挂在分类下">
+      <Columns>
+        <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
+        <Column Name="Code" DataType="String" Nullable="False" Description="编码" />
+        <Column Name="Name" DataType="String" Master="True" Length="100" Nullable="False" Description="名称" />
+        <Column Name="Sort" DataType="Int32" Description="排序" />
+        <Column Name="Enable" DataType="Boolean" Description="启用" />
+        <Column Name="Remark" DataType="String" Length="500" Description="备注" />
+      </Columns>
+      <Indexes>
+        <Index Columns="Code" Unique="True" />
+      </Indexes>
+    </Table>
     <Table Name="ApprovalFormDefinition" Description="表单定义。可发布为不可变版本">
       <Columns>
         <Column Name="Id" DataType="Int32" Identity="True" PrimaryKey="True" Description="编号" />
