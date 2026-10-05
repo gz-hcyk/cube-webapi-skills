@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using NewLife;
 using Approval.Data.Entities;
 
@@ -52,14 +53,14 @@ public sealed class FlowGraph
             if (!keys.Add(node.Key)) throw new ApprovalException(4222, "节点键重复：" + node.Key);
             if (node.Name.IsNullOrEmpty()) node.Name = node.Key;
             node.Type = (node.Type ?? "").Trim().ToLowerInvariant();
-            if (node.Type is not ("start" or "approve" or "end"))
-                throw new ApprovalException(4222, "本切片节点类型只接受 start、approve、end：" + node.Key);
-            if (node.Type == "approve")
+            if (node.Type is not ("start" or "approve" or "end" or "cc" or "exclusive" or "parallel"))
+                throw new ApprovalException(4222, "节点类型不支持：" + node.Key);
+            if (node.Type is "approve" or "cc")
             {
                 var kind = node.Assignee?.Type?.Trim() ?? "";
                 if (kind is not ("user" or "role" or "deptManager" or "subjectCounselor"))
-                    throw new ApprovalException(4222, "审批节点办理人规则不合法：" + node.Key);
-                node.ApproveMode = ParseMode(node.Mode);
+                    throw new ApprovalException(4222, "节点办理人规则不合法：" + node.Key);
+                if (node.Type == "approve") node.ApproveMode = ParseMode(node.Mode);
             }
         }
 
@@ -97,9 +98,158 @@ public sealed class FlowGraph
         var missed = Nodes.Where(e => !seen.Contains(e.Key)).Select(e => e.Key).ToList();
         if (missed.Count > 0)
             throw new ApprovalException(4222, "有节点从开始节点不可达：" + String.Join(",", missed));
+
+        foreach (var node in Nodes.Where(e => e.Type == "exclusive"))
+        {
+            var outs = Edges.Where(e => e.From == node.Key).ToList();
+            if (outs.Count(e => e.Default) != 1)
+                throw new ApprovalException(4222, "排他网关必须恰好有一条默认出线：" + node.Key);
+            if (outs.Any(e => !e.Default && e.Condition == null))
+                throw new ApprovalException(4222, "排他网关的非默认出线必须有条件：" + node.Key);
+        }
+
+        foreach (var node in Nodes.Where(e => e.Type == "parallel"))
+        {
+            var outs = Edges.Count(e => e.From == node.Key);
+            var ins = Edges.Count(e => e.To == node.Key);
+            if (outs >= 2 && ins >= 2)
+                throw new ApprovalException(4222, "并行网关不能同时分支和汇聚：" + node.Key);
+            if (outs < 2 && ins < 2)
+                throw new ApprovalException(4222, "并行网关必须是分支或汇聚：" + node.Key);
+        }
+
+        CheckParallelPairs();
     }
 
-    /// <summary>从某节点出发的下一条连线。本切片不执行排他网关，多条出线时取得分最低的一条。</summary>
+    /// <summary>成对、不嵌套。每条分支在结束前都汇入同一个汇聚。</summary>
+    private void CheckParallelPairs()
+    {
+        foreach (var split in Nodes.Where(e => e.Type == "parallel" && Edges.Count(x => x.From == e.Key) >= 2))
+        {
+            String? join = null;
+            foreach (var edge in Edges.Where(e => e.From == split.Key))
+            {
+                var found = WalkToJoin(edge.To, split.Key);
+                if (join == null) join = found;
+                else if (join != found)
+                    throw new ApprovalException(4222, "并行分支必须汇入同一个汇聚：" + split.Key);
+            }
+        }
+    }
+
+    private String WalkToJoin(String key, String splitKey)
+    {
+        var guard = 0;
+        while (true)
+        {
+            if (++guard > 50) throw new ApprovalException(4222, "并行分支过长");
+            var node = FindNode(key) ?? throw new ApprovalException(4222, "并行分支指向了不存在的节点");
+            if (node.Type == "end") throw new ApprovalException(4222, "并行分支内不能放结束节点");
+            if (node.Key == splitKey || (node.Type == "parallel" && Edges.Count(e => e.From == node.Key) >= 2))
+                throw new ApprovalException(4222, "不允许嵌套并行");
+            if (node.Type == "parallel" && Edges.Count(e => e.To == node.Key) >= 2) return node.Key;
+            var next = Edges.Where(e => e.From == key).OrderBy(e => e.Priority).ThenBy(e => e.Sort).FirstOrDefault()
+                ?? throw new ApprovalException(4222, "并行分支没有汇聚：" + key);
+            key = next.To;
+        }
+    }
+
+    /// <summary>排他网关按优先级取第一条成立的条件，否则走默认出线。</summary>
+    public FlowEdge Choose(String fromKey, String? formJson, Int32 applicantUserId, Int32 applicantDepartmentId)
+    {
+        var edges = Edges.Where(e => e.From == fromKey).OrderBy(e => e.Priority).ThenBy(e => e.Sort).ThenBy(e => e.Key, StringComparer.Ordinal).ToList();
+        foreach (var edge in edges.Where(e => !e.Default && e.Condition != null))
+        {
+            if (ConditionMatch(edge.Condition!, formJson, applicantUserId, applicantDepartmentId)) return edge;
+        }
+
+        return edges.FirstOrDefault(e => e.Default)
+            ?? throw new ApprovalException(4222, "排他网关没有可用出线");
+    }
+
+    private static Boolean ConditionMatch(FlowCondition condition, String? formJson, Int32 applicantUserId, Int32 applicantDepartmentId)
+    {
+        if (!condition.Logic.IsNullOrEmpty())
+        {
+            var items = condition.Items ?? [];
+            var hits = items.Select(e => ConditionMatch(e, formJson, applicantUserId, applicantDepartmentId)).ToList();
+            return condition.Logic.Equals("or", StringComparison.OrdinalIgnoreCase) ? hits.Any(e => e) : hits.All(e => e);
+        }
+
+        JsonNode? left = null;
+        if (!condition.Field.IsNullOrEmpty())
+        {
+            try
+            {
+                var obj = JsonNode.Parse(formJson.IsNullOrEmpty() ? "{}" : formJson!) as JsonObject;
+                if (obj != null && obj.TryGetPropertyValue(condition.Field, out var node)) left = node;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        else if (condition.Var == "applicant.userId") left = applicantUserId;
+        else if (condition.Var == "applicant.departmentId") left = applicantDepartmentId;
+        else return false;
+
+        if (left == null) return false;
+        return Compare(left, condition.Op, condition.Value);
+    }
+
+    private static Boolean Compare(JsonNode left, String? op, JsonNode? right)
+    {
+        var text = (op ?? "eq").Trim().ToLowerInvariant();
+        if (text == "in")
+        {
+            if (right is not JsonArray array) return false;
+            return array.Any(item => Same(left, item));
+        }
+
+        var ln = AsDecimal(left);
+        var rn = AsDecimal(right);
+        if (ln != null && rn != null)
+        {
+            return text switch
+            {
+                "gt" => ln > rn,
+                "ge" => ln >= rn,
+                "lt" => ln < rn,
+                "le" => ln <= rn,
+                "ne" => ln != rn,
+                _ => ln == rn,
+            };
+        }
+
+        var ls = left.ToString();
+        var rs = right?.ToString() ?? "";
+        return text switch
+        {
+            "ne" => !String.Equals(ls, rs, StringComparison.Ordinal),
+            "gt" or "ge" or "lt" or "le" => false,
+            _ => String.Equals(ls, rs, StringComparison.Ordinal),
+        };
+    }
+
+    private static Boolean Same(JsonNode? left, JsonNode? right)
+    {
+        if (left == null || right == null) return false;
+        var ln = AsDecimal(left);
+        var rn = AsDecimal(right);
+        return ln != null && rn != null ? ln == rn : String.Equals(left.ToString(), right.ToString(), StringComparison.Ordinal);
+    }
+
+    private static Decimal? AsDecimal(JsonNode? node)
+    {
+        if (node is not JsonValue value) return null;
+        if (value.TryGetValue<Decimal>(out var number)) return number;
+        if (value.TryGetValue<Int32>(out var integer)) return integer;
+        if (value.TryGetValue<Int64>(out var wide)) return wide;
+        if (value.TryGetValue<Double>(out var real)) return (Decimal)real;
+        return Decimal.TryParse(value.ToString(), out var parsed) ? parsed : null;
+    }
+
+    /// <summary>从某节点出发的下一条连线。排他网关用 Choose；其余多条出线取得分最低的一条。</summary>
     public FlowEdge? NextEdge(String fromKey) =>
         Edges.Where(e => e.From == fromKey).OrderBy(e => e.Sort).ThenBy(e => e.Key, StringComparer.Ordinal).FirstOrDefault();
 
@@ -131,7 +281,7 @@ public sealed class FlowNode
     /// <summary>名称。</summary>
     public String Name { get; set; } = "";
 
-    /// <summary>any、all、sequential。只执行 any。</summary>
+    /// <summary>any、all、sequential。</summary>
     public String? Mode { get; set; }
 
     /// <summary>办理人规则。</summary>
@@ -175,6 +325,37 @@ public sealed class FlowEdge
 
     /// <summary>排序。</summary>
     public Int32 Sort { get; set; }
+
+    /// <summary>排他网关的默认出线。</summary>
+    public Boolean Default { get; set; }
+
+    /// <summary>条件优先级，数字小的先判断。</summary>
+    public Int32 Priority { get; set; }
+
+    /// <summary>排他条件。默认出线不填。</summary>
+    public FlowCondition? Condition { get; set; }
+}
+
+/// <summary>条件。logic 为 and/or 时看 items，否则是叶子。</summary>
+public sealed class FlowCondition
+{
+    /// <summary>and 或 or。</summary>
+    public String? Logic { get; set; }
+
+    /// <summary>表单字段。</summary>
+    public String? Field { get; set; }
+
+    /// <summary>内置变量，如 applicant.departmentId。</summary>
+    public String? Var { get; set; }
+
+    /// <summary>eq、ne、gt、ge、lt、le、in。</summary>
+    public String? Op { get; set; }
+
+    /// <summary>比较值。</summary>
+    public JsonNode? Value { get; set; }
+
+    /// <summary>组合条件的子项。</summary>
+    public List<FlowCondition>? Items { get; set; }
 }
 
 /// <summary>表单结构的最低校验：字段键唯一。</summary>

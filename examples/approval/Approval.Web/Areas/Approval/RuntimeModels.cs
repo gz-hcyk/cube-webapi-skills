@@ -70,6 +70,35 @@ public class WithdrawInput
     public Int32 InstanceVersion { get; set; }
 }
 
+/// <summary>向后加签一级。</summary>
+public class AddSignInput
+{
+    /// <summary>任务编号。</summary>
+    public String? TaskId { get; set; }
+
+    /// <summary>加签对象。</summary>
+    public Int32 TargetUserId { get; set; }
+
+    /// <summary>意见。</summary>
+    public String? Comment { get; set; }
+
+    /// <summary>幂等请求号。</summary>
+    public String? RequestId { get; set; }
+
+    /// <summary>实例乐观锁版本。0 表示不校验。</summary>
+    public Int32 InstanceVersion { get; set; }
+}
+
+/// <summary>抄送标为已阅。</summary>
+public class ReadInput
+{
+    /// <summary>任务编号。</summary>
+    public String? TaskId { get; set; }
+
+    /// <summary>幂等请求号。</summary>
+    public String? RequestId { get; set; }
+}
+
 /// <summary>保存表单或流程草稿。</summary>
 public class DesignInput
 {

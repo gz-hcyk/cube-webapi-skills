@@ -122,7 +122,7 @@ public partial class ApprovalProcess : Entity<ApprovalProcess>
                 Name = node.Name,
                 NodeType = node.Type,
                 ApproveMode = node.Type == "approve" ? node.ApproveMode : ApproveMode.None,
-                AssigneeType = node.Type == "approve" ? node.Assignee?.Type : null,
+                AssigneeType = node.Type is "approve" or "cc" ? node.Assignee?.Type : null,
                 AssigneeJson = node.Assignee == null ? null : JsonSerializer.Serialize(node.Assignee, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -142,7 +142,9 @@ public partial class ApprovalProcess : Entity<ApprovalProcess>
                 EdgeKey = edge.Key,
                 FromKey = edge.From,
                 ToKey = edge.To,
-                Sort = edge.Sort == 0 ? sort : edge.Sort,
+                IsDefault = edge.Default,
+                Priority = edge.Priority,
+                Sort = edge.Sort != 0 ? edge.Sort : edge.Priority != 0 ? edge.Priority : sort,
             }.Insert();
         }
     }

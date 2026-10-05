@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Approval.Data;
 using NewLife;
 using XCode;
 using XCode.Membership;
@@ -195,7 +196,7 @@ public partial class ApprovalInstance
             if (claimed != 1) throw new ApprovalException(4092, "该任务已由他人处理");
 
             ClearTaskCache();
-            CancelOthers(inst.Id, task, "单据已驳回", now);
+            CancelPending(inst.Id, task.Id, "单据已驳回", now);
 
             var before = inst.Status;
             inst.Status = InstanceStatus.Rejected;
@@ -247,7 +248,7 @@ public partial class ApprovalInstance
 
             ClearTaskCache();
             var node = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId).First(e => e.NodeKey == task.NodeKey);
-            CreateTask(inst, node, target, task.Mode, task.Seq, TaskSource.Transfer, now);
+            CreateTask(inst, node, target, task.Mode, task.Seq, TaskSource.Transfer, TaskKind.Approve, now);
             var before = inst.Status;
             inst.LastActionTime = now;
             inst.Version++;
@@ -283,14 +284,7 @@ public partial class ApprovalInstance
 
             var op = User.FindByID(operatorUserId) ?? throw new ApprovalException(4041, "当前用户不存在");
             var now = DateTime.Now;
-            foreach (var item in ApprovalTask.FindPending(inst.Id).ToList())
-            {
-                item.Status = TaskStatus.Canceled;
-                item.Comment = "发起人已撤回";
-                item.HandleTime = now;
-                item.UpdateTime = now;
-                item.Update();
-            }
+            CancelPending(inst.Id, 0, "发起人已撤回", now);
 
             var before = inst.Status;
             inst.Status = InstanceStatus.Draft;
@@ -302,6 +296,102 @@ public partial class ApprovalInstance
             result = inst;
         });
         return FindById(result!.Id) ?? result;
+    }
+
+    /// <summary>向后加签一级。当前任务记为已同意，同节点挂上加签待办，节点先不往下走。</summary>
+    public static ApprovalInstance AddSign(Int64 taskId, Int32 operatorUserId, Int32 targetUserId, String? comment, String requestId, Int32 instanceVersion, String? clientIp)
+    {
+        if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        if (targetUserId <= 0) throw new ApprovalException(4001, "请选择加签对象");
+        if (targetUserId == operatorUserId) throw new ApprovalException(4001, "不能加签给自己");
+        ApprovalInstance? result = null;
+        Run(() =>
+        {
+            var task = ApprovalTask.FindById(taskId) ?? throw new ApprovalException(4041, "任务不存在");
+            var inst = FindById(task.InstanceId) ?? throw new ApprovalException(4041, "审批单不存在");
+            var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
+            if (dup != null)
+            {
+                result = inst;
+                return;
+            }
+
+            EnsureHandle(task, inst, operatorUserId, instanceVersion);
+            if (task.Kind != TaskKind.Approve) throw new ApprovalException(4091, "只有审批任务可以加签");
+            if (task.Source == TaskSource.AddSign) throw new ApprovalException(4091, "向后加签只允许一级");
+            var target = User.FindByID(targetUserId) ?? throw new ApprovalException(4041, "加签对象不存在");
+            if (!target.Enable) throw new ApprovalException(4221, "加签对象已停用");
+            if (PendingOnNode(inst, task).Any(t => t.AssigneeId == target.ID))
+                throw new ApprovalException(4001, "该用户已是当前节点的处理人");
+
+            var op = User.FindByID(operatorUserId)!;
+            var now = DateTime.Now;
+            var claimed = ApprovalTask.Update(
+                ["Status", "HandleTime", "Comment", "UpdateTime"],
+                [TaskStatus.Agreed, now, comment ?? "", now],
+                ["Id", "Status"],
+                [task.Id, TaskStatus.Pending]);
+            if (claimed != 1) throw new ApprovalException(4092, "该任务已由他人处理");
+
+            ClearTaskCache();
+            var node = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId).First(e => e.NodeKey == task.NodeKey);
+            CreateTask(inst, node, target, task.Mode, task.Seq, TaskSource.AddSign, TaskKind.Approve, now);
+            var before = inst.Status;
+            inst.LastActionTime = now;
+            inst.Version++;
+            inst.Update();
+            WriteHistory(inst, task, node, "addSign", "加签", $"加签给{Display(target)}。{comment}", before, inst.Status, requestId, clientIp, op, now);
+            result = inst;
+        });
+        return FindById(result!.Id) ?? result;
+    }
+
+    /// <summary>抄送标为已阅。不推进流程，也不改实例版本，避免挡住正在办理的同意。</summary>
+    public static ApprovalInstance Read(Int64 taskId, Int32 operatorUserId, String requestId, String? clientIp)
+    {
+        if (requestId.IsNullOrEmpty()) throw new ApprovalException(4001, "缺少请求号");
+        ApprovalInstance? result = null;
+        Run(() =>
+        {
+            var task = ApprovalTask.FindById(taskId) ?? throw new ApprovalException(4041, "任务不存在");
+            var inst = FindById(task.InstanceId) ?? throw new ApprovalException(4041, "审批单不存在");
+            var dup = ApprovalHistory.FindByInstanceIdAndRequestId(inst.Id, requestId);
+            if (dup != null)
+            {
+                result = inst;
+                return;
+            }
+
+            if (task.Kind != TaskKind.Cc) throw new ApprovalException(4091, "只有抄送可以标为已阅");
+            if (task.AssigneeId != operatorUserId) throw new ApprovalException(4031, "您不是该抄送的接收人");
+            if (task.Status != TaskStatus.Pending) throw new ApprovalException(4092, "该抄送已处理");
+            var op = User.FindByID(operatorUserId) ?? throw new ApprovalException(4041, "当前用户不存在");
+            var now = DateTime.Now;
+            var claimed = ApprovalTask.Update(
+                ["Status", "HandleTime", "UpdateTime"],
+                [TaskStatus.Read, now, now],
+                ["Id", "Status"],
+                [task.Id, TaskStatus.Pending]);
+            if (claimed != 1) throw new ApprovalException(4092, "该抄送已处理");
+
+            ClearTaskCache();
+            var node = ApprovalNode.FindAllByProcessVersionId(inst.ProcessVersionId).FirstOrDefault(e => e.NodeKey == task.NodeKey);
+            WriteHistory(inst, task, node, "read", "已阅", null, inst.Status, inst.Status, requestId, clientIp, op, now);
+            result = inst;
+        });
+        return FindById(result!.Id) ?? result;
+    }
+
+    /// <summary>
+    /// 流程监控。只在这里套数据范围，不注册拦截器，因此待办仍只按办理人过滤。
+    /// </summary>
+    public static IList<ApprovalInstance> Monitor(User viewer)
+    {
+        if (viewer == null || !viewer.Enable) throw new ApprovalException(4031, "当前用户已停用");
+        var ctx = DataScopeContext.Create(viewer, null);
+        var exp = new WhereExpression();
+        exp = exp.ApplyScope<ApprovalInstance>(ctx);
+        return FindAll(exp);
     }
 
     private static void EnsureHandle(ApprovalTask task, ApprovalInstance inst, Int32 operatorUserId, Int32 instanceVersion)
@@ -324,13 +414,9 @@ public partial class ApprovalInstance
             return;
         }
 
-        if (node.NodeType == "start")
+        if (node.NodeType is "start" or "cc" or "exclusive" or "parallel")
         {
-            var edge = transitions.Where(e => e.FromKey == node.NodeKey).OrderBy(e => e.Sort).FirstOrDefault()
-                ?? throw new ApprovalException(4222, "开始节点没有出线");
-            var next = nodes.FirstOrDefault(e => e.NodeKey == edge.ToKey)
-                ?? throw new ApprovalException(4222, "开始节点的出线没有目标");
-            Enter(inst, next, nodes, transitions, now);
+            EnterGateway(inst, node, nodes, transitions, now);
             return;
         }
 
@@ -341,13 +427,13 @@ public partial class ApprovalInstance
         if (users.Count == 0) throw new ApprovalException(4223, $"节点“{node.Name}”没有可用审批人");
         var mode = node.ApproveMode is ApproveMode.None ? ApproveMode.Any : node.ApproveMode;
         if (mode == ApproveMode.Sequential)
-            CreateTask(inst, node, users[0], mode, 1, TaskSource.Rule, now);
+            CreateTask(inst, node, users[0], mode, 1, TaskSource.Rule, TaskKind.Approve, now);
         else
         {
             var seq = 1;
             foreach (var user in users)
             {
-                CreateTask(inst, node, user, mode, seq, TaskSource.Rule, now);
+                CreateTask(inst, node, user, mode, seq, TaskSource.Rule, TaskKind.Approve, now);
                 seq++;
             }
         }
@@ -364,6 +450,8 @@ public partial class ApprovalInstance
         var mode = task.Mode is ApproveMode.None ? ApproveMode.Any : task.Mode;
         if (mode == ApproveMode.Any)
         {
+            if (NodeTasks(inst, node.NodeKey).Any(t => t.Source == TaskSource.AddSign && t.Status == TaskStatus.Pending))
+                return;
             CancelOthers(inst.Id, task, "他人已处理", now);
             Advance(inst, node.NodeKey, nodes, transitions, now);
             return;
@@ -377,7 +465,7 @@ public partial class ApprovalInstance
             var done = SequentialSlotsDone(inst, task.NodeKey);
             if (done < users.Count)
             {
-                CreateTask(inst, node, users[done], ApproveMode.Sequential, done + 1, TaskSource.Rule, now);
+                CreateTask(inst, node, users[done], ApproveMode.Sequential, done + 1, TaskSource.Rule, TaskKind.Approve, now);
                 return;
             }
         }
@@ -429,7 +517,90 @@ public partial class ApprovalInstance
         return done;
     }
 
-    private static void CreateTask(ApprovalInstance inst, ApprovalNode node, User user, ApproveMode mode, Int32 seq, TaskSource source, DateTime now)
+    private static void EnterGateway(ApprovalInstance inst, ApprovalNode node, IList<ApprovalNode> nodes, IList<ApprovalTransition> transitions, DateTime now)
+    {
+        if (node.NodeType == "parallel")
+        {
+            var outs = transitions.Where(e => e.FromKey == node.NodeKey).OrderBy(e => e.Sort).ToList();
+            var ins = transitions.Where(e => e.ToKey == node.NodeKey).Select(e => e.FromKey).Distinct().ToList();
+            if (outs.Count >= 2)
+            {
+                var names = new List<String>();
+                foreach (var edge in outs)
+                {
+                    var target = nodes.FirstOrDefault(e => e.NodeKey == edge.ToKey)
+                        ?? throw new ApprovalException(4222, "并行分支没有目标");
+                    Enter(inst, target, nodes, transitions, now);
+                    names.Add(target.Name);
+                }
+
+                inst.CurrentNodes = String.Join(",", names);
+                inst.Status = InstanceStatus.Running;
+                return;
+            }
+
+            if (!BranchesReady(inst, ins, nodes)) return;
+            if (outs.Count == 0) throw new ApprovalException(4222, "并行汇聚没有出线");
+            var next = nodes.FirstOrDefault(e => e.NodeKey == outs[0].ToKey)
+                ?? throw new ApprovalException(4222, "并行汇聚的出线没有目标");
+            Enter(inst, next, nodes, transitions, now);
+            return;
+        }
+
+        if (node.NodeType == "exclusive")
+        {
+            var version = ApprovalProcessVersion.FindById(inst.ProcessVersionId)
+                ?? throw new ApprovalException(4041, "流程版本不存在");
+            var graph = FlowGraph.Parse(version.Definition);
+            var form = ApprovalFormData.FindById(inst.Id);
+            var chosen = graph.Choose(node.NodeKey, form?.Data, inst.UserId, inst.DepartmentId);
+            var target = nodes.FirstOrDefault(e => e.NodeKey == chosen.To)
+                ?? throw new ApprovalException(4222, "排他网关的出线没有目标");
+            Enter(inst, target, nodes, transitions, now);
+            return;
+        }
+
+        if (node.NodeType == "cc")
+        {
+            var users = ResolveAssignees(inst, node);
+            if (users.Count == 0) throw new ApprovalException(4223, $"节点“{node.Name}”没有可用抄送人");
+            var seq = 1;
+            foreach (var user in users)
+            {
+                CreateTask(inst, node, user, ApproveMode.None, seq, TaskSource.Rule, TaskKind.Cc, now);
+                seq++;
+            }
+        }
+
+        var forward = transitions.Where(e => e.FromKey == node.NodeKey).OrderBy(e => e.Sort).FirstOrDefault()
+            ?? throw new ApprovalException(4222, "节点没有出线：" + node.Name);
+        var following = nodes.FirstOrDefault(e => e.NodeKey == forward.ToKey)
+            ?? throw new ApprovalException(4222, "出线指向了不存在的节点");
+        Enter(inst, following, nodes, transitions, now);
+    }
+
+    private static Boolean BranchesReady(ApprovalInstance inst, IList<String> fromKeys, IList<ApprovalNode> nodes)
+    {
+        foreach (var key in fromKeys)
+        {
+            var from = nodes.FirstOrDefault(e => e.NodeKey == key);
+            if (from == null) return false;
+            if (from.NodeType == "approve")
+            {
+                var tasks = NodeTasks(inst, key);
+                if (tasks.Count == 0 || tasks.Any(t => t.Status == TaskStatus.Pending)) return false;
+            }
+            else if (from.NodeType == "cc")
+            {
+                var copied = ApprovalTask.FindAll(ApprovalTask._.InstanceId == inst.Id & ApprovalTask._.NodeKey == key & ApprovalTask._.Kind == TaskKind.Cc);
+                if (copied.Count == 0) return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void CreateTask(ApprovalInstance inst, ApprovalNode node, User user, ApproveMode mode, Int32 seq, TaskSource source, TaskKind kind, DateTime now)
     {
         new ApprovalTask
         {
@@ -438,7 +609,7 @@ public partial class ApprovalInstance
             ProcessId = inst.ProcessId,
             NodeKey = node.NodeKey,
             NodeName = node.Name,
-            Kind = TaskKind.Approve,
+            Kind = kind,
             Mode = mode,
             Seq = seq,
             Source = source,
@@ -577,6 +748,21 @@ public partial class ApprovalInstance
         foreach (var item in pending)
         {
             if (item.Id == kept.Id || item.NodeKey != kept.NodeKey || item.Round != kept.Round) continue;
+            item.Status = TaskStatus.Canceled;
+            item.Comment = comment;
+            item.HandleTime = now;
+            item.UpdateTime = now;
+            item.Update();
+        }
+    }
+
+    /// <summary>单据结束或撤回时，取消本实例上所有仍待处理的审批和抄送。</summary>
+    private static void CancelPending(Int64 instanceId, Int64 keptTaskId, String comment, DateTime now)
+    {
+        var pending = ApprovalTask.FindAll(ApprovalTask._.InstanceId == instanceId & ApprovalTask._.Status == TaskStatus.Pending);
+        foreach (var item in pending)
+        {
+            if (item.Id == keptTaskId) continue;
             item.Status = TaskStatus.Canceled;
             item.Comment = comment;
             item.HandleTime = now;

@@ -3,11 +3,13 @@ using XCode.Membership;
 
 namespace Approval.Data.Entities;
 
-public partial class ApprovalInstance : Entity<ApprovalInstance>
+public partial class ApprovalInstance : Entity<ApprovalInstance>, IDataScope
 {
     static ApprovalInstance()
     {
         // 实例会在无登录上下文的驱动里写入，用户和 IP 允许为空；有登录时拦截器仍会填充。
+        // 本类实现 IDataScope，但不要在这里注册 DataScopeInterceptor。
+        // 监控列表单独 ApplyScope；拦截器会让其他部门的审批人在保存时校验失败。
         Meta.Interceptors.Add(new UserInterceptor { AllowEmpty = true });
         Meta.Interceptors.Add<TimeInterceptor>();
         Meta.Interceptors.Add(new IPInterceptor { AllowEmpty = true });

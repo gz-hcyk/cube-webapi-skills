@@ -92,6 +92,71 @@ public class RuntimeController : ControllerBaseX
         }
     }
 
+    /// <summary>向后加签一级。</summary>
+    [EntityAuthorize((PermissionFlags)8192)]
+    [DisplayName("加签")]
+    [HttpPost]
+    public ActionResult AddSign([FromBody] AddSignInput input)
+    {
+        try
+        {
+            var user = Current();
+            if (input == null || !Int64.TryParse(input.TaskId, out var taskId) || taskId <= 0)
+                throw new ApprovalException(4001, "缺少任务编号");
+            var inst = ApprovalInstance.AddSign(taskId, user.ID, input.TargetUserId, input.Comment, input.RequestId ?? "", input.InstanceVersion, UserHost);
+            return Json(0, "ok", Describe(inst), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>抄送标为已阅。</summary>
+    [EntityAuthorize((PermissionFlags)4096)]
+    [DisplayName("已阅")]
+    [HttpPost]
+    public ActionResult Read([FromBody] ReadInput input)
+    {
+        try
+        {
+            var user = Current();
+            if (input == null || !Int64.TryParse(input.TaskId, out var taskId) || taskId <= 0)
+                throw new ApprovalException(4001, "缺少任务编号");
+            var inst = ApprovalInstance.Read(taskId, user.ID, input.RequestId ?? "", UserHost);
+            return Json(0, "ok", Describe(inst), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
+    /// <summary>流程监控。按当前用户的数据范围过滤，不改变待办的办理人过滤。</summary>
+    [EntityAuthorize((PermissionFlags)16384)]
+    [DisplayName("监控")]
+    [HttpGet]
+    public ActionResult Monitor()
+    {
+        try
+        {
+            var user = Current();
+            return Json(0, "ok", ApprovalInstance.Monitor(user).Select(inst => new
+            {
+                instanceId = inst.Id.ToString(),
+                no = inst.No,
+                title = inst.Title,
+                status = (Int32)inst.Status,
+                userId = inst.UserId,
+                departmentId = inst.DepartmentId,
+            }), null);
+        }
+        catch (ApprovalException ex)
+        {
+            return Json(ex.Code, ex.Message, null, null);
+        }
+    }
+
     /// <summary>当前用户的待办。</summary>
     [EntityAuthorize((PermissionFlags)1024)]
     [DisplayName("待办")]
