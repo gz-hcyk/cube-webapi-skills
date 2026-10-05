@@ -23,7 +23,7 @@ public class ProcessController : EntityController<ApprovalProcess>
     /// <summary>按模型做必填校验。</summary>
     protected override Boolean EnableFieldValidation => true;
 
-    /// <summary>读取流程节点。只读，优先已发布版本，否则草稿。设计器不在这里改图。</summary>
+    /// <summary>读取可编辑的流程草稿。没有草稿时用已发布定义。保存和发布走 SaveDesign、Publish。</summary>
     [EntityAuthorize(PermissionFlags.Detail)]
     [DisplayName("读取设计")]
     [HttpGet]
@@ -33,19 +33,35 @@ public class ProcessController : EntityController<ApprovalProcess>
         {
             var process = ApprovalProcess.FindById(id)
                 ?? throw new ApprovalException(4041, "流程不存在");
-            var version = process.PublishedVersionId > 0
+            var draft = ApprovalProcessVersion.FindByProcessIdAndVersion(process.Id, 0);
+            var published = process.PublishedVersionId > 0
                 ? ApprovalProcessVersion.FindById(process.PublishedVersionId)
-                : ApprovalProcessVersion.FindByProcessIdAndVersion(process.Id, 0);
-            var graph = version == null || version.Definition.IsNullOrEmpty()
-                ? new FlowGraph()
-                : FlowGraph.Parse(version.Definition);
+                : null;
+            var version = draft ?? published;
+            var definition = version == null || version.Definition.IsNullOrEmpty()
+                ? """{"nodes":[],"edges":[]}"""
+                : version.Definition;
+            var graph = FlowGraph.Parse(definition);
+            var form = ApprovalFormDefinition.FindById(process.FormId);
+            var schema = form != null && form.PublishedVersionId > 0
+                ? ApprovalFormVersion.FindById(form.PublishedVersionId)?.Schema
+                : null;
             return Json(0, "ok", new
             {
                 id = process.Id,
                 code = process.Code,
                 name = process.Name,
-                readOnly = true,
+                readOnly = false,
                 publishedVersion = process.PublishedVersion,
+                definition,
+                formFields = FormSchema.Labels(schema).Select(field => new { key = field.Key, label = field.Label }),
+                users = XCode.Membership.User.FindAll().Where(user => user != null && user.Enable).Select(user => new
+                {
+                    id = user.ID,
+                    name = user.DisplayName.IsNullOrEmpty() ? user.Name : user.DisplayName,
+                }),
+                roles = Role.FindAll().Select(role => new { id = role.ID, name = role.Name }),
+                departments = Department.FindAll().Where(dept => dept.Enable).Select(dept => new { id = dept.ID, name = dept.Name }),
                 nodes = graph.Nodes.Select(node => new
                 {
                     key = node.Key,

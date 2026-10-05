@@ -115,6 +115,9 @@ public class RuntimeController : ControllerBaseX
                 processId = process.Id,
                 name = process.Name,
                 fields = FieldRules.Views(schema, start),
+                picks = graph.Nodes
+                    .Where(node => node.Assignee?.Type == "starterPick")
+                    .Select(node => new { nodeKey = node.Key, name = node.Name }),
             }, null);
         }
         catch (ApprovalException ex)
@@ -132,11 +135,17 @@ public class RuntimeController : ControllerBaseX
         try
         {
             var rows = ApprovalFieldValue.FindMatches(field ?? "", keyword ?? "");
-            return Json(0, "ok", rows.Select(row => new
+            return Json(0, "ok", rows.Select(row =>
             {
-                instanceId = row.InstanceId.ToString(),
-                field = row.FieldKey,
-                value = row.FieldValue,
+                var inst = ApprovalInstance.FindById(row.InstanceId);
+                return new
+                {
+                    instanceId = row.InstanceId.ToString(),
+                    field = row.FieldKey,
+                    value = row.FieldValue,
+                    title = inst?.Title ?? "",
+                    status = inst == null ? 0 : (Int32)inst.Status,
+                };
             }), null);
         }
         catch (ApprovalException ex)

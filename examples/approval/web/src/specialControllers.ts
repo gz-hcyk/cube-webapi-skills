@@ -109,5 +109,5 @@ export const SPECIAL_CONTROLLERS: Record<string, SpecialDescriptor> = {
   /* 审批切片：运行台不是实体列表；表单/流程设计页按业务 JSON 展示，不走通用 GetPage 表单。 */
   'Approval/Runtime': { kind: 'custom', view: RuntimeDesk, note: '待办、已办、发起、同意、驳回、转办' },
   'ApprovalAdmin/FormDefinition': { kind: 'custom', view: FormDesignView, note: '表单字段设计，可保存并发布' },
-  'ApprovalAdmin/Process': { kind: 'custom', view: ProcessDesignView, note: '流程节点与办理人规则，只读' },
+  'ApprovalAdmin/Process': { kind: 'custom', view: ProcessDesignView, note: '流程节点、连线、办理人规则和字段权限，可保存并发布' },
 };

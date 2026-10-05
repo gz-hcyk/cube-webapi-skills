@@ -7,8 +7,23 @@
       <t-tab-panel value="inbox" label="待办" />
       <t-tab-panel value="done" label="已办" />
       <t-tab-panel value="drafts" label="草稿" />
+      <t-tab-panel value="search" label="检索" />
     </t-tabs>
+    <div v-if="tab === 'search'" class="search-bar">
+      <t-input v-model="keyword" placeholder="按事由检索，例如回家" />
+      <t-button theme="primary" @click="runSearch">检索</t-button>
+    </div>
     <t-table
+      v-if="tab === 'search'"
+      row-key="instanceId"
+      :data="searchRows"
+      :columns="searchColumns"
+      :loading="loading"
+      hover
+      @row-click="onSearchRow"
+    />
+    <t-table
+      v-else
       :row-key="tab === 'drafts' ? 'instanceId' : 'id'"
       :data="displayRows"
       :columns="tab === 'drafts' ? draftColumns : columns"
@@ -62,6 +77,9 @@
         </t-form-item>
         <t-form-item v-if="counselorAccess !== 'hidden'" label="该生辅导员">
           <t-select v-model="start.counselorUserId" :options="userOptions" placeholder="按学生选择辅导员" :disabled="counselorAccess === 'readonly'" />
+        </t-form-item>
+        <t-form-item v-for="pick in picks" :key="pick.nodeKey" :label="pick.name || '发起人自选'">
+          <t-select v-model="pickUsers[pick.nodeKey]" :options="userOptions" placeholder="选择办理人" />
         </t-form-item>
         <t-form-item v-for="field in visibleStartFields" :key="field.key" :label="field.label">
           <t-input v-model="fieldValues[field.key]" :disabled="field.access === 'readonly'" />
@@ -153,6 +171,17 @@ interface ProcessOption {
   id: number;
   name: string;
 }
+interface PickNode {
+  nodeKey: string;
+  name: string;
+}
+interface SearchHit {
+  instanceId: string;
+  field: string;
+  value: string;
+  title: string;
+  status: number;
+}
 
 const tab = ref('inbox');
 const rows = ref<TaskRow[]>([]);
@@ -165,6 +194,10 @@ const openedTaskId = ref('');
 const startOpen = ref(false);
 const resubmitOpen = ref(false);
 const startFields = ref<FieldRule[]>([]);
+const picks = ref<PickNode[]>([]);
+const pickUsers = ref<Record<string, number | undefined>>({});
+const keyword = ref('');
+const hits = ref<SearchHit[]>([]);
 const fieldValues = ref<Record<string, string>>({});
 const editValues = ref<Record<string, string>>({});
 const rejectOpen = ref(false);
@@ -194,6 +227,11 @@ const draftColumns = [
   { colKey: 'subjectName', title: '业务主体' },
   { colKey: 'round', title: '轮次' },
 ];
+const searchColumns = [
+  { colKey: 'title', title: '标题' },
+  { colKey: 'value', title: '事由' },
+  { colKey: 'statusText', title: '状态' },
+];
 const historyColumns = [
   { colKey: 'actionName', title: '动作' },
   { colKey: 'operatorName', title: '操作人' },
@@ -203,6 +241,7 @@ const historyColumns = [
 const displayRows = computed(() => (tab.value === 'drafts'
   ? drafts.value
   : rows.value.map((row) => ({ ...row, statusText: taskStatus(row.status) }))));
+const searchRows = computed(() => hits.value.map((hit) => ({ ...hit, statusText: instanceStatus(hit.status) })));
 const meLabel = computed(() => me.value?.displayName || me.value?.name || '');
 const userOptions = computed(() => people.value.map((p) => ({ label: p.displayName || p.name, value: p.id })));
 const studentOptions = computed(() => userOptions.value.filter((p) => p.value !== me.value?.id));
@@ -240,6 +279,7 @@ function tell(error: unknown) {
 }
 
 async function loadList() {
+  if (tab.value === 'search') return;
   loading.value = true;
   try {
     if (!me.value) me.value = await unwrap(getApi<Person>('/Approval/Runtime/Me'));
@@ -271,16 +311,37 @@ function fillEdits(view: InstanceView) {
   }
   editValues.value = current;
 }
-function onRow(context: RowEventContext<TableRowData>) {
-  const row = context.row as TaskRow;
-  openedTaskId.value = row.id || '';
-  void unwrap(getApi<InstanceView>('/Approval/Runtime/View', { instanceId: row.instanceId }))
+function openInstance(instanceId: string, taskId: string) {
+  openedTaskId.value = taskId;
+  void unwrap(getApi<InstanceView>('/Approval/Runtime/View', { instanceId }))
     .then((view) => {
       detail.value = view;
       fillEdits(view);
       detailOpen.value = true;
     })
     .catch(tell);
+}
+function onRow(context: RowEventContext<TableRowData>) {
+  const row = context.row as TaskRow;
+  openInstance(row.instanceId, row.id || '');
+}
+function onSearchRow(context: RowEventContext<TableRowData>) {
+  const row = context.row as SearchHit;
+  openInstance(row.instanceId, '');
+}
+async function runSearch() {
+  if (!keyword.value.trim()) {
+    MessagePlugin.warning('请填写事由关键字');
+    return;
+  }
+  loading.value = true;
+  try {
+    hits.value = (await unwrap(getApi<SearchHit[]>('/Approval/Runtime/Search', { field: 'reason', keyword: keyword.value.trim() }))) || [];
+  } catch (error) {
+    tell(error);
+  } finally {
+    loading.value = false;
+  }
 }
 function editablePayload() {
   const data: Record<string, string> = {};
@@ -366,8 +427,14 @@ async function loadStartFields(processId?: number) {
     startFields.value = [];
     return;
   }
-  const form = await unwrap(getApi<{ fields: FieldRule[] }>('/Approval/Runtime/StartForm', { processId }));
+  const form = await unwrap(getApi<{ fields: FieldRule[]; picks?: PickNode[] }>('/Approval/Runtime/StartForm', { processId }));
   startFields.value = form?.fields || [];
+  picks.value = form?.picks || [];
+  const nextPicks: Record<string, number | undefined> = {};
+  picks.value.forEach((pick) => {
+    nextPicks[pick.nodeKey] = pickUsers.value[pick.nodeKey];
+  });
+  pickUsers.value = nextPicks;
   const next: Record<string, string> = {};
   startFields.value.forEach((field) => {
     next[field.key] = fieldValues.value[field.key] || '';
@@ -387,6 +454,8 @@ async function openStart() {
       reason: '',
     };
     fieldValues.value = {};
+    pickUsers.value = {};
+    picks.value = [];
     await loadStartFields(start.value.processId);
     startOpen.value = true;
   } catch (error) {
@@ -405,8 +474,14 @@ function startPayload(studentId: number) {
 
 async function submitStart() {
   const studentId = start.value.proxy ? start.value.subjectUserId : me.value?.id;
-  if (!start.value.processId || !studentId || !start.value.counselorUserId) {
+  const needCounselor = startFields.value.some((field) => field.key === 'counselorUserId' && field.access !== 'hidden');
+  if (!start.value.processId || !studentId || (needCounselor && !start.value.counselorUserId)) {
     MessagePlugin.warning(start.value.proxy ? '代发起必须选择学生和该生辅导员' : '请选择该生辅导员');
+    return;
+  }
+  const missingPick = picks.value.find((pick) => !pickUsers.value[pick.nodeKey]);
+  if (missingPick) {
+    MessagePlugin.warning(`请为「${missingPick.name || '发起人自选'}」选择办理人`);
     return;
   }
   if (start.value.proxy && studentId === me.value?.id) {
@@ -415,11 +490,15 @@ async function submitStart() {
   }
   saving.value = true;
   try {
+    const assigneePicks = picks.value.length
+      ? JSON.stringify(Object.fromEntries(picks.value.map((pick) => [pick.nodeKey, pickUsers.value[pick.nodeKey]])))
+      : undefined;
     await unwrap(postApi('/Approval/Runtime/Start', {
       processId: start.value.processId,
       proxy: start.value.proxy,
       subjectUserId: start.value.proxy ? studentId : 0,
       data: startPayload(studentId),
+      assigneePicks,
       requestId: requestId(),
     }));
     startOpen.value = false;
@@ -497,4 +576,5 @@ onMounted(loadList);
 .block-title { margin: 16px 0 8px; }
 .actions { display: flex; gap: 8px; margin-top: 16px; }
 .gap { margin-top: 12px; }
+.search-bar { display: flex; gap: 8px; margin: 12px 0; max-width: 480px; }
 </style>

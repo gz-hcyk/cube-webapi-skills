@@ -229,7 +229,8 @@ public class HttpRuntimeTests
         Assert.Contains("days", edited["schema"]!.GetValue<String>());
 
         var flow = Ok(await Get(client, "/api/ApprovalAdmin/Process/Design?id=" + process.Id, studentToken));
-        Assert.True(flow["readOnly"]!.GetValue<Boolean>());
+        Assert.False(flow["readOnly"]!.GetValue<Boolean>());
+        Assert.Contains("subjectCounselor", flow["definition"]!.GetValue<String>());
         var nodes = flow["nodes"]!.AsArray();
         Assert.Contains(nodes, n => n!["typeLabel"]!.GetValue<String>() == "审批" && n["assigneeLabel"]!.GetValue<String>() == "该生辅导员");
         Assert.Contains(nodes, n => n!["modeLabel"]!.GetValue<String>() == "或签");
