@@ -10,8 +10,8 @@ description: cube-webapi-backend 生产部署 Playbook —— 后端 publish/Pro
 ## 十五、生成生产部署包（可复用 Playbook）
 
 > **适用**：把「魔方 WebApi 后端 + 独立 TDesign 前端」项目打包成可上线的 Linux 部署包（Nginx 反代 + Kestrel + SQLite）。
-> 实测来自 MyBlog 个人博客（NewLife.Cube 6.13 + XCode 12.1 + .NET 8 + Vue3/TDesign）。
-> **形态**：Linux + .NET 8 框架依赖（`--no-self-contained`）+ Nginx 反向代理，根路径 `/` 访问（子路径 `/blog/` 见 tdesign §10.10）。
+> 实测来自 MyBlog 个人博客（NewLife.Cube + XCode + Vue3/TDesign）。
+> **形态**：Linux + 框架依赖（`--no-self-contained`，目标机预装与发布包 TFM 匹配的 .NET Runtime）+ Nginx 反向代理，根路径 `/` 访问（子路径 `/blog/` 见 tdesign §10.10）。
 > **调用方式**：直接照 15.1→15.8 五步走，每步含可拷贝命令/模板；坑见 15.9。
 > 前端构建与同步的专属坑（vite 后台 outDir 空写、base 路径）在 `cube-webapi-tdesign` §10.10，本 Playbook 只引用不重复。
 
@@ -32,12 +32,12 @@ publish/
 ### 15.2 后端发布（Release，跨平台出 Linux 包）
 
 ```bash
-# 本机 Windows / .NET 10 SDK 也能跨平台出 linux-x64 包（publish 不依赖目标 SDK）
+# 本机 Windows 上的 SDK 也能跨平台出 linux-x64 包（publish 不依赖目标 SDK）
 # ⚠️ SDK 10 + 新增包时 dotnet restore 可能 NuGet 异常 → 用 --no-restore 复用已还原资产
 dotnet publish MyBlog.Web/MyBlog.Web.csproj -c Release -r linux-x64 --no-self-contained -o publish/backend
 ```
 
-- `--no-self-contained` = 框架依赖：目标服务器需**预装 .NET 8 Runtime**（`dotnet --version` 显示 8.x），否则起不来。
+- `--no-self-contained` = 框架依赖：目标服务器需**预装与发布包 TFM 匹配的 .NET Runtime**（`dotnet --version` 显示对应主版本），否则起不来。
 - `-r linux-x64`：跨平台出 Linux 包（本机 Win 也无妨）。产物 `publish/backend/MyBlog.Web.dll` 即主程序。
 - 0 错误即成功；若报 `MSB3027/3021 文件被锁定` → `taskkill /F /IM dotnet.exe` 杀旧进程再 publish（代码本身 0 错误，勿误判）。
 
@@ -128,11 +128,11 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 [Install]
 WantedBy=multi-user.target
 ```
-`WorkingDirectory` 仍指向 backend 目录，便于日志和相对文件。SQLite 连接串 `Data/*.db` 在 XCode 12.2 上相对 **`AppContext.BaseDirectory`**（dll 所在目录），不是进程 CWD，也不是 ContentRoot。`dotnet /var/www/.../MyBlog.Web.dll` 时库落在该 dll 旁边的 `Data/`。
+`WorkingDirectory` 仍指向 backend 目录，便于日志和相对文件。SQLite 连接串 `Data/*.db` 在 XCode 上相对 **`AppContext.BaseDirectory`**（dll 所在目录），不是进程 CWD，也不是 ContentRoot。`dotnet /var/www/.../MyBlog.Web.dll` 时库落在该 dll 旁边的 `Data/`。
 
-### 15.7 本地冒烟验证（本机 .NET 10 跑 net8 包）
+### 15.7 本地冒烟验证（本机 SDK 跑已发布包）
 
-> 本机默认 SDK 是 .NET 10（无 net8 SDK）也能跑 net8 应用：`DOTNET_ROLL_FORWARD=Major` 让 net8 应用滚动到 net10 运行时。
+> 本机默认 SDK 主版本高于发布包 TFM 时也能跑：`DOTNET_ROLL_FORWARD=Major` 让应用滚动到本机运行时。
 > ⚠️ **功能冒烟用 `ASPNETCORE_ENVIRONMENT=Development`**：Production 的 AllowedHosts 限域名，127.0.0.1 会被 400 Invalid Hostname 拦截，功能验证无意义；Development 下 `AllowedHosts=*` 放行。上线才切 Production + 真实 AllowedHosts。
 
 ```bash
@@ -145,13 +145,13 @@ DOTNET_ROLL_FORWARD=Major ASPNETCORE_ENVIRONMENT=Development \
 
 ### 15.8 README 模板（随包）
 
-含：生成时间、功能清单、前置条件（.NET 8 Runtime / Nginx）、部署步骤（上传→改 Production 配置→配 Nginx→起 systemd→验证）、生产安全必做、数据备份与回滚。直接照 MyBlog `publish/README.md` 结构写。
+含：生成时间、功能清单、前置条件（与发布包 TFM 匹配的 .NET Runtime / Nginx）、部署步骤（上传→改 Production 配置→配 Nginx→起 systemd→验证）、生产安全必做、数据备份与回滚。直接照 MyBlog `publish/README.md` 结构写。
 
 ### 15.9 部署 Playbook 常见坑
 
 - **连接串反斜杠**（实测）：Windows 写 `Data\*.db` 在 Linux SQLite 路径解析错乱 → 一律正斜杠 `Data/*.db`。
 - **Production 400 Invalid Hostname**：本地冒烟必须 Development 环境；上线才切 Production + 真实 AllowedHosts。
-- **`--no-self-contained` 忘了装 .NET 8 Runtime**：服务器 `dotnet --version` 非 8.x 则起不来。
+- **`--no-self-contained` 忘了装匹配的 .NET Runtime**：服务器 `dotnet --version` 主版本与发布包 TFM 不匹配则起不来。
 - **端口残留进程**：`fuser -k <port>/tcp` 清理后换端口再起。
 - **SQLite 相对 `AppContext.BaseDirectory`**：发布后的 dll 目录就是路径基准，库在该目录的 `Data/`。不要再按「相对 CWD」去改 `WorkingDirectory` 来搬家。
 - **上传上限不一致**：Nginx `client_max_body_size` 与后端 `Kestrel MaxRequestBodySize` 须对齐（本项目 220m）。
