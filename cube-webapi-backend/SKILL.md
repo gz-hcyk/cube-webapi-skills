@@ -80,6 +80,29 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 ---
 
+## 铁律：魔方内置功能直接用，不重复造轮子（不可违反）
+
+**框架已实现的能力一律优先使用内置实现，禁止另起炉灶自建同类功能**。动手写自定义代码前，先确认 NewLife.Cube 6.15.2026.901 是否已有对应内置能力（开发环境挂 `/Swagger` 核对自带接口清单，或查框架源码/反编译确认扩展点）——**有就直接用，没有才自建**。
+
+已实证的内置能力（直接用，勿重造）：
+
+1. **实体 CRUD 与控制器基类**：`EntityController<T>` / `ReadOnlyEntityController<T>` / `EntityTreeApiController<T>` / `ControllerBaseX` 已提供标准 REST 增删改查、分页排序筛选，以及 `Search(Pager)` / `SearchData(Pager)` / `ExportData(max)` / `Valid(entity,type,post)` 等辅助方法——不要手写重复的 CRUD Action、分页与查询样板。
+2. **导出**：控制器内置 `ExportFile(format)`（excel/csv/json/xml，见 §11）——不要自建导出接口或另引导出组件。
+3. **数据层预热**：`UseCube()` 内部已完成 `EntityFactory.InitAll/InitAllAsync`（§1.2）——不要在 Program.cs 再手写预热；`InitConnection` 只用于运行时动态加租户库等场景。
+4. **字段元数据驱动界面**：`GetFields`/`GetPage` 按 list/addForm/editForm/detail/search 五组字段集合下发（含 `lovCode`/`mapField`）——前端表单/表格由元数据驱动，不要后端硬编码界面结构或自建字段描述接口。
+5. **枚举中文标签**：`AddCubeLov(o => o.ScanNamespace("实体命名空间"))` + `UseCubeLov()` + `SetLov(...)` 注册 LOV 值集是权威通道——不要自建枚举字典表/翻译接口（`[Map]` 仅为降级通道）。
+6. **登录鉴权与令牌**：`AddCube()` 内置 `Auth/Login`、JWT（Bearer/X-Token）——不要自建登录/签发/校验链路；自定义权限走 `PermissionFlags` 权限位 + `EntityAuthorize` 鉴权，不要另造权限框架。
+7. **菜单**：菜单树由后端 `GetMenuTree` 自动扫描控制器产出（见上方菜单铁律）——不要手工维护菜单表之外的第二套菜单源。
+8. **定时作业**：周期任务用 `CronJob` + `CubeJobBase`（§9.1，命名空间 `NewLife.Cube.Jobs`，随程序集自动扫描注册）——不要自建 `Timer`/`TimerX` 调度器（老模板自建调度器与内置 JobService 冲突，会把新作业置 `Enable=false` 禁用掉，迁移时须删）；`AddCube()` 已内含作业调度注册，勿重复调用。
+9. **审计字段**：XCode 实体基类自动维护 `CreateUser`/`CreateTime`/`UpdateUser`/`UpdateTime`——不要自建审计表/审计中间件补记这些字段（控制器侧审计用 `LogOnChange=true`）。
+10. **系统管理能力**：字典参数/访问规则/OAuth 配置/短信配置/应用日志等由框架内置页与接口提供——不要重做同类管理功能。
+
+**违反判定**：为上述任一能力手写平行实现（自建登录/权限/导出/调度/审计/枚举字典/CRUD 样板）= 违反；正确姿势是先用 Swagger 接口清单与框架源码确认内置能力，缺什么补什么，而非全量重造。
+
+**判定口诀：先查框架（Swagger 清单 + 源码/反编译），再写自己的代码；内置有的，一个都不重造。**
+
+---
+
 ## 〇、标准开发路线（元流程，先于一切编码）
 
 基于魔方 WebApi 的完整项目按以下路线推进，每一步有明确产出与检查点，**编译错误必须清零后才能进入下一步**：
