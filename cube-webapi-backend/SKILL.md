@@ -557,6 +557,12 @@ GET /api/School/Student/GetPage        // 一次性返回 setting+list+addForm+e
 
 ### 6.1 权限位模型（PermissionFlags，XCode.Membership，UInt32 [Flags]）
 
+**模型（官方 [角色菜单与权限控制](https://www.newlifex.com/cube/permission)）**：一个控制器对应一个菜单，控制器的方法（Action）就是该菜单的操作；每个操作分配一个 2 的幂作为标记（1、2、4、8…），角色的授权记录即这些标记的位域组合。
+
+- **位域三运算**：授权 = 或运算（`1|2|4=7`）、判断 = 与运算（`2 & 7 = 2` → 有权限；`2 & 5 = 0` → 无权限）、取消 = 异或（`7 ^ 2 = 5`）；
+- **`Role.Permission` 存储格式**：逗号分隔每个菜单，每项 `菜单id#操作记录值`，如 `1#255,2#255,3#255,4#255`（255 = 八个内置位 `1|2|4|8|16|32|64|128` 全开）；单菜单权限值是 UInt32 位域，`-1` 表示全动作；
+- **容量口径（官方）**：Int32 最多支持 32 种权限，框架内置排到 8，**用户自定义权限从 16 开始**（16/32/64/128…，与内置 1/2/4/8 错开）。
+
 | 值 | 枚举 | 描述（菜单权限项显示名） |
 |----|------|--------------------------|
 | 0 | `None` | 无权限（仅用于“已登录”语义） |
@@ -573,6 +579,7 @@ GET /api/School/Student/GetPage        // 一次性返回 setting+list+addForm+e
 
 框架在首次访问或扫描时（`MenuHelper.ScanActionMenu` / `EntityAuthorizeAttribute.CreateMenu`）遍历控制器 Action：
 
+- **扫描入口（官方 permission 文档）**：每个区域必须继承 `AreaRegistrationBase` 并调用其 `RegisterArea` 完成注册——区域没注册，该区控制器的菜单与权限项根本不会生成（自定义权限「静默不生效」的头号原因）；
 - 仅处理 `public`、非 `static`、未标 `[AllowAnonymous]` 的 Action；
 - 若 Action 标了 `[EntityAuthorize(p)]` 且 `p > None`：
   - `p ≤ Delete` → 权限项名取 `[Description]`（查看/添加/修改/删除）；
@@ -750,6 +757,17 @@ if (user.Has(menu, PermissionFlags.Detail)) { ... }   // 或关系可传多个�
   - 控制器表达式：`[DataPermission]` 的行级过滤（见第十节）。
 - `[DataPermission("系统管理员,超级管理员", "CreateUserID={$user.Id} or linkId in {#SiteIds}")]`（详见第十节）；
 - `DataPermissionAttribute.Valid(roles)`：当前用户属于 `SystemRoles` 时**跳过**表达式过滤（系统角色不受限）。
+
+### 6.8 自定义权限落地闭环（官方 permission_custom 配方 · WebApi 版）
+
+官方 [自定义功能按钮的权限控制](https://www.newlifex.com/cube/permission_custom) 以 ERP 出入库为例演示了完整闭环，WebApi 版按同一顺序落地：
+
+1. **后端 Action 标权限位 + 名称**：`[EntityAuthorize((PermissionFlags)16)]` + `[DisplayName("入库")]`——权限项在角色页的显示名来自 `[DisplayName]`（官方原文：该接口「多了权限特性和名称特性，指定使用 32 号权限位，同时该权限名是'取消入库'」）；
+2. **框架扫描自动生成权限项**（6.2）：角色编辑页该菜单下出现「入库 / 取消入库」子项，**数值分别是 16 和 32**（官方实测）；管理员勾选即授权，`Role.Permission` 落为 `菜单id#16` 掩码；
+3. **前端按钮按权限位显隐**：WebApi 没有 Razor 视图，官方 MVC 配方里 `_List_Toolbar_Batch` 中 `this.Has((PermissionFlags)16)` 的角色由前端接替——菜单节点 `permissions` 字典带 16/32 位（值为权限项名），前端据此控制业务按钮显隐，配方见 `cube-webapi-tdesign` §4.10.1；
+4. **接口鉴权兜底**：按钮隐藏只是 UX，每个自定义 Action 必须带 `[EntityAuthorize]`，防止绕过界面直调 API（官方原文：「每个按钮对应后台控制器的一个 Action 接口，这里也必须验证权限，避免接口被非法调用」）。
+
+> 官方同页口径：`PermissionFlags` 为 Int32，最多 32 个权限位，内置占用到 8，**自定义一律从 16 起**；同一控制器内权限位不得重复（去重坑见 6.4）。
 
 ---
 
@@ -1389,6 +1407,7 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 - [ ] 字段定制写在 `static XxxController(){}` 而非实例构造器
 - [ ] 自定义 Action 已标注 `[EntityAuthorize]` 或 `[AllowAnonymous]`
 - [ ] 需要非 CRUD 的业务权限时，已用更高权限位 `(PermissionFlags)16/32` + `[DisplayName]` 标注，且角色管理能正确显示该权限项
+- [ ] 自定义权限位驱动的业务按钮，前端已按菜单节点 `permissions` 字典的 16/32 位显隐（§6.8，前端配方见 tdesign §4.10.1）
 - [ ] **同一控制器内权限位无重复**（重复会使整个控制器的权限项注册失败，运行时报「找不到菜单」/权限名为空；用 grep 逐位核对，重启后在 `Menu.Permission` 验证）
 - [ ] 控制器已通过 `[Menu]` 声明可见性 `Mode`（`Admin`/`Tenant`/组合），避免租户/后台越权可见
 - [ ] 前端调用 `GetFields`/`GetPage` 驱动动态界面，未硬编码字段

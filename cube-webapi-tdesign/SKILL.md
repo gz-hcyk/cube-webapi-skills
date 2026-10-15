@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-tdesign
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、整块渲染、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、自定义权限位、按钮权限位显隐、整块渲染、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
 ---
 
 # cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
@@ -581,6 +581,28 @@ stylelint.config.js   package-lock.json          ← 工具链配置文件；缺
 
 以 `GetPage.setting`（`enableAdd`/`isReadOnly`/`enableSelect`/`enableTableDoubleClick`/`enableKey`/`enableFooter`/`orderByKey`/`doubleDelete`）+ `GetMenuTree` + `/Auth/Info` 为准。`setting` 全量属性落点见 troubleshooting/field-renderers 相关条目。**前端显隐仅为 UX，真实鉴权永远在后端**（`[EntityAuthorize]` + 403）。
 
+#### 4.10.1 自定义业务按钮按权限位显隐（16/32/64/128…）
+
+CRUD 之外的业务按钮（审批 / 入库 / 下发指令 / 批量操作…）由后端自定义权限位驱动，对应官方 [自定义功能按钮的权限控制](https://www.newlifex.com/cube/permission_custom)（MVC 版在 `_List_Toolbar_Batch` 视图里用 `this.Has((PermissionFlags)16)` 控制按钮）——WebApi 版的等价链路：
+
+- **权限位来源**：`GetMenuTree` 当前节点的 `permissions` 字典（§4.12），键 = 权限位整数字符串，值 = 后端 Action 的 `[DisplayName]`，形如 `{"1":"查看","2":"添加","16":"入库","32":"取消入库"}`；辅以 `/Auth/Info`（当前用户角色与权限）；
+- **判定配方**（composable 级，工具条按钮 `v-if` 调用）：
+
+```ts
+// usePerms.ts：登录后按当前路由匹配菜单节点，建立 位值→权限名 字典
+export function usePerms() {
+  const perms = ref<Record<string, string>>({})   // 当前节点的 permissions 字典
+  const has = (bit: number) => Object.prototype.hasOwnProperty.call(perms.value, String(bit))
+  return { perms, has }                            // 位在字典里 = 已授权
+}
+// ListPage 工具条：
+// <t-button v-if="has(16)">入库</t-button>   <t-button v-if="has(32)">取消入库</t-button>
+```
+
+- **命名来自后端**：权限项显示名 = 后端 Action 的 `[DisplayName]`（定义见 `cube-webapi-backend` §6.4 / §6.8），前端不得自造权限名；
+- **位值约定（官方口径）**：内置 1/2/4/8（查看/添加/修改/删除），自定义从 16 起，Int32 上限 32 位，同一控制器内不重复；
+- 角色侧勾选这些自定义子项见 §4.12.1 与 `references/permission-editor-integration.md`（当前 RoleMenuEditor 资产只渲染 1/2/4/8，自定义位列需按字典扩展）。
+
 ### 4.11 组件 / 页面选型策略
 
 核心：列表表格、表单控件**全部由 `GetPage` 字段集合决定**。两个选型函数（`fieldRender.ts`）：`selectListComponent(fields)→'flat'|'tree'`（全字段组聚合判定）；`selectFormControl(field)→控件`。完整决策表见 `references/field-renderers.md` §7（含 `setting.*` 全量落点、`lovCode` 优先级、`url+title` 链接操作列、`maxWidth/length` 语义等）。快速要点：
@@ -613,7 +635,7 @@ stylelint.config.js   package-lock.json          ← 工具链配置文件；缺
 
 ### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
 
-`Role.Permission` 契约：逗号分隔 `菜单ID#权限位掩码`（`1#3`；`3=查看+新增`；`-1`=全动作；位 `1查看/2新增/4修改/8删除`）。通用表单把 Permission 渲染成 `t-input`——**必须换成勾选 UI**。
+`Role.Permission` 契约（位模型见官方 [角色菜单与权限控制](https://www.newlifex.com/cube/permission)）：逗号分隔 `菜单ID#权限位掩码`（`1#3`；`3=查看+新增`；`-1`=全动作；位 `1查看/2新增/4修改/8删除`）。通用表单把 Permission 渲染成 `t-input`——**必须换成勾选 UI**。自定义业务位（16/32/64/128…）同串参与：`16#16`=仅授予「入库」，`16#48`=`16|32`（入库+取消入库），权限项名 = 后端 Action `[DisplayName]`（官方 [permission_custom](https://www.newlifex.com/cube/permission_custom) 实测：角色编辑页该菜单下出现「出库 / 取消出库」子项，值 16/32）。
 
 **资产（已按 Cube MVC SetPermission 形态定型，开箱即用）**：`assets/core/components/cube/RoleMenuEditor.vue` = **行内勾选平铺版**（菜单树 DFS 平铺、每行 查看/新增/修改/删除 独立 checkbox；父子位级联动——勾父动作位自动授予/收回全部子孙、不误伤其它位；全展开/全折叠工具栏 + 授权菜单数 Tag + 列头；序列化仅输出 `perm>0`，`-1` 透传）。完整接入三步 + 验收清单 + 坑表见 `references/permission-editor-integration.md`：
 
@@ -622,6 +644,8 @@ stylelint.config.js   package-lock.json          ← 工具链配置文件；缺
 3. **FormDialog**：懒加载该组件；含该项时 `dialogWidth=1000px`；模板 `template v-for` 分流把 `role-permission` **整块渲染**（全宽 div，勿套带 label 的 `t-form-item`，避免表单标签栏残留）。
 
 高频坑（详见指南）：特判 key 是 camelCase `permission`（勿写 `'Permission'`）；组件数据源必须 `/api/Admin/Menu`（vite 下无前缀打到 SPA）；Role 详情/列表记得过滤 permission 明文；自动化验收以 PUT body 真实 postData 为最终判据（父勾「查看」→ `1#1,...,56#1` 级联；取消 → `Permission:""`）。
+
+⚠️ **自定义权限位列扩展（官方 permission_custom 要求）**：当前 `RoleMenuEditor.vue` 资产只渲染 1/2/4/8 四个内置位列，>8 的自定义位（16/32…）不会出现勾选框。后端一旦定义业务权限位（§4.10.1），必须按菜单 `permissions` 字典扩展组件——把 >8 的位按字典值（权限项名）渲染为额外 checkbox 列，序列化仍输出 `菜单ID#掩码`（验收：角色页出现「入库」勾选项 → PUT body 含 `16#16`）。扩展点与坑表见 `references/permission-editor-integration.md` §5。
 
 ### 4.12.2 API 清单接口 `GET /Cube/Apis`（权威接口清单 + 实体/动作判定）
 
