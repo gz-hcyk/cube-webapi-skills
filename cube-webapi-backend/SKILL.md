@@ -1524,6 +1524,14 @@ Vite 代理 target `127.0.0.1` 勿 localhost / npm registry 换镜像 / manualCh
 | 编译 MSB3021/3026/3027（dll 被锁） | 上次 `dotnet run` 的进程未退出 | 编译前先 `Stop-Process -Name <项目名>`（PowerShell），再 build |
 | Swagger 里看不到实体控制器 | ApiExplorer 未收录（不影响调用） | 用 `/Cube/Apis` 拿全量 API 清单，或按 §14.7 直接 curl |
 | 菜单页硬刷新得到 404 JSON 或实体 JSON（不是页面） | 根命名空间区域路由与前端菜单页路径**同名**，Kestrel 缺 SPA 回退（dev 有 `spaAwareBypass`，prod 没有） | 加 **SPA 导航分流中间件**（§2.1 / `references/spa-hosting.md`） |
+| 启动报 `token 'area' could not be found`（数百条路由错误、进程退出） | 实体控制器未标区域特性。`AreaBase` 继承自 `AreaAttribute`，**区域类本身可直接当特性用** | 每个控制器标注 `[DutyArea]`（即 `DutyArea : AreaBase` 类名）；区域基类构造直接 `base("区名")`，勿用 `TrimEnd("Area")`（.NET 8 下有 ReadOnlySpan 重载歧义 CS1503） |
+| 首启初始化报 SQLite `database is locked` 退出；或首启中断后**管理员全接口 403**（含 `/api/Admin/Menu`） | 首启建表/扫描被瞬时锁（Defender 扫新文件常见）中断：Menu 已入库但 `Role.CheckRole` 未把新菜单权限回填进 `Role.Permission` | 删 `Data/*.db` 重启；已坏库直接补 `Role.Permission`——**格式 `menuID#flags` 单键位或相加**（查看1+添加2+修改4+删除8 → `16#15`；`-1`=全部），同键多条会互相覆盖且运行时服务会规范化重写该串 |
+| 子类 `public override EnableFieldValidation` 报 CS0507 | 基类该属性实为 **protected**（skill §3.4 示例未标修饰符） | 写 `protected override Boolean EnableFieldValidation => true;` |
+| 新增实体控制器后 Menu 表**没有**新菜单（首启曾报 `database is locked` 时） | 首启锁库竞争使区域菜单扫描部分失败，且已删控制器的**死菜单残留**在 Menu 表 | **重启服务即可重跑扫描**补登新菜单（框架自动把新菜单授权给系统角色 `#-1`）；死菜单用 SQL 清理（python sqlite3 即可）并同步清 `Role.Permission` 中 `菜单ID#flags` 残留段 |
+| 新 Map 外键实体的 Insert/Update **静默 code:-2 添加失败** | Model.xml `Map=` 生成的派生显示字段（如 `DutyTypeName`）被收进 AddForm/EditForm 字段集，实体校验不过且不抛异常 | 控制器静态构造器 `AddFormFields.RemoveField("DutyTypeName"); EditFormFields.RemoveField("DutyTypeName");`（逐字段多参写法）；实测：DutyType（无 Map 字段）插入正常、DutyNotice（有 Map）失败，修复后即通 |
+| 服务层 `System.Text.Json` 反序列化业务 JSON **恒得默认值/空集合（不报错）** | STJ 默认 `PropertyNameCaseInsensitive=false`；业务 JSON（EffectiveJson 的 `start/end`、SchemaJson 的 `code/label/required`）是 camelCase，PascalCase 属性全部映射不上，`catch` 吞掉后表现为"方案永不命中/校验恒通过"之类静默逻辑失效 | 统一 `new JsonSerializerOptions { PropertyNameCaseInsensitive = true }`；自产自销（内部序列化→内部反序列化）同侧一致才可省 |
+| 实体校验报「X 不可以为空」但请求体明明传了该字段（如 `roleId`） | 报错的「X」是 **Map 目标列**（如 DutyGroup.RoleId 非空），请求体漏传该外键列导致 Map 派生字段解析为空，错误文案被泛化 | 看 Log.db（Category=实体名/Action=Add/Remark=错误文案）定位真实字段，按依赖顺序补传外键（先建角色再建分组再建成员） |
+| 冒烟脚本用 `id=1` 打 Detail/写接口报「不存在」 | 高频表 Id 为 **雪花 ID**（`DataScale="time"`，19 位），不是自增小整数 | 冒烟链路要从上一步响应里取真实 Id（`data.id`）传递，勿硬编码 |
 
 ## 十五、生成生产部署包（可复用 Playbook）
 
