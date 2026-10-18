@@ -225,11 +225,11 @@ export function refersToParent(f: DataField): boolean {
 }
 
 /**
- * 必填三级判定（与后端语义一致，宽松兜底）：
+ * 必填判定（与 Cube 6.15 实机下发一致）：
  *   required === true → 必填
- *   nullable === false（明确 NOT NULL）→ 必填
- *   未下发 / true → 不必填
- * 系统字段与只读字段一律不参与。
+ *   nullable === true → 不必填
+ *   未下发 nullable → 非空，必填（Name / Code / CategoryName 都是这样）
+ * 主键、审计字段、只读字段、布尔开关不参与。
  */
 export interface FieldBehavior {
   required: boolean;
@@ -241,7 +241,9 @@ export interface FieldBehavior {
 export function resolveFieldBehavior(f: DataField, mode: 'create' | 'edit' | 'detail' = 'edit'): FieldBehavior {
   const key = isKeyField(f) || AUDIT_FIELDS.has(camel(String(f.name ?? '')));
   const readonly = f.readOnly === true;
-  const required = !key && !readonly && (f.required === true || f.nullable === false);
+  // Cube 6.15 只在可空时下发 nullable:true；非空字段省略该键，不会出现 nullable:false。
+  // 名称/编码/分类都是这种省略。布尔开关的 false 是合法值，不能套必填规则。
+  const required = !key && !readonly && !isBooleanField(f) && (f.required === true || f.nullable !== true);
 
   return {
     required,
@@ -448,10 +450,20 @@ export function buildColumns(fields: DataField[], options: { exclude?: string[] 
   const exclude = new Set((options.exclude ?? []).map((s) => camel(s)));
   const cols: ColumnSpec[] = [];
 
+  const names = new Set(fields.map((f) => camel(String(f.name ?? ''))));
+  // CreateUser / UpdateUser 已经是名称列。旁边的 *UserID 列值经常是 0，标题却同样叫「更新者」。
+  const auditIdShadow: Record<string, string> = {
+    createUserID: 'createUser',
+    updateUserID: 'updateUser',
+    createDeptID: 'createDept',
+  };
+
   for (const f of fields) {
     const prop = camel(String(f.name ?? ''));
     if (!prop || exclude.has(prop)) continue;
     if (isKeyField(f)) continue;
+    const shadow = auditIdShadow[prop];
+    if (shadow && names.has(shadow)) continue;
 
     const control = selectFormControl(f);
     const label = String(f.displayName || f.name || prop);

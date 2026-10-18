@@ -36,7 +36,7 @@ interface ApiEnvelope<T> {
 | 动作 | 路由 | 动词 | 关键点 |
 |---|---|---|---|
 | 列表 | `/api/{area}/{controller}` | GET | 参数 `pageIndex` `pageSize` `Q` `sort` `desc` + 字段参数 |
-| 详情 | `/api/{area}/{controller}/{id}` | GET | |
+| 详情 | `/api/{area}/{controller}/Detail?id=` | GET | 写成 `/{id}` 会 404 |
 | 新增 | `/api/{area}/{controller}` | POST | |
 | 修改 | `/api/{area}/{controller}` | PUT | **主键在 body，不在 URL** |
 | 删除 | `/api/{area}/{controller}?id=xxx` | DELETE | **id 在 query**，写进 path 会 405 |
@@ -114,7 +114,7 @@ interface ApiEnvelope<T> {
 | `visible` | ⚠️ 实测恒为 `false`，**不可用于判断隐藏列** |
 
 > **布尔位一律写 `=== true`**：Cube 的 `DataField` 是非空 `bool`，`false` 也会下发，不能靠"键缺失"判断。
-> 唯一例外是 `nullable`：它需要区分"未下发"这第三态，判据是 `!== false`。
+> `nullable` 是例外：只在可空时下发 `true`。键缺失表示非空（必填），不是第三态的「可空」。`required` 同样经常缺键，不能把缺键当成 `false`。
 
 ## 6. 命名大小写（两层，别混）
 

@@ -458,6 +458,9 @@ build: {
 3. 编辑/删除 405 → `PUT`/`DELETE` 把 id 写进了 path；
 4. 列表显示原始 ID → 没走 `labelOf`；
 5. 树形塌平铺 → 只查了 `list` 组 / 没 `buildTree` / 分页截断；
-6. 多选崩溃 → 值是 `null` 不是 `[]`。
+6. 多选崩溃 → 值是 `null` 不是 `[]`；
+7. 分类/名称没有必填星号 → `GetPage` 对非空字段省略 `nullable`，不要等 `nullable: false`；
+8. 「更新者」显示 `0` → 列表同时渲染了 `UpdateUser` 和 `UpdateUserID`，ID 列要让给名称列；
+9. 无权限只看到 `status code 403` → HTTP 错误要读信封 `message`。
 
 逐条修法见 `references/troubleshooting.md`。

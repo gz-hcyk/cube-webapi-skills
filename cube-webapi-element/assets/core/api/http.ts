@@ -153,6 +153,11 @@ function attach(instance: AxiosInstance): void {
     async (error: any) => {
       const status = error?.response?.status;
       const url: string | undefined = error?.config?.url;
+      const body = error?.response?.data;
+      const message =
+        body && typeof body === 'object' && typeof body.message === 'string' && body.message
+          ? body.message
+          : error?.message || '请求失败';
 
       if (status === 401 && !isAuthEndpoint(url) && getRefreshToken()) {
         const ok = await tryRefresh();
@@ -162,11 +167,16 @@ function attach(instance: AxiosInstance): void {
           return instance.request(error.config);
         }
         handleUnauthorized();
-        return Promise.reject(error);
+      } else if (status === 401) {
+        handleUnauthorized();
       }
 
-      if (status === 401) handleUnauthorized();
-      return Promise.reject(error);
+      // HTTP 403 的正文是魔方信封。不取 message 时页面只能看到 axios 的状态码句子。
+      const err: any = new Error(message);
+      err.status = status;
+      err.code = body && typeof body === 'object' ? (body.code ?? status) : status;
+      if (body && typeof body === 'object' && body.fieldErrors) err.fieldErrors = body.fieldErrors;
+      return Promise.reject(err);
     },
   );
 }
