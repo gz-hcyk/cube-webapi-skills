@@ -151,6 +151,13 @@
   padding: 8px 0;
 }
 
+/* 行内 link 按钮默认约 20px 高，点不中。行高 48px 里抬到 32px。 */
+.cube-table .el-button.is-link {
+  min-height: 32px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .cube-table .cell {
   line-height: 20px;
 }

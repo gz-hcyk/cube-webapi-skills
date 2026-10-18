@@ -90,7 +90,9 @@
 | 只读控制器（`setting.isReadOnly`） | 隐藏新增/编辑/删除按钮 |
 
 > 主键和审计字段先被排除，所以「未下发即可空」不会把 `ID`、`CreateTime` 标成必填。
-> 列表里若同时有 `UpdateUser` 和 `UpdateUserID`，只保留名称列。ID 列的值经常是 `0`，标题却也叫「更新者」。
+> 列表、详情、表单里若同时有 `UpdateUser` 和 `UpdateUserID`（`CreateUser` / `CreateDept` 同理），只保留名称字段。ID 字段的值经常是 `0` 或 `1`，标题却也叫「更新者」。搜索栏的外键下拉和表单共用 `lookups`，只给表单传字典时，搜索里的分类会是空下拉。
+
+未填的日期在 Cube 里常是 `0001-01-01`（`DateTime` 默认值）。列表和详情把它当成空，显示「—」。`description` 与 `displayName` 相同时不另起一行说明。
 
 ## 4. 树形（自引用 ParentID）
 

@@ -148,6 +148,39 @@ const AUDIT_FIELDS = new Set([
   'deleteTime',
 ]);
 
+/**
+ * 名称列已经在时，旁边的 *UserID / *DeptID 不再渲染。
+ * 两列标题都叫「创建者」「更新者」，ID 列的值却是 0 或 1。
+ * 列表、详情、表单共用这一条，避免同一实体三个入口表现不一致。
+ */
+const AUDIT_ID_SHADOW: Record<string, string> = {
+  createUserID: 'createUser',
+  updateUserID: 'updateUser',
+  createDeptID: 'createDept',
+};
+
+export function omitShadowAuditIds(fields: DataField[]): DataField[] {
+  const names = new Set(fields.map((f) => camel(String(f.name ?? ''))));
+  return fields.filter((f) => {
+    const shadow = AUDIT_ID_SHADOW[camel(String(f.name ?? ''))];
+    return !(shadow && names.has(shadow));
+  });
+}
+
+/** 空值，以及 .NET DateTime 未赋值时的 0001-01-01。界面应显示「—」，不要把纪元当业务日期。 */
+export function isUnsetValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') return true;
+  return String(value).trim().startsWith('0001-01-01');
+}
+
+/** 说明与标题相同（Cube 常把 displayName 再写进 description）时不占一行提示。 */
+export function fieldHint(f: DataField): string {
+  const desc = String(f.description ?? '').trim();
+  if (!desc) return '';
+  const label = String(f.displayName || f.name || '').trim();
+  return desc === label ? '' : desc;
+}
+
 export function isBaseType(f: DataField): boolean {
   const t = String(f.typeName ?? '').toLowerCase();
   return !t || BASE_TYPES.has(t);
@@ -450,20 +483,10 @@ export function buildColumns(fields: DataField[], options: { exclude?: string[] 
   const exclude = new Set((options.exclude ?? []).map((s) => camel(s)));
   const cols: ColumnSpec[] = [];
 
-  const names = new Set(fields.map((f) => camel(String(f.name ?? ''))));
-  // CreateUser / UpdateUser 已经是名称列。旁边的 *UserID 列值经常是 0，标题却同样叫「更新者」。
-  const auditIdShadow: Record<string, string> = {
-    createUserID: 'createUser',
-    updateUserID: 'updateUser',
-    createDeptID: 'createDept',
-  };
-
-  for (const f of fields) {
+  for (const f of omitShadowAuditIds(fields)) {
     const prop = camel(String(f.name ?? ''));
     if (!prop || exclude.has(prop)) continue;
     if (isKeyField(f)) continue;
-    const shadow = auditIdShadow[prop];
-    if (shadow && names.has(shadow)) continue;
 
     const control = selectFormControl(f);
     const label = String(f.displayName || f.name || prop);
@@ -518,7 +541,7 @@ export function buildFormItems(
   const { lookups, mode = 'edit', onlyEditable = true } = options;
   const items: FormItemSpec[] = [];
 
-  for (const f of fields) {
+  for (const f of omitShadowAuditIds(fields)) {
     const behavior = resolveFieldBehavior(f, mode === 'search' ? 'detail' : mode);
     if (onlyEditable && behavior.hidden) continue;
 
@@ -541,7 +564,7 @@ export function buildFormItems(
       placeholder: String(f.description || `请输入${f.displayName || f.name || ''}`),
       maxlength: f.length ? Number(f.length) : undefined,
       precision: FLOAT_TYPES.has(String(f.typeName ?? '').toLowerCase()) ? Number(f.precision ?? 2) || 2 : undefined,
-      description: f.description ? String(f.description) : undefined,
+      description: fieldHint(f) || undefined,
       field: f,
     });
   }

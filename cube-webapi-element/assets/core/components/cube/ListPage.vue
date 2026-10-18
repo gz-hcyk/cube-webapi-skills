@@ -208,6 +208,7 @@ import {
   buildColumns,
   buildFormItems,
   isMultiValue,
+  isUnsetValue,
   labelOf,
   multiLabels,
   toSearchParams,
@@ -247,7 +248,12 @@ const pageTitle = computed(() => props.title || props.controller);
 const lookups = computed(() => resource.lookups.value);
 const columns = computed(() => buildColumns(resource.listFields.value));
 const searchItems = computed(() =>
-  buildFormItems(resource.searchFields.value, { mode: 'search', onlyEditable: false }),
+  buildFormItems(resource.searchFields.value, {
+    mode: 'search',
+    onlyEditable: false,
+    // 不传 lookups 时，搜索栏的 CategoryID 会渲成空下拉（表单有、搜索没有）
+    lookups: resource.lookups.value,
+  }),
 );
 
 const keyword = ref('');
@@ -375,7 +381,7 @@ function isMulti(f: DataField) {
 }
 
 function isEmpty(v: unknown) {
-  return v === null || v === undefined || v === '';
+  return isUnsetValue(v);
 }
 
 function display(f: DataField, v: unknown) {

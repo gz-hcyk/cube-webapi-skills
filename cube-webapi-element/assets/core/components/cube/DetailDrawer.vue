@@ -63,7 +63,7 @@
                 {{ text(f, record[camel(f.name)]) || '—' }}
               </span>
 
-              <div v-if="f.description" class="cube-detail__hint">{{ f.description }}</div>
+              <div v-if="hint(f)" class="cube-detail__hint">{{ hint(f) }}</div>
             </el-descriptions-item>
           </el-descriptions>
         </section>
@@ -84,13 +84,16 @@ import { computed, ref, watch } from 'vue';
 import { serverUrl } from '@/api/http';
 import {
   camel,
+  fieldHint,
   groupByCategory,
   isBooleanField,
   isDateField,
   isDayField,
   isMultiValue,
+  isUnsetValue,
   labelOf,
   multiLabels,
+  omitShadowAuditIds,
   selectFormControl,
   type DataField,
   type LookupMap,
@@ -125,8 +128,8 @@ const loading = ref(false);
 const record = ref<Record<string, any> | null>(null);
 
 const fields = computed<DataField[]>(() => {
-  if (props.fields?.length) return props.fields;
-  return props.resource?.detailFields.value ?? [];
+  const raw = props.fields?.length ? props.fields : (props.resource?.detailFields.value ?? []);
+  return omitShadowAuditIds(raw);
 });
 
 const groups = computed(() => groupByCategory(fields.value));
@@ -191,8 +194,11 @@ function isLongText(f: DataField) {
 function isUpload(f: DataField) {
   return selectFormControl(f) === 'upload';
 }
-function isEmpty(f: DataField, v: unknown) {
-  return v === null || v === undefined || v === '';
+function isEmpty(_f: DataField, v: unknown) {
+  return isUnsetValue(v);
+}
+function hint(f: DataField) {
+  return fieldHint(f);
 }
 function text(f: DataField, v: unknown) {
   if (isEmpty(f, v)) return '';
