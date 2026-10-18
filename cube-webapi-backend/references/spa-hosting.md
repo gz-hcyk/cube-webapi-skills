@@ -5,11 +5,7 @@ description: cube-webapi-backend —— 前后端同域部署时「根命名空�
 
 # 前后端同域部署：根命名空间撞名与请求语义分流
 
-<<<<<<< HEAD
 > 实测来自 NV8021X（NewLife.Cube + XCode + Vue3/TDesign，Kestrel 自托管 `wwwroot`）。
-=======
-> 实测来自 NV8021X（NewLife.Cube 6.13 + XCode + .NET 8 + Vue3/TDesign，Kestrel 自托管 `wwwroot`）。
->>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
 > 定位：SKILL.md §2.1 的细节展开。**只解决「同域一起部署」的 SPA 回退问题**；纯 Nginx `try_files` 方案见 §15。
 
 ## 一、根因
