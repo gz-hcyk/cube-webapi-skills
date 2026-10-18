@@ -8,7 +8,7 @@
       </div>
       <div class="cube-page__actions">
         <el-button :icon="Refresh" :loading="resource.loading.value" @click="reload">刷新</el-button>
-        <el-button v-if="resource.canAdd.value" type="primary" :icon="Plus" @click="openCreate">新增</el-button>
+        <el-button v-if="resource.canAdd.value && !resource.error.value" type="primary" :icon="Plus" @click="openCreate">新增</el-button>
       </div>
     </header>
 
@@ -144,8 +144,13 @@
 
         <template #empty>
           <div class="cube-empty">
-            <el-empty :description="emptyText" :image-size="88" />
-            <el-button v-if="resource.canAdd.value" type="primary" :icon="Plus" @click="openCreate">
+            <el-empty :description="resource.error.value ? '加载失败，请重试' : emptyText" :image-size="88" />
+            <el-button
+              v-if="resource.canAdd.value && !resource.error.value"
+              type="primary"
+              :icon="Plus"
+              @click="openCreate"
+            >
               新增第一条
             </el-button>
           </div>

@@ -154,6 +154,8 @@ required = !key && !readonly && !boolean && (f.required === true || f.nullable !
 
 `GET /api/Ledger/Equipment` 对无「查看」权限的账号返回 HTTP 403，正文仍是 `{ code, message }`。拦截器若直接抛 axios 错误，列表告警只有 `Request failed with status code 403`。要读 `response.data.message`。401 仍走刷新令牌，不要把 403 当成未登录。
 
+`GetPage` 在这个样例里匿名可取，`enableAdd` 仍是 true。列表加载失败时不要再画「暂无数据 / 新增第一条」，否则无权限页面看起来像空表。
+
 ## G14 上传 401
 
 `el-upload` 用 `:http-request` 走 `api/http.ts`（`FieldControl.vue` 已实现）；
