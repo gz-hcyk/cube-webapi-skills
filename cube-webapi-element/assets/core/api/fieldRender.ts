@@ -328,7 +328,8 @@ export function resolveOptions(f: DataField, lookups?: LookupMap): OptionItem[] 
 
   if (isMappedField(f) || isIdField(f) || isIdsField(f)) {
     const dict = lookupDict(lookups, lookupBaseName(f));
-    if (dict) return Object.entries(dict).map(([value, label]) => ({ value, label: String(label) }));
+    // 行数据里的外键是 number，字典键是 string。不转换时编辑回显会显示裸 ID。
+    if (dict) return Object.entries(dict).map(([value, label]) => ({ value: asOptionValue(value), label: String(label) }));
   }
   return [];
 }

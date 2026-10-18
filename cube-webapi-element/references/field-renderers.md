@@ -70,7 +70,7 @@
 
 表单控件的 `prop` 必须是 `mapField`（`categoryID`），不能是显示字段 `categoryName`。只提交显示字段时，外键列仍是 0，后端返回「分类不可以为空」。
 
-`map` / `dataSource` 的纯数字键要转成 number 再交给 `el-option`。枚举字段提交 `"0"` 时，Cube 的 JSON 转换会失败；提交 `0` 才成功。
+`map` / `dataSource` / 外键字典的纯数字键要转成 number 再交给 `el-option`。枚举字段提交 `"0"` 时，Cube 的 JSON 转换会失败；提交 `0` 才成功。外键行值也是 number，选项若保持字符串，编辑弹窗会回显裸 ID。
 
 ## 3. 必填 / 只读 / 主键
 
