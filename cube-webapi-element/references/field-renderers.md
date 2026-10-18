@@ -74,13 +74,13 @@
 
 ## 3. 必填 / 只读 / 主键
 
-三级判定（`resolveFieldBehavior`）：
+判定（`resolveFieldBehavior`，以 Cube 6.15 设备台账实机为准）：
 
 1. `required === true` → 必填；
-2. 否则 `nullable === false`（明确 NOT NULL）→ 必填；
-3. `nullable === true` **或未下发** → 不必填。
+2. `nullable === true` → 不必填；
+3. **未下发 `nullable` → 非空，必填**。可空字段才会带 `nullable: true`（如存放位置）；名称、编码、分类都不带这个键，后端仍返回「不可以为空」。不要等 `nullable: false`，当前版本不会下发它。
 
-同时排除 `primaryKey` / `isIdentity` / `readOnly` / 审计字段（`CreateTime`、`UpdateUserID`、`CreateIP`…）。
+同时排除 `primaryKey` / `isIdentity` / `readOnly` / 审计字段（`CreateTime`、`UpdateUserID`、`CreateIP`…）/ 布尔开关（`false` 是合法值）。
 
 | 场景 | 处理 |
 |---|---|
@@ -89,8 +89,8 @@
 | 详情 | 全部只读 |
 | 只读控制器（`setting.isReadOnly`） | 隐藏新增/编辑/删除按钮 |
 
-> 实测 Cube 对所有字段下发 `required:false`，所以**只有 `true` 才算必填**。
-> 反过来把 `!nullable` 当必填，会给 `ID`、`CreateTime` 也标红星。
+> 主键和审计字段先被排除，所以「未下发即可空」不会把 `ID`、`CreateTime` 标成必填。
+> 列表里若同时有 `UpdateUser` 和 `UpdateUserID`，只保留名称列。ID 列的值经常是 `0`，标题却也叫「更新者」。
 
 ## 4. 树形（自引用 ParentID）
 

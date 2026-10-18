@@ -16,7 +16,8 @@
 | G10 | 改了主色，hover/选中底色还是旧蓝 | 只改 `--el-color-primary`，没改色阶 | 见 §G10 |
 | G11 | 菜单图标全部空白 | 图标没全局注册，或 `icon` 名对不上 | 见 §G11 |
 | G12 | 点菜单不跳转 / 跳到 404 | url 没归一化（带 `/Index`），或路由没配动态段 | 见 §G12 |
-| G13 | 表单该必填的不校验 / 不该必填的全红 | `required` 与 `nullable` 用法反了 | 见 §G13 |
+| G13 | 表单该必填的不校验 / 不该必填的全红 | 把「未下发 nullable」当成可空 | 见 §G13 |
+| G19 | 无权限时只看到 status code 403 | HTTP 错误没读魔方信封的 `message` | 见 §G19 |
 | G14 | 上传附件 401 | 用了 `el-upload` 的 `action`，绕过了 axios 拦截器 | 见 §G14 |
 | G15 | 导出下载下来是 `index.html` | 用 `window.open` 直连，没带令牌 | 见 §G15 |
 | G16 | 生产子路径部署白屏 | `vite base` 与 `createWebHistory` base 不一致 | 见 §G16 |
@@ -142,11 +143,16 @@ Element Plus 的 hover/选中底色用的是 `--el-color-primary-light-*` 系列
 ## G13 必填判定
 
 ```ts
-required = f.required === true || f.nullable === false   // 再排除主键/审计/只读
+required = !key && !readonly && !boolean && (f.required === true || f.nullable !== true)
 ```
 
-- 把 `f.required === false` 当"明确不必填" → `Name` 这类业务必填项不会校验（Cube 全部下发 `false`）；
-- 用 `!f.nullable` → 未下发也被当不可空，`ID`/`CreateTime` 全标红星。
+设备台账 `GetPage`：`Location` 带 `nullable: true`；`Name` / `Code` / `CategoryName` 省略 `nullable`，也没有 `required`。省略就是非空。等 `nullable === false` 时，分类不会出现必填星号，提交才由后端报「分类不可以为空」。
+
+主键和审计字段先排除，所以这条规则不会给 `ID`、`CreateTime` 打星。布尔开关排除，避免 `false` 被当成没填。
+
+## G19 403 只剩状态码
+
+`GET /api/Ledger/Equipment` 对无「查看」权限的账号返回 HTTP 403，正文仍是 `{ code, message }`。拦截器若直接抛 axios 错误，列表告警只有 `Request failed with status code 403`。要读 `response.data.message`。401 仍走刷新令牌，不要把 403 当成未登录。
 
 ## G14 上传 401
 

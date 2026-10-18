@@ -195,7 +195,9 @@
 .cube-pager {
   display: flex;
   justify-content: flex-end;
+  max-width: 100%;
   padding-top: 16px;
+  overflow-x: auto;
 }
 
 .cube-pager .el-pagination {
@@ -248,6 +250,13 @@
  */
 .cube-form-dialog {
   border-radius: var(--cube-radius-card);
+  max-width: calc(100vw - 32px);
+}
+
+@media (max-width: 720px) {
+  .cube-form-dialog {
+    width: calc(100vw - 32px) !important;
+  }
 }
 
 .cube-form-dialog .el-dialog__header {

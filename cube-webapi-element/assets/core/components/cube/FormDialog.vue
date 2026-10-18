@@ -174,6 +174,17 @@ const dialogWidth = computed(() => {
   return flatItems.value.some((it) => it.control === 'textarea' || it.control === 'rich-text') ? '720px' : '640px';
 });
 
+/** 后端字段名可能是显示列 CategoryName，表单 prop 却是 mapField categoryID。 */
+function propForFieldError(field: string): string {
+  const target = field.toLowerCase();
+  const hit = items.value.find((it) => {
+    const name = String(it.field.name ?? '').toLowerCase();
+    const mapped = String(it.field.mapField ?? '').toLowerCase();
+    return it.prop.toLowerCase() === target || name === target || mapped === target;
+  });
+  return hit?.prop ?? camel(field);
+}
+
 function isFullWidth(it: FormItemSpec): boolean {
   return it.control === 'textarea' || it.control === 'rich-text' || it.control === 'upload' || it.control === 'daterange';
 }
@@ -249,7 +260,7 @@ async function submit() {
     const fieldErrors = e?.fieldErrors as { field: string; message: string }[] | undefined;
     if (fieldErrors?.length) {
       formRef.value?.setFields?.(
-        fieldErrors.map((f) => ({ prop: camel(f.field), message: f.message })),
+        fieldErrors.map((f) => ({ prop: propForFieldError(f.field), message: f.message })),
       );
     }
     ElMessage.error(e?.message || '保存失败');
