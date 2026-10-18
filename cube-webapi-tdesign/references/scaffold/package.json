@@ -95,11 +95,7 @@
     ]
   },
   "engines": {
-<<<<<<< HEAD
     "node": ">=22.22.1"
-=======
-    "node": ">=22.12.0"
->>>>>>> 756c85a (feat(cube-webapi-tdesign): 新增「UI 悬空形态类」闸门 check-ui-classes，并接入 check-all（6→7）)
   },
   "description": "Base on tdesign-starter-cli"
 }
