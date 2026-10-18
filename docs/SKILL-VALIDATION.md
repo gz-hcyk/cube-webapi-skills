@@ -1,5 +1,7 @@
 # 技能验证报告：设备台账示例
 
+本报告只覆盖 `cube-webapi-backend` 与 `cube-webapi-tdesign`。`cube-webapi-element` 不在这条设备台账流程里。Element 技能的检查是另一条：create-vue 脚手架、写完 `/api` `/Auth` `/Cube` 代理后再跑 `scripts/check-project.mjs`、以及 `npm run build`（`vue-tsc --build`）。登录到 CRUD 仍要本机 `127.0.0.1:5052` 的魔方后端，本报告没有替它做这一步。
+
 ## 复测结论：干净通过
 
 最后一轮完整验证没有再发现新的技能缺陷。对照的是技能修正分支 `cursor/skill-fix-from-ledger-validation-7836` 的 `ed47602a7d2c7f27af3203bbe1fd82d45ee94326`，不是最初的 `main` `756c85af1467af8432b8bce6dd16e2115add3be4`。下面第 1–4 节保留第一次对着 `main` 的记录，没有删。

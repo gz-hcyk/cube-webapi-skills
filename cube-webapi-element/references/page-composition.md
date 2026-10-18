@@ -68,7 +68,7 @@ export const SPECIAL_VIEWS: Record<string, () => Promise<any>> = {
 };
 ```
 
-`EntityView` 命中 `area/controller` 时渲染专属组件，否则退回 `ListPage`。
+资产里的 `EntityView` **不会**读取这张表，默认始终渲染 `ListPage`。要启用专属视图，需自己在 `EntityView` 里按 `area/controller` 查表，命中再渲染，否则退回 `ListPage`。`ConfigView.vue` / `DbView.vue` 不在本技能资产中。
 
 ## 3. ListPage 接口
 

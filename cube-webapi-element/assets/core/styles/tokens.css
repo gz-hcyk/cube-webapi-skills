@@ -3,7 +3,7 @@
  * 落位：src/styles/tokens.css，在 element-plus/dist/index.css 之后引入。
  *
  * 基线：政务蓝 #2563eb + 8px 栅格 + 8px 圆角 + 极轻阴影。
- * 改主色时同步三处：本文件、src/stores/setting.ts 的 DEFAULT_BRAND、CubeSettingPanel 预设首位。
+ * 改主色时同步三处：本文件、src/stores/setting.ts 的 DEFAULT_BRAND、SettingPanel 预设首位。
  */
 :root {
   color-scheme: light;
