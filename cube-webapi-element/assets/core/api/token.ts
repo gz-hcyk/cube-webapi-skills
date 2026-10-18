@@ -98,6 +98,7 @@ function b64urlDecode(input: string): string {
 export function getUsernameFromToken(): string {
   const token = getToken();
   const parts = token.split('.');
+  // noUncheckedIndexedAccess（create-vue 3.24 默认开启）下 split 下标是 string | undefined
   const segment = parts[1];
   if (!segment) return '';
   try {

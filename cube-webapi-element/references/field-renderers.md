@@ -66,17 +66,11 @@
 
 ### 2.5 后端没给 map/dataSource 时
 
-按 `lookupBaseName` 拉关联实体的 `Index` 组装字典：
+按 `lookupBaseName` 拉关联实体组装字典。基名不是控制器名：`CategoryID` 得到 `Category`，设备台账里的控制器是 `EquipmentCategory`。`useEntityResource` 用 `GetMenuTree` 在**同一区域**里做后缀匹配（多命中取最长），再请求 `GET /api/{area}/{controller}`。
 
-```ts
-const base = lookupBaseName(field);            // CategoryID → Category
-const res = await getApi<any[]>(`/${area}/${base}`);
-lookups.value[base] = Object.fromEntries(
-  (res.data ?? []).map((r) => [String(r.id), String(r.name ?? r.displayName ?? r.id)]),
-);
-```
+表单控件的 `prop` 必须是 `mapField`（`categoryID`），不能是显示字段 `categoryName`。只提交显示字段时，外键列仍是 0，后端返回「分类不可以为空」。
 
-约定：关联实体默认同 `area`；跨区时由后端在 `DataField` 追加 `source` 字段，前端按 `source` 定位。
+`map` / `dataSource` / 外键字典的纯数字键要转成 number 再交给 `el-option`。枚举字段提交 `"0"` 时，Cube 的 JSON 转换会失败；提交 `0` 才成功。外键行值也是 number，选项若保持字符串，编辑弹窗会回显裸 ID。
 
 ## 3. 必填 / 只读 / 主键
 

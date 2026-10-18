@@ -253,6 +253,17 @@ export function resolveFieldBehavior(f: DataField, mode: 'create' | 'edit' | 'de
 
 /* ------------------------------ 选项解析 ------------------------------ */
 
+/**
+ * 选项值。Cube 的 map/dataSource 键一律是字符串，但枚举 JSON 只接受数字
+ * （status: "0" 会 400，status: 0 才成功）。纯数字键转成 number。
+ */
+function asOptionValue(value: unknown): string | number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/^-?\d+$/.test(text)) return Number(text);
+  return text;
+}
+
 /** dataSource 双形态归一：{text,value}[] / Record<value,label> / JSON 串 */
 export function dictEntries(source: unknown): OptionItem[] {
   if (!source) return [];
@@ -280,14 +291,14 @@ export function dictEntries(source: unknown): OptionItem[] {
         const value = item.value ?? item.Value ?? item.id ?? item.ID;
         const label = item.text ?? item.Text ?? item.label ?? item.Label ?? item.name ?? item.Name ?? value;
         if (value === undefined || value === null) return null;
-        return { value, label: String(label) };
+        return { value: asOptionValue(value), label: String(label) };
       })
       .filter(Boolean) as OptionItem[];
   }
 
   if (typeof source === 'object') {
     return Object.entries(source as Record<string, unknown>).map(([value, label]) => ({
-      value,
+      value: asOptionValue(value),
       label: String(label),
     }));
   }
@@ -297,7 +308,7 @@ export function dictEntries(source: unknown): OptionItem[] {
 
 export function toOptions(f: DataField): OptionItem[] {
   if (f.map && typeof f.map === 'object') {
-    return Object.entries(f.map).map(([value, label]) => ({ value, label: String(label) }));
+    return Object.entries(f.map).map(([value, label]) => ({ value: asOptionValue(value), label: String(label) }));
   }
   return dictEntries(f.dataSource);
 }
@@ -317,7 +328,8 @@ export function resolveOptions(f: DataField, lookups?: LookupMap): OptionItem[] 
 
   if (isMappedField(f) || isIdField(f) || isIdsField(f)) {
     const dict = lookupDict(lookups, lookupBaseName(f));
-    if (dict) return Object.entries(dict).map(([value, label]) => ({ value, label: String(label) }));
+    // 行数据里的外键是 number，字典键是 string。不转换时编辑回显会显示裸 ID。
+    if (dict) return Object.entries(dict).map(([value, label]) => ({ value: asOptionValue(value), label: String(label) }));
   }
   return [];
 }
@@ -498,7 +510,9 @@ export function buildFormItems(
     const behavior = resolveFieldBehavior(f, mode === 'search' ? 'detail' : mode);
     if (onlyEditable && behavior.hidden) continue;
 
-    const prop = camel(String(f.name ?? ''));
+    // 映射字段提交真实列（CategoryName + mapField=CategoryID → categoryID）。
+    // 提交 categoryName 时后端不会回填外键，校验会报「分类不可以为空」。
+    const prop = (isMappedField(f) ? mappedFieldName(f) : '') || camel(String(f.name ?? ''));
     if (!prop) continue;
 
     const control = selectFormControl(f);
@@ -707,9 +721,36 @@ export function toSearchParams(
   return params;
 }
 
+/**
+ * 需要单独拉 id→name 字典的外键基名。
+ * 已有 map/dataSource 的枚举不在此列；Parent 走树形自查找。
+ */
+export function foreignLookupBases(fields: DataField[]): string[] {
+  const bases = new Set<string>();
+  for (const f of fields) {
+    const name = camel(String(f.name ?? ''));
+    if (!name || AUDIT_FIELDS.has(name)) continue;
+    if (!isMappedField(f) && !isIdField(f) && !isIdsField(f)) continue;
+    if (refersToParent(f)) continue;
+    if (toOptions(f).length) continue;
+    const base = lookupBaseName(f);
+    if (!base || base.toLowerCase() === 'parent') continue;
+    bases.add(base);
+  }
+  return [...bases];
+}
+
 /** 只保留元数据里出现过的字段，避免把 UI 辅助字段提交给后端 */
 export function pickPayload(fields: DataField[], model: Record<string, any>): Record<string, any> {
-  const allowed = new Set(fields.map((f) => camel(String(f.name ?? ''))));
+  const allowed = new Set<string>();
+  for (const f of fields) {
+    const name = camel(String(f.name ?? ''));
+    if (name) allowed.add(name);
+    if (isMappedField(f)) {
+      const storage = mappedFieldName(f);
+      if (storage) allowed.add(storage);
+    }
+  }
   const payload: Record<string, any> = {};
   for (const [key, value] of Object.entries(model)) {
     if (allowed.has(key)) payload[key] = value;

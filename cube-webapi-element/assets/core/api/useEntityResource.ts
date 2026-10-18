@@ -6,9 +6,10 @@
  * schema / 分页 / 搜索 / 排序 / CRUD / 树形 / 统计 全部在这里，业务页零重复代码。
  */
 import { computed, ref, type Ref } from 'vue';
-import { deleteApi, getApi, http, postApi, putApi } from './http';
+import { deleteApi, getApi, getRaw, http, postApi, putApi } from './http';
 import {
   buildTree,
+  foreignLookupBases,
   isTreeSchema,
   normalizeRow,
   pickPayload,
@@ -31,6 +32,38 @@ export interface LoadParams {
   sort?: string;
   desc?: boolean;
   [key: string]: unknown;
+}
+
+/** 菜单树成功结果缓存。失败不缓存，下次进入实体页再试。 */
+let menuCatalogCache: Promise<any[]> | null = null;
+
+function loadMenuCatalog(): Promise<any[]> {
+  if (!menuCatalogCache) {
+    menuCatalogCache = getRaw<any[]>('/api/Admin/Index/GetMenuTree')
+      .then((res) => (Array.isArray(res?.data) ? res.data : []))
+      .catch(() => {
+        menuCatalogCache = null;
+        return [];
+      });
+  }
+  return menuCatalogCache;
+}
+
+/** 同区域菜单子节点里，名称以基名结尾的控制器。Category → EquipmentCategory */
+function controllerForBase(tree: any[], areaName: string, base: string): string | undefined {
+  const want = areaName.toLowerCase();
+  const top = tree.find((node) => {
+    const name = String(node?.name ?? '').toLowerCase();
+    const head = String(node?.url ?? '').replace(/^\//, '').split('/')[0]?.toLowerCase() ?? '';
+    return name === want || head === want;
+  });
+  const kids: any[] = Array.isArray(top?.children) ? top.children : [];
+  const needle = base.toLowerCase();
+  const hits = kids
+    .map((node) => String(node?.name ?? ''))
+    .filter((name) => name.toLowerCase().endsWith(needle));
+  hits.sort((a, b) => b.length - a.length);
+  return hits[0];
 }
 
 const EMPTY_SCHEMA: PageSchema = {
@@ -87,6 +120,9 @@ export function useEntityResource(options: EntityResourceOptions) {
   /** 树形时把扁平行组装成树；同时导出 id→name 字典供 ParentName 回显 */
   const treeRows = computed(() => (isTree.value ? buildTree(rows.value) : rows.value));
 
+  /** 外键字典：CategoryName(mapField=CategoryID) 这类字段没有内联 dataSource */
+  const foreignLookups = ref<LookupMap>({});
+
   const selfLookups = computed<LookupMap>(() => {
     const result: LookupMap = {};
     if (!isTree.value) return result;
@@ -98,7 +134,7 @@ export function useEntityResource(options: EntityResourceOptions) {
     return result;
   });
 
-  const lookups = computed<LookupMap>(() => ({ ...selfLookups.value }));
+  const lookups = computed<LookupMap>(() => ({ ...selfLookups.value, ...foreignLookups.value }));
 
   /* ------------------------------ 权限（以 GetPage.setting 为准） ------------------------------ */
 
@@ -122,7 +158,43 @@ export function useEntityResource(options: EntityResourceOptions) {
       search: (data.search as DataField[]) ?? [],
     };
     schemaReady.value = true;
+    await loadForeignLookups();
     return schema.value;
+  }
+
+  /**
+   * 用菜单树把外键基名解析成真实控制器。
+   * CategoryID 去后缀是 Category，设备台账里的控制器却是 EquipmentCategory。
+   * 同区域里按名称后缀匹配，多命中取最长的那个。
+   */
+  async function loadForeignLookups(): Promise<void> {
+    const bases = foreignLookupBases(allFields.value);
+    if (!bases.length) {
+      foreignLookups.value = {};
+      return;
+    }
+    const tree = await loadMenuCatalog();
+    const next: LookupMap = {};
+    await Promise.all(
+      bases.map(async (base) => {
+        const controller = controllerForBase(tree, area.value, base);
+        if (!controller) return;
+        try {
+          const res = await getApi<any[]>(`/${area.value}/${controller}`, { pageIndex: 1, pageSize: 500 });
+          const dict: Record<string, string> = {};
+          for (const row of res.data ?? []) {
+            const id = row?.id ?? row?.Id;
+            if (id === undefined || id === null || id === '') continue;
+            const label = row?.name ?? row?.displayName ?? row?.title ?? id;
+            dict[String(id)] = String(label);
+          }
+          if (Object.keys(dict).length) next[base] = dict;
+        } catch {
+          /* 关联控制器不可达时下拉留空，列表仍可打开 */
+        }
+      }),
+    );
+    foreignLookups.value = next;
   }
 
   function buildQuery(extra: LoadParams, all = false): Record<string, unknown> {
@@ -234,7 +306,8 @@ export function useEntityResource(options: EntityResourceOptions) {
   /* ------------------------------ CRUD ------------------------------ */
 
   async function fetchOne(id: string | number): Promise<Record<string, any>> {
-    const res = await getApi<Record<string, any>>(`${base.value}/${id}`);
+    // 详情是 Detail?id=。写成 /{id} 会 404，编辑弹窗每次打开都报错。
+    const res = await getApi<Record<string, any>>(`${base.value}/Detail`, { id });
     return normalizeRow(res.data ?? {});
   }
 

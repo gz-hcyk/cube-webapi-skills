@@ -77,9 +77,10 @@ export function menuPath(node: MenuNode): string {
   if (!url) return '';
   url = url.replace(/^https?:\/\/[^/]+/i, '');
   url = url.replace(/^\/api\//i, '/');
-  const beforeQuery = url.split('?')[0] ?? '';
-  const beforeHash = beforeQuery.split('#')[0] ?? '';
-  const clean = beforeHash.replace(/\/+$/, '');
+  // noUncheckedIndexedAccess 下 split()[0] / parts[2] 可能是 undefined，先收窄再调用
+  const query = url.split('?')[0] ?? '';
+  const hashless = query.split('#')[0] ?? '';
+  const clean = hashless.replace(/\/+$/, '');
   const parts = clean.split('/').filter(Boolean);
   if (!parts.length) return '';
   // /Admin/User/Index → /Admin/User（Index 是默认动作，不单独成页）
