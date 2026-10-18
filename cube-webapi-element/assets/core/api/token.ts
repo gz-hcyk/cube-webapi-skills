@@ -98,9 +98,10 @@ function b64urlDecode(input: string): string {
 export function getUsernameFromToken(): string {
   const token = getToken();
   const parts = token.split('.');
-  if (parts.length < 2) return '';
+  const segment = parts[1];
+  if (!segment) return '';
   try {
-    const payload = JSON.parse(b64urlDecode(parts[1]));
+    const payload = JSON.parse(b64urlDecode(segment));
     return payload.name || payload.unique_name || payload.preferred_username || payload.Username || '';
   } catch {
     return '';

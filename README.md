@@ -19,5 +19,6 @@ https://www.hcyk.net/article/4
 技能通过 Windows 目录联结（junction）链回 `~/.workbuddy/skills/`：
 - `C:/Users/admin/.workbuddy/skills/cube-webapi-backend` → `cube-webapi-skills\cube-webapi-backend`
 - `C:/Users/admin/.workbuddy/skills/cube-webapi-tdesign` → `cube-webapi-skills\cube-webapi-tdesign`
+- `C:/Users/admin/.workbuddy/skills/cube-webapi-element` → `cube-webapi-skills\cube-webapi-element`
 
 修改技能后，在此仓库执行 `git add -A && git commit && git push` 即可完成版本管理。

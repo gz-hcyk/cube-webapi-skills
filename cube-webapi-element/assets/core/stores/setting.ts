@@ -52,7 +52,7 @@ export const useSettingStore = defineStore('setting', () => {
 
     const palette = elementPrimaryPalette(brand.value);
     for (const [key, value] of Object.entries(palette)) root.style.setProperty(key, value);
-    root.style.setProperty('--cube-brand', palette['--el-color-primary']);
+    root.style.setProperty('--cube-brand', palette['--el-color-primary'] ?? DEFAULT_BRAND);
   }
 
   function persist(): void {

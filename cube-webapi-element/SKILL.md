@@ -156,8 +156,8 @@ GET /api/{area}/{controller}/GetPage
 | 步 | 动作 | 命令 / 入口 | 铁律 | 出口校验 |
 |---|---|---|---|---|
 | **① 初始化** | 官方脚手架 create-vue 生成骨架 | `npm create vue@latest <名> -- --ts --router --pinia --eslint --prettier` | E1 前提 | `package.json` / `vite.config.ts` / `src/main.ts` / `src/router/index.ts` 齐全 |
-| **② 并入资产** | 设计令牌 + 可复用组件拷入 | `cp -r assets/core/. <工程>/src/`；`cp assets/env.example <工程>/.env.local` | E3 / E7 | `node scripts/check-project.mjs <工程>` → **退出码 0** |
-| **③ 个性化** | 改必改项 + 按需扩 | 见下表 | E2 / E4 / E5 / E6 | 编译 0 错误 + §七 交付清单 |
+| **② 并入资产** | 设计令牌 + 可复用组件拷入 | `cp -r assets/core/. <工程>/src/`；`cp assets/env.example <工程>/.env.local` | E3 / E7 | `src/api/http.ts`、`src/styles/tokens.css` 已就位。**不要**在这一步跑闸门 |
+| **③ 代理与个性化** | 先写 `/api` `/Auth` `/Cube` 代理，再跑闸门，然后改文案 | 见 §五开头 | E2 / E3-4 / E4 / E5 / E6 | `node scripts/check-project.mjs <工程>` → **退出码 0**，且 `npm run build` 0 错误 |
 
 **为什么必须先脚手架**：`create-vue` 会给出一套**经过验证**的 tsconfig / vite / 目录约定。
 手搭 `package.json` 看着快，后面每个工具链问题都要自己踩一遍。技能只允许在脚手架产物上做**白名单补丁**。
@@ -210,7 +210,7 @@ src/
 
 ## 二、前置条件
 
-- Node ≥ 18（create-vue 要求）；后端已用 `cube-webapi-backend` 暴露标准实体 API。
+- Node `^22.18.0 || >=24.12.0`（与当前 `create-vue` 的 `engines.node` 一致）。低于 22.18 时 CLI 会报 `EBADENGINE`。后端已用 `cube-webapi-backend` 暴露标准实体 API。
 - 后端默认端口示例 `5052`，与 `vite.config.ts` 的 `API_TARGET` 对齐。
 - 浏览器支持 CSS 变量与 `:focus-visible`（现代浏览器均满足）。
 
@@ -220,7 +220,7 @@ src/
 npm create vue@latest cube-admin -- --ts --router --pinia --eslint --prettier
 cd cube-admin
 npm install
-npm i element-plus @element-plus/icons-vue
+npm i element-plus @element-plus/icons-vue axios
 ```
 
 - 若 CLI 仍进入交互，按此选：**TypeScript 是 / JSX 否 / Router 是 / Pinia 是 / Vitest 否 / E2E 否 / ESLint 是 / Prettier 是**。
@@ -230,12 +230,13 @@ npm i element-plus @element-plus/icons-vue
 | 删除 | 原因 |
 |---|---|
 | `src/components/HelloWorld.vue` | 示例组件 |
+| `src/components/TheWelcome.vue`、`src/components/WelcomeItem.vue`、`src/components/icons/` | 欢迎页及其图标，删掉 `HelloWorld` 后仍会留在 `src/` 里被 `vue-tsc` 扫到 |
 | `src/views/HomeView.vue`、`src/views/AboutView.vue` | 示例页面 + 示例路由 |
-| `src/assets/main.css`、`src/assets/base.css` | 会覆盖设计令牌（尤其 `body { background:#fff }`） |
+| `src/assets/main.css`、`src/assets/base.css`、`src/assets/logo.svg` | `main.css` / `base.css` 会覆盖设计令牌（尤其 `body { background:#fff }`）；`logo.svg` 只被示例页引用 |
 | `src/stores/counter.ts` | 示例 store |
-| `src/router/index.ts` 里的 `/about` 路由 | 前端自造页面入口，违反 E4-M2 |
+| `src/router/index.ts` 里的 `/about` 路由 | 前端自造页面入口，违反 E4-M2。下一步会整文件覆盖路由，这里先删掉，避免拷贝前残留 |
 
-保留：`vite.config.ts`、`tsconfig*.json`、`index.html`、`src/vite-env.d.ts`、`eslint.config.*`、`.prettierrc*`、`.gitignore`。
+保留：`vite.config.ts`、`tsconfig*.json`、`index.html`、仓库根的 `env.d.ts`（create-vue 3.24 起不再生成 `src/vite-env.d.ts`）、`eslint.config.*`、`.prettierrc*`、`.gitignore`。
 
 ### 白名单补丁（只允许这几类偏离）
 
@@ -252,15 +253,42 @@ npm i element-plus @element-plus/icons-vue
 ```bash
 cp -r <skill>/assets/core/. ./src/
 cp <skill>/assets/env.example ./.env.local
-node <skill>/scripts/check-project.mjs .
 ```
 
 `.env.local` 三项：`VITE_APP_TITLE`（系统名）、`VITE_SERVER_BASE`（独立域名部署才填）、`VITE_API_BASE`（一般留空）。
 
-闸门脚本会校验六类硬约束：脚手架骨架、唯一 HTTP 层、令牌键、`/api` 前缀与代理、设计令牌与暗色接线、动态菜单与登录页。
-**退出码 1 不要往下做**——那些 FAIL 都会以"页面空白但不报错"的形式在运行时爆炸。
+这一步**不要**跑 `check-project.mjs`。create-vue 生成的 `vite.config.ts` 还没有 `/api` `/Auth` `/Cube` 代理，闸门会在这里失败。代理写完再跑，见下一节。
 
-## 五、第③步：个性化
+## 五、第③步：先写代理，再跑闸门，然后个性化
+
+### 5.0 代理与闸门（必做，先于文案）
+
+在脚手架的 `vite.config.ts` 里保留原有 `plugins` 与 `@` 别名，加上 `API_TARGET` 和 `server.proxy`。三条前缀缺一，闸门就是 FAIL；不要写 `'/Admin'`。
+
+```ts
+const API_TARGET = 'http://127.0.0.1:5052';
+
+// defineConfig({ ...现有 plugins / resolve 不动...
+server: {
+  proxy: {
+    '/api': { target: API_TARGET, changeOrigin: true },
+    '/Auth': { target: API_TARGET, changeOrigin: true },
+    '/Mfa': { target: API_TARGET, changeOrigin: true },
+    '/Sso': { target: API_TARGET, changeOrigin: true },
+    '/Cube': { target: API_TARGET, changeOrigin: true },
+    '/Content': { target: API_TARGET, changeOrigin: true },
+  },
+},
+```
+
+端口与后端对齐。写 `127.0.0.1`，不要写 `localhost`。然后：
+
+```bash
+node <skill>/scripts/check-project.mjs .
+```
+
+闸门脚本会校验六类硬约束：脚手架骨架、唯一 HTTP 层、令牌键、`/api` 前缀与代理、设计令牌与暗色接线、动态菜单与登录页。
+**退出码 1 不要往下做**——那些 FAIL 都会以"页面空白但不报错"的形式在运行时爆炸。退出码 0 之后再改系统名和登录文案。
 
 ### 5.1 请求层（`api/http.ts`）
 
@@ -358,17 +386,30 @@ function onOpen(index: string) {
 
 ### 5.10 构建与体积
 
-默认**全量引入** Element Plus：简单、稳定、不会出现"某个组件没注册"的运行时空白。
-代价是首包约 1.2MB（gzip 417KB）。三种优化按需选，不要为了体积破坏可读性：
+默认**全量引入** Element Plus：简单、稳定，不会出现「某个组件没注册」的运行时空白。
+主包会触发 Vite 的 500KB 告警，这是预期，不要为了消警告去改引入方式。
+
+Vite 8（rolldown）**不接受对象形式**的 `manualChunks`。下面这种写法会让 `vite build` 直接失败（`manualChunks is not a function`），不要粘贴：
 
 ```ts
-// vite.config.ts —— 只做分包，不改变引入方式（利于长期缓存）
+// 错误：对象表。rolldown 只接受函数。
+manualChunks: {
+  vue: ['vue', 'vue-router', 'pinia'],
+  element: ['element-plus', '@element-plus/icons-vue'],
+}
+```
+
+需要分包、又不改成按需引入时，用函数按模块路径归类：
+
+```ts
+// vite.config.ts —— 只做分包，不改变引入方式
 build: {
   rollupOptions: {
     output: {
-      manualChunks: {
-        vue: ['vue', 'vue-router', 'pinia'],
-        element: ['element-plus', '@element-plus/icons-vue'],
+      manualChunks(id) {
+        if (id.includes('element-plus') || id.includes('@element-plus')) return 'element';
+        if (id.includes('vue-router') || id.includes('pinia')) return 'vue';
+        if (id.includes('node_modules/vue/') || id.includes('node_modules\\vue\\')) return 'vue';
       },
     },
   },
@@ -393,7 +434,7 @@ build: {
 ## 七、交付清单
 
 - [ ] `node scripts/check-project.mjs .` 退出码 0；
-- [ ] `npm run build`（`vue-tsc --noEmit && vite build`）0 错误；
+- [ ] `npm run build`（create-vue 的脚本是 `vue-tsc --build` 与 `vite build`）0 错误；
 - [ ] 登录 → 菜单 → 列表 → 新增 → 编辑 → 删除 全链路手工走通一遍；
 - [ ] 窄屏（900 / 560）无横向溢出；
 - [ ] 暗色切换后表格、表单、弹窗、登录页都正常（不是只变了顶栏）；

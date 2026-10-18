@@ -77,11 +77,14 @@ export function menuPath(node: MenuNode): string {
   if (!url) return '';
   url = url.replace(/^https?:\/\/[^/]+/i, '');
   url = url.replace(/^\/api\//i, '/');
-  const clean = url.split('?')[0].split('#')[0].replace(/\/+$/, '');
+  const beforeQuery = url.split('?')[0] ?? '';
+  const beforeHash = beforeQuery.split('#')[0] ?? '';
+  const clean = beforeHash.replace(/\/+$/, '');
   const parts = clean.split('/').filter(Boolean);
   if (!parts.length) return '';
   // /Admin/User/Index → /Admin/User（Index 是默认动作，不单独成页）
-  if (parts.length >= 3 && ['index', 'list'].includes(parts[2].toLowerCase())) {
+  const action = parts[2];
+  if (action && ['index', 'list'].includes(action.toLowerCase())) {
     return '/' + parts.slice(0, 2).join('/');
   }
   return '/' + parts.join('/');
