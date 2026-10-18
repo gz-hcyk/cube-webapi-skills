@@ -166,8 +166,8 @@ function onCustomColor(value: string | null) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   color: #fff;
   border: 2px solid transparent;

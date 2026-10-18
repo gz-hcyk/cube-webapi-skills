@@ -11,7 +11,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { DEFAULT_UI_PREFS, getUiPrefs, setUiPrefs, type UiPrefs } from '@/api/token';
-import { elementPrimaryPalette } from '@/utils/color';
+import { elementPrimaryPalette, elementPrimaryPaletteDark } from '@/utils/color';
 
 export const DEFAULT_BRAND = '#2563eb';
 
@@ -50,7 +50,7 @@ export const useSettingStore = defineStore('setting', () => {
     root.classList.toggle('dark', dark);
     root.classList.toggle('compact', !!prefs.compact);
 
-    const palette = elementPrimaryPalette(brand.value);
+    const palette = dark ? elementPrimaryPaletteDark(brand.value) : elementPrimaryPalette(brand.value);
     for (const [key, value] of Object.entries(palette)) root.style.setProperty(key, value);
     root.style.setProperty('--cube-brand', palette['--el-color-primary'] ?? brand.value);
   }

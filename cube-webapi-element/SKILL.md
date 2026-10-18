@@ -460,7 +460,11 @@ build: {
 5. 树形塌平铺 → 只查了 `list` 组 / 没 `buildTree` / 分页截断；
 6. 多选崩溃 → 值是 `null` 不是 `[]`；
 7. 分类/名称没有必填星号 → `GetPage` 对非空字段省略 `nullable`，不要等 `nullable: false`；
-8. 「更新者」显示 `0` → 列表同时渲染了 `UpdateUser` 和 `UpdateUserID`，ID 列要让给名称列；
-9. 无权限只看到 `status code 403` → HTTP 错误要读信封 `message`。
+8. 「更新者」显示 `0` 或 `1` → 列表、详情、表单同时渲染了 `UpdateUser` 和 `UpdateUserID`，ID 列要让给名称列；
+9. 无权限只看到 `status code 403` → HTTP 错误要读信封 `message`；
+10. 搜索里的分类下拉是「无数据」、表单里却有选项 → 搜索栏 `buildFormItems` 没传 `lookups`；
+11. 面包屑停在父菜单、当前项不高亮 → `/Ledger` 前缀命中了 `/Ledger/Equipment`，要取最长路径；
+12. 暗色下选中菜单是一块近白 → `setting.apply()` 把浅色 light-9 写进了 inline，盖掉 `theme-dark.css`；
+13. 没填的日期显示 `0001-01-01` → 这是未赋值，按空值显示「—」。
 
 逐条修法见 `references/troubleshooting.md`。

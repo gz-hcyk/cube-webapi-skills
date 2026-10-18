@@ -271,6 +271,11 @@ if (!listPage) {
   if (!/buildColumns/.test(listPage)) fail('列表基类（E1）', 'ListPage 未用元数据生成列');
   if (!/FieldControl/.test(listPage)) warn('字段控件', 'ListPage 未复用 FieldControl');
   else pass('列表基类（E1）', '元数据列 + 通用字段控件');
+  if (!/lookups:\s*(resource\.)?lookups/.test(listPage)) {
+    fail('搜索下拉（E2）', '搜索栏 buildFormItems 未传入 lookups，外键条件会是空下拉');
+  } else {
+    pass('搜索下拉（E2）', '搜索栏与表单共用 lookups');
+  }
 }
 
 const formDialog = read('src/components/cube/FormDialog.vue');

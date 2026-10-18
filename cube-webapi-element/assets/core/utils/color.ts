@@ -59,6 +59,37 @@ export function elementPrimaryPalette(base: string): Record<string, string> {
   };
 }
 
+/** 默认政务蓝在深色底上的色阶，与 theme-dark.css 保持同一组数字。 */
+const DARK_BRAND_PALETTE: Record<string, string> = {
+  '--el-color-primary': '#4d84f5',
+  '--el-color-primary-light-3': '#3a6ad4',
+  '--el-color-primary-light-5': '#2c53a8',
+  '--el-color-primary-light-7': '#203d7c',
+  '--el-color-primary-light-8': '#1a315f',
+  '--el-color-primary-light-9': '#15264a',
+  '--el-color-primary-dark-2': '#6f9cff',
+};
+
+/**
+ * 暗色色阶。浅色 light-9 是近白，写进 html inline 会盖掉 theme-dark.css，
+ * 选中菜单和当前行会变成一块浅色。深色下 light-* 改为向页面底混合。
+ */
+export function elementPrimaryPaletteDark(base: string): Record<string, string> {
+  const c = normalizeHex(base);
+  if (c === '#2563eb') return { ...DARK_BRAND_PALETTE };
+  const primary = tint(c, 0.18);
+  const surface = '#0f1115';
+  return {
+    '--el-color-primary': primary,
+    '--el-color-primary-light-3': mix(primary, surface, 0.4),
+    '--el-color-primary-light-5': mix(primary, surface, 0.55),
+    '--el-color-primary-light-7': mix(primary, surface, 0.7),
+    '--el-color-primary-light-8': mix(primary, surface, 0.78),
+    '--el-color-primary-light-9': mix(primary, surface, 0.86),
+    '--el-color-primary-dark-2': tint(c, 0.35),
+  };
+}
+
 /** 计算相对亮度，用于自动决定覆盖在品牌色上的文字用白还是黑（WCAG 对比度） */
 export function isLightColor(color: string): boolean {
   const [r, g, b] = toRgb(color).map((v) => {

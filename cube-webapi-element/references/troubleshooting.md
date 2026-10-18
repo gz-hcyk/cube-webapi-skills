@@ -150,6 +150,22 @@ required = !key && !readonly && !boolean && (f.required === true || f.nullable !
 
 主键和审计字段先排除，所以这条规则不会给 `ID`、`CreateTime` 打星。布尔开关排除，避免 `false` 被当成没填。
 
+## G20 搜索外键下拉是空的
+
+表单里的分类有「计量仪器 / 办公设备」，搜索栏同一个字段打开却是「无数据」。`GetPage.search` 里的字段名是 `CategoryID`，没有内联 `dataSource`，选项只在 `lookups` 里。`ListPage` 生成搜索项时必须把 `resource.lookups` 传进 `buildFormItems`。只在 `FormDialog` 里传，搜索栏对不上。
+
+## G21 面包屑停在父级，当前菜单不高亮
+
+`/Ledger` 是 `/Ledger/Equipment` 的前缀。`route.path.startsWith(path + '/')` 会先命中父节点。父节点是 `el-sub-menu`，设成 `default-active` 不会点亮子项，面包屑也少最后一级。在所有命中里取 `menuPath` 最长的那个。
+
+## G22 暗色选中态是浅色块
+
+`theme-dark.css` 把 `--el-color-primary-light-9` 写成 `#15264a`。`setting.apply()` 若按浅色公式把 light-9 设成 `#e9effd` 并写到 `html` 的 inline style，会盖掉样式表。深色下改走 `elementPrimaryPaletteDark`。默认政务蓝与 `theme-dark.css` 同一组色值。
+
+## G23 空日期显示 0001-01-01
+
+没填购置日期时，后端给出 `0001-01-01 00:00:00`。这不是业务日期。`isUnsetValue` 把它和 `null` 一样收成「—」。
+
 ## G19 403 只剩状态码
 
 `GET /api/Ledger/Equipment` 对无「查看」权限的账号返回 HTTP 403，正文仍是 `{ code, message }`。拦截器若直接抛 axios 错误，列表告警只有 `Request failed with status code 403`。要读 `response.data.message`。401 仍走刷新令牌，不要把 403 当成未登录。

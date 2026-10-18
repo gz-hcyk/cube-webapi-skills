@@ -167,13 +167,29 @@ function matchesRoute(node: MenuNode): boolean {
   return route.path === path || route.path.startsWith(path + '/');
 }
 
-const activeIndex = computed(() => {
-  for (const [idx, node] of indexMap.value) if (matchesRoute(node)) return idx;
-  return '';
-});
+/**
+ * 父级 url `/Ledger` 也会前缀命中 `/Ledger/Equipment`。
+ * 取路径最长的那一个，当前页才是菜单高亮和面包屑的末项。
+ */
+function bestMenuMatch(): [string, MenuNode] | undefined {
+  let best: [string, MenuNode] | undefined;
+  let bestLen = -1;
+  for (const entry of indexMap.value) {
+    const node = entry[1];
+    if (!matchesRoute(node)) continue;
+    const len = menuPath(node).length;
+    if (len > bestLen) {
+      best = entry;
+      bestLen = len;
+    }
+  }
+  return best;
+}
+
+const activeIndex = computed(() => bestMenuMatch()?.[0] ?? '');
 
 const trail = computed<MenuNode[]>(() => {
-  const hit = [...indexMap.value.entries()].find(([, n]) => matchesRoute(n));
+  const hit = bestMenuMatch();
   if (!hit) return [];
   const chain: MenuNode[] = [];
   let cur: string | null = hit[0];
