@@ -1,0 +1,87 @@
+/**
+ * 暗色主题（落位：src/styles/theme-dark.css）
+ *
+ * 依赖 element-plus/theme-chalk/dark/css-vars.css —— 它按 `html.dark` 提供组件级暗色变量。
+ * 本文件只做"品牌化修正"：把 Element Plus 默认的 #409eff 暗色系换成我们的政务蓝冷灰体系，
+ * 并压平卡片、边框、阴影，让暗色不是"把白色反过来"，而是独立的视觉层。
+ *
+ * 接线三处（缺一即死代码，见 SKILL.md E7）：
+ *   ① main.ts 在 tokens.css 之后引入本文件；
+ *   ② setting.ts 的 apply() 切 html.dark；
+ *   ③ BasicLayout 挂 <SettingPanel />（用户唯一入口）。
+ */
+html.dark {
+  color-scheme: dark;
+
+  --el-color-primary: #4d84f5;
+  --el-color-primary-light-3: #3a6ad4;
+  --el-color-primary-light-5: #2c53a8;
+  --el-color-primary-light-7: #203d7c;
+  --el-color-primary-light-8: #1a315f;
+  --el-color-primary-light-9: #15264a;
+  --el-color-primary-dark-2: #6f9cff;
+
+  --el-bg-color: #161a21;
+  --el-bg-color-page: #0f1115;
+  --el-bg-color-overlay: #1b1f27;
+
+  --el-text-color-primary: #e8eaee;
+  --el-text-color-regular: #c2c7d0;
+  --el-text-color-secondary: #8e95a3;
+  --el-text-color-placeholder: #6b7280;
+  --el-text-color-disabled: #4b5261;
+
+  --el-border-color: #262b35;
+  --el-border-color-light: #22262e;
+  --el-border-color-lighter: #1e222a;
+  --el-border-color-extra-light: #1a1d24;
+
+  --el-fill-color: #1e232b;
+  --el-fill-color-light: #1b1f26;
+  --el-fill-color-lighter: #181b22;
+  --el-fill-color-blank: #161a21;
+
+  --el-mask-color: rgba(0, 0, 0, 0.72);
+
+  --cube-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --cube-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --cube-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* 表格：暗色下用"行分隔线 + 无斑马纹"，比整块底色更耐看 */
+html.dark .el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: #1b1f26;
+  --el-table-row-hover-bg-color: #1f242d;
+  --el-table-border-color: var(--el-border-color-light);
+}
+
+html.dark .el-card,
+html.dark .cube-card {
+  box-shadow: none !important;
+}
+
+/* 侧边栏在暗色下比内容区更深一档，形成层次 */
+html.dark .cube-sidebar {
+  background: #10131a;
+  border-right-color: var(--el-border-color);
+}
+
+html.dark .cube-sidebar .el-menu {
+  background: transparent;
+}
+
+html.dark .el-menu-item.is-active {
+  background: var(--el-color-primary-light-9) !important;
+  color: #dbe6ff !important;
+}
+
+html.dark .cube-header {
+  background: #12151b;
+  border-bottom-color: var(--el-border-color);
+}
+
+html.dark .cube-page__title h1 {
+  color: #f3f4f6;
+}

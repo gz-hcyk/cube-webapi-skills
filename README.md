@@ -13,6 +13,7 @@ https://www.hcyk.net/article/4
 ## 包含的技能
 - `cube-webapi-backend/` — NewLife.Cube 第三代 WebApi 开发技能
 - `cube-webapi-tdesign/` — Cube WebApi 的 TDesign Vue Next 前端生成技能
+- `cube-webapi-element/` — Cube WebApi 的 Vue 3 + Vite + Element Plus 前端生成技能（组件化 + 模板继承）
 
 ## 本地加载方式
 技能通过 Windows 目录联结（junction）链回 `~/.workbuddy/skills/`：
