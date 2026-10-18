@@ -306,7 +306,8 @@ export function useEntityResource(options: EntityResourceOptions) {
   /* ------------------------------ CRUD ------------------------------ */
 
   async function fetchOne(id: string | number): Promise<Record<string, any>> {
-    const res = await getApi<Record<string, any>>(`${base.value}/${id}`);
+    // 详情是 Detail?id=。写成 /{id} 会 404，编辑弹窗每次打开都报错。
+    const res = await getApi<Record<string, any>>(`${base.value}/Detail`, { id });
     return normalizeRow(res.data ?? {});
   }
 
