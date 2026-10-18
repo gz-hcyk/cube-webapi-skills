@@ -100,7 +100,10 @@ export function getUsernameFromToken(): string {
   const parts = token.split('.');
   if (parts.length < 2) return '';
   try {
-    const payload = JSON.parse(b64urlDecode(parts[1]));
+    // noUncheckedIndexedAccess（create-vue 3.24 默认开启）下 split 下标是 string | undefined
+    const segment = parts[1];
+    if (!segment) return '';
+    const payload = JSON.parse(b64urlDecode(segment));
     return payload.name || payload.unique_name || payload.preferred_username || payload.Username || '';
   } catch {
     return '';
