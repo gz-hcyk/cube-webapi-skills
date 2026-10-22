@@ -896,6 +896,29 @@ import type { MenuValue, RadioValue, SwitchValue, InputNumberValue, SelectValue,
 **已随 core 落地的专用页**：`DbView`（数据库）、`FileView`（文件管理）、`ServerInfoView`（服务器信息 / 监控）、
 `WidgetBoardView`（工作台部件）、`ConfigView`（配置族）、认证族 `AuthShell` + `RegisterView` + `ForgotPasswordView`。
 
+**已资产化的「内置功能页」（2026-10-22 新增，共 12 件，**无需每次现写**）**：
+
+| 资产 | 干什么 | 启用条件 | 索引 |
+|---|---|---|---|
+| `PageNav.vue` / `PageSection.vue` / `ProfileHeader.vue` | 版式三基元：页内导航 / 分区卡片 / 信息头卡 | 无条件（所有内置功能页都用） | `FEATURES.md` §一 |
+| `AccountView.vue` | 个人资料 + 安全中心（资料 / 改密 / 第三方授权 / 租户） | 需要用户自助 | `FEATURES.md` §二 |
+| `LovConfigDrawer.vue` | 值集配置（4 子表，整份 `SaveConfig`） | 后端有 `Admin/Lov` | §二 |
+| `EntityActions.vue` + `entityActions.ts` | 声明式行操作（吊销令牌 / 清空密码 / 强制下线 / 立即执行） | ListPage 内置，零接线 | §二 |
+| `TenantSwitcher.vue` | 租户切换（列表来源 + 逐级降级） | 多租户部署 | §二 |
+| `ActivateView.vue` / `SsoCallbackView.vue` | 账号激活 / 第三方登录回跳 | 后端有对应端点 | §二 |
+| `api/crypto.ts` | 密码加密（登录与改密共用一份） | 无条件 | §二 |
+
+> **版式基线**：`references/mvc-page-organization.md` —— 内置功能页的页面组织**照 MVC 版**
+> （`_User_Nav` / `_Object_Nav` 的平级导航、`profile.css` 的分区卡片与两列字段、`SetPermission` 的 4 列矩阵）。
+> 颜色一律走设计令牌，禁止照抄 MVC 的 `#2b7dbc`。
+>
+> ★★ **2026-10-22 实测修正（6.15.2026.901 / net9.0，`GET /Cube/Apis` 391 条签名 + 端点探针）**：
+> 历史文档有 6 处端点假设是错的，已在 `cube-page-catalog.md` 与 `FEATURES.md` 标注：
+> `Auth/Activate`、`Auth/SendActivateCode`、`Auth/SwitchTenant`、`Role/PermissionTree`、
+> 值集四个 `BatchSave*` **均不存在**；`UserOnline/Kick` 是 **GET** 不是 POST；
+> `CronJob/ExecuteNow` 形参是 **`id`** 不是 `name`。
+> **纪律**：新增行操作或专用页前，先 `curl /Cube/Apis` 核签名，再写代码——这一步能省掉整轮返工。
+
 **未实测契约的纪律**：官方文档只给动作签名、不给响应结构时，页面必须
 （a）**自适应渲染**（按键/按值类型自动成行成表，不硬编码字段名），
 （b）挂 `DataProbe.vue`（DEV 可见）把真实返回摊开。

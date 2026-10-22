@@ -6,13 +6,23 @@ import ForgotPasswordView from '@/pages/ForgotPasswordView.vue';
 import BasicLayout from '@/layouts/BasicLayout.vue';
 import EntityPage from '@/pages/EntityPage.vue';
 import DashboardView from '@/pages/DashboardView.vue';
+import AccountView from '@/pages/AccountView.vue';
+import ActivateView from '@/pages/ActivateView.vue';
+import SsoCallbackView from '@/pages/SsoCallbackView.vue';
 
 /**
- * 免登录页（认证族）：登录 / 注册 / 忘记密码。
+ * 免登录页（认证族）：登录 / 注册 / 忘记密码 / 账号激活。
  * 与业务页分离——业务页一律要过守卫，认证页已登录时反向跳回 dashboard。
  * 认证族端点在**根族**（无 [Area]），故不走 /api 前缀（见 SKILL.md §H2 判据）。
  */
-export const GUEST_PATHS = ['/login', '/register', '/forgot-password'];
+export const GUEST_PATHS = ['/login', '/register', '/forgot-password', '/activate'];
+
+/**
+ * 公开路径：**未登录可进、已登录也可进**。
+ * SSO 回跳页必须在此列——它要做的是「把令牌写进本地」，若被「已登录 → dashboard」规则
+ * 反向跳走，令牌就永远落不了库（表现为第三方登录后仍在登录页）。
+ */
+export const PUBLIC_PATHS = ['/sso-callback'];
 
 /**
  * 组件可视化验证页（**仅 DEV 注册**，生产构建不暴露；连同对应 .vue 一起可整段删除）：
@@ -37,12 +47,18 @@ const router = createRouter({
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
     { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },
+    // 认证族：账号激活（支持 ?token=&account= 邮件直达）
+    { path: '/activate', name: 'activate', component: ActivateView },
+    // 第三方登录回跳落地页（公开路径，见上 PUBLIC_PATHS 说明）
+    { path: '/sso-callback', name: 'sso-callback', component: SsoCallbackView },
     {
       path: '/',
       component: BasicLayout,
       redirect: '/dashboard',
       children: [
         { path: 'dashboard', name: 'dashboard', component: DashboardView },
+        // 个人资料 / 安全中心（内置功能页，组织照 MVC 版 User/Info）
+        { path: 'account', name: 'account', component: AccountView },
         // 通用实体页：Asset 区 26 个实体零新增页，均由元数据驱动
         { path: 'entity/:area/:controller', name: 'entity', component: EntityPage, props: true },
         // DEV 专用组件验证页（生产构建为空数组）
@@ -55,9 +71,10 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const isGuest = GUEST_PATHS.includes(to.path);
+  const isPublic = PUBLIC_PATHS.includes(to.path);
   // 未登录访问业务页 → 去登录（redirect 记住来路，登录后可回跳）
-  if (!isGuest && !isAuthed()) return { path: '/login', query: { redirect: to.fullPath } };
-  // 已登录再访问认证页 → 回 dashboard（注册 / 忘记密码同此规则）
+  if (!isGuest && !isPublic && !isAuthed()) return { path: '/login', query: { redirect: to.fullPath } };
+  // 已登录再访问认证页 → 回 dashboard（注册 / 忘记密码 / 激活同此规则）
   if (isGuest && isAuthed()) return '/dashboard';
   return true;
 });

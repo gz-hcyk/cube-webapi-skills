@@ -32,13 +32,7 @@
               <t-input class="top-search" placeholder="搜索设备名称 / 编号 / IP" clearable>
                 <template #prefix-icon><t-icon name="search" /></template>
               </t-input>
-              <t-select
-                :value="tenant"
-                class="tenant"
-                :options="tenantOptions"
-                @change="onTenant"
-                :auto-width="true"
-              />
+              <TenantSwitcher compact />
               <t-tooltip content="通知">
                 <t-button theme="default" shape="square" variant="text">
                   <t-icon name="notification" />
@@ -70,13 +64,7 @@
           <template #prefix-icon><t-icon name="search" /></template>
         </t-input>
         <div class="top-actions">
-          <t-select
-            :value="tenant"
-            class="tenant"
-            :options="tenantOptions"
-            @change="onTenant"
-            :auto-width="true"
-          />
+          <TenantSwitcher compact />
           <t-tooltip content="通知">
             <t-button theme="default" shape="square" variant="text">
               <t-icon name="notification" />
@@ -109,9 +97,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
+// 顶栏租户切换：独立组件（内置功能，逻辑见 components/cube/TenantSwitcher.vue）。
+// 此处不再内联 t-select：历史实现把租户选项硬编码在布局里，换项目必须改布局，
+// 且切换只改本地头、不调服务端——属「界面切了数据没切」的典型缺陷。
+import TenantSwitcher from '@/components/cube/TenantSwitcher.vue';
 // TDesign 事件回调类型从包根导入：t-select 的 @change 是 `(value: SelectValue<SelectOption>)`。
 // ⚠️ 参数位置按**逆变**检查（strictFunctionTypes），把它写成更窄的类型会 TS2322。
 //
@@ -120,7 +111,6 @@ import { MessagePlugin } from 'tdesign-vue-next';
 //   `TdDropdownItemProps['value']` = `string | number | { [key: string]: any } | undefined`
 //   （旧写法 `(d: DropdownOption)` 在 1.20.2 能过、在 1.20.7 **编译失败** → 见 type DropdownClickValue）。
 //   故此处一律使用**与包内声明等宽的并集**，两个版本下都成立，不再依赖具体小版本。
-import type { SelectValue, SelectOption } from 'tdesign-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { useSettingStore } from '@/stores/setting';
 import { getUsernameFromToken } from '@/api/token';
@@ -163,12 +153,8 @@ const initial = computed(() => (username.value || '管').slice(0, 1).toUpperCase
 // 顶部布局下菜单主题跟随全局模式（侧边布局固定深色以匹配深蓝侧栏）
 const menuTheme = computed<'light' | 'dark'>(() => (setting.mode === 'dark' ? 'dark' : 'light'));
 
-const tenant = ref(auth.getTenant());
-const tenantOptions = [
-  { value: '', label: '默认租户（总控）' },
-  { value: 'east', label: '华东物联网公司' },
-  { value: 'south', label: '华南智造工厂' },
-];
+// 顶栏租户切换器由 <TenantSwitcher> 自持（列表来源、切换流程、降级策略都在组件内），
+// 布局层不再持有租户状态——布局只负责摆放位置。
 
 function toggleCollapsed() {
   setting.$patch({ collapsed: !setting.collapsed });
@@ -192,24 +178,13 @@ function onNavigate(url: string) {
   router.push(target);
 }
 
-function onTenant(v: SelectValue<SelectOption>) {
-  // SelectValue 是宽联合（string|number|boolean|bigint|SelectOption|数组）。
-  // 本页 tenantOptions 的 value 均为字符串，但类型上必须显式归一化后才能写入 string ref。
-  // ⚠️ 不可断言成 SelectOption：SelectOption = SelectOption | SelectOptionGroup，其中
-  //    SelectOptionGroup 没有 value 属性 → TS2339。统一按 Record<string, any> 取 value。
-  const s = v == null ? '' : String(typeof v === 'object' ? ((v as Record<string, any>).value ?? '') : v);
-  tenant.value = s;
-  auth.setTenant(s);
-  MessagePlugin.success(s ? '已切换租户，刷新数据' : '已切回总控');
-  window.location.reload();
-}
-
 // 铁律 M3：默认落地页为 dashboard —— 品牌区（系统名/Logo）与用户菜单均回仪表盘
 function goHome() {
   if (route.path !== '/dashboard') router.push('/dashboard');
 }
 
 const userMenu = [
+  { content: '个人资料', value: 'account' },
   { content: '返回仪表盘', value: 'home' },
   { content: '退出登录', value: 'logout' },
 ];
@@ -221,6 +196,10 @@ type DropdownClickValue = string | number | { [key: string]: any } | undefined;
 function onUserMenu(d: DropdownClickValue) {
   const value = d && typeof d === 'object' ? (d as { value?: string | number }).value : d;
 
+  if (value === 'account') {
+    if (route.path !== '/account') router.push('/account');
+    return;
+  }
   if (value === 'home') {
     goHome();
     return;

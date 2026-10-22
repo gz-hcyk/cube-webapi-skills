@@ -5,6 +5,21 @@
 >
 > 配套：`page-composition.md`（页面构成与覆盖机制）、`field-renderers.md`（字段→控件）、
 > `config-controller.md`（配置页）、`lov-list-field.md`（值集）、`permission-editor-integration.md`（角色权限树）。
+>
+> ★★ **2026-10-22 实测复核（NewLife.Cube 6.15.2026.901 / net9.0）**：启动真实后端，
+> 用 `GET /Cube/Apis`（391 条动作签名，权威）+ 端点探针逐条核对，**推翻了本文原有的 5 处假设**：
+>
+> | 原假设 | 实测 | 影响 |
+> |---|---|---|
+> | `POST /Auth/Activate`、`/Auth/SendActivateCode` 存在 | **404，不存在**（Auth 仅 11 个动作） | 账号激活页在原生 6.15 无后端支撑 → 已做显式降级提示 |
+> | `POST /Auth/SwitchTenant` 存在 | **404，不存在** | 租户切换退化为本地 `X-Tenant` 头 + 重载（该版本的正常路径） |
+> | `GET /api/Admin/UserOnline/Kick` 是 POST | **是 GET** | 写成 POST 会 405 |
+> | `POST /api/Cube/CronJob/ExecuteNow?name=` | 形参是 **`id`（String）** | 传 name 会静默不执行 |
+> | `Role/PermissionTree`、`SavePermission` 存在 | **不存在**（Role 仅 11 个标准实体动作） | 权限矩阵须后端自建端点 |
+> | 值集 `BatchSaveEnumItems` 等四个分存端点 | **不存在**（Lov 共 16 个动作） | 只能整份 `SaveConfig` |
+>
+> 落地资产与启用条件见 `FEATURES.md`；页面版式基线见 `mvc-page-organization.md`。
+> 标记约定：**✅ 已有资产落地**（可直接用）/ **🧩 仅配方**（需现场接线）/ **⚠️ 实测无端点**（不可直接实现）。
 
 ---
 
@@ -62,12 +77,12 @@
 | 两步验证（登录中） | `POST /Mfa/Verify`（`MfaController`） | — | `LoginView` 内 MFA 步骤 | ✅ |
 | 注册 | `POST /Auth/Register` | — | `pages/RegisterView.vue` | ✅ |
 | 忘记密码 / 重置 | `POST /Auth/SendCode`（`action=ResetPassword`）+ `POST /Auth/ResetPassword` | — | `pages/ForgotPasswordView.vue` | ✅ |
-| 账号激活 | `POST /Auth/Activate`（验证码）/ `POST /Auth/SendActivateCode`（重发） | — | 复用 `AuthShell`，见 §五.2 配方 | 🧩 |
-| 邮箱激活直达 | `GET /Auth/Activate?token=&account=` | — | 同上（前端解析 query 后调接口） | 🧩 |
+| 账号激活 | `POST /Auth/Activate`（验证码）/ `POST /Auth/SendActivateCode`（重发） | — | `pages/ActivateView.vue`（**已资产化**，端点缺失时显式提示并降级到 `Auth/SendCode`） | ⚠️ 实测 6.15 无此两端点 |
+| 邮箱激活直达 | `GET /Auth/Activate?token=&account=` | — | 同上（前端解析 query 后调接口） | ⚠️ 同上 |
 | 刷新令牌 | `POST /Auth/Refresh` | — | `api/http.ts` 401 拦截器自动重放 | ✅ |
-| 切换租户 | `POST /Auth/SwitchTenant` | — | 顶栏租户切换器 + 成功后整页刷新 | 🧩 |
-| 安全中心：改密 | `POST /api/Admin/User/ChangePassword` | ① | 见 §5.3 配方 | 🧩 |
-| 安全中心：绑定邮箱/手机 | `POST /api/Admin/User/BindByVerifyCode`、`SendVerifyCode` | ① | 同上 | 🧩 |
+| 切换租户 | `POST /Auth/SwitchTenant` | — | `components/cube/TenantSwitcher.vue`（**已资产化**；无端点时改本地 `X-Tenant` 并重载） | ⚠️ 实测 6.15 无此端点 |
+| 安全中心：改密 | `POST /api/Admin/User/ChangePassword` | ① | `pages/AccountView.vue`（**已资产化**） | ✅ |
+| 安全中心：绑定邮箱/手机 | `POST /api/Admin/User/BindByVerifyCode`、`SendVerifyCode` | ① | 同上（实测端点均存在） | ✅ |
 | 安全中心：验证/更换联系方式 | `POST /Auth/VerifyContact`（`action=bind` 发码） | — | 同上 | 🧩 |
 | MFA 自助开通/关闭 | `GET /Mfa/Setup`、`POST /Mfa/Activate`、`POST /Mfa/Disable`、`GET /Mfa/Status` | — | 同上（二维码 + 备用码） | 🧩 |
 | 单人单点/SSO 回调 | `SsoController`：`Login` / `Auth2` / `LoginInfo` / `Bind` / `UnBind`（24 动作） | — | 登录页 OAuth 按钮已指向 `/Sso/Login/{name}`；回跳页配方见 §5.4 | 🧩 |
@@ -90,11 +105,11 @@
 | 页面 | 控制器 | 类别 | 默认落地 | 状态 |
 |---|---|---|---|---|
 | 用户管理 | `Admin/User`（实体，18 动作） | ① | `ListPage`（泛型） | ✅ |
-| ↳ 吊销用户令牌 | `POST /api/Admin/User/RevokeTokens?id=` | ① | `#row-actions` 配方 §5.1 | 🧩 |
-| ↳ 清空密码 | `POST /api/Admin/User/ClearPassword?id=` | ① | 同上 | 🧩 |
+| ↳ 吊销用户令牌 | `POST /api/Admin/User/RevokeTokens?id=` | ① | `src/entityActions.ts` 声明式行操作（**已资产化**） | ✅ |
+| ↳ 清空密码 | `POST /api/Admin/User/ClearPassword?id=` | ① | 同上 | ✅ |
 | ↳ 头像上传 | `POST /api/Admin/User/UploadFile` → 再 `Info(avatar=)` | ① | 表单内上传（`FormDialog` 已支持 upload） | 🧩 |
 | 角色管理 | `Admin/Role`（实体） | ① | `ListPage` | ✅ |
-| ↳ **角色权限设置** | `GET /api/Admin/Role/PermissionTree?id=`、`POST SavePermission` | ① | `RoleMenuEditor.vue`，接线配方见 `permission-editor-integration.md` | 🧩 |
+| ↳ **角色权限设置** | `GET /api/Admin/Role/PermissionTree?id=`、`POST SavePermission` | ① | `RoleMenuEditor.vue`，接线配方见 `permission-editor-integration.md` | ⚠️ 实测 6.15 无此两端点（Role 仅 11 个标准实体动作）→ 需后端自建 |
 | 菜单管理 | `Admin/Menu`（**实体树** + `BuildMenuSource` 父级路径字典） | ① | `ListPage`（**自动树形表格**，见 SKILL §4.7）；父级下拉用映射列 | ✅ |
 | 部门管理 | `Admin/Department`（实体树） | ① | `ListPage`（自动树形） | ✅ |
 | 租户管理 | `Admin/Tenant` | ① | `ListPage` | ✅ |
@@ -102,7 +117,7 @@
 | 访问规则 | `Admin/AccessRule`（`AccessActionKinds`/`LimitDimensions` 枚举） | ① | `ListPage`（枚举→下拉） | ✅ |
 | 用户关联 | `Admin/UserConnect`（`?userId=` 由 User 链接列跳转） | ① | `ListPage` | ✅ |
 | 用户在线 | `Admin/UserOnline` | ① | `ListPage` | ✅ |
-| ↳ **强制下线** | `POST /api/Admin/UserOnline/Kick?id=` | ① | `#row-actions` 配方 §5.1 | 🧩 |
+| ↳ **强制下线** | `GET /api/Admin/UserOnline/Kick?id=` | ① | `src/entityActions.ts`（**已资产化**；注意是 **GET**） | ✅ |
 | 用户令牌 | `Admin/UserToken` | ① | `ListPage` | ✅ |
 | 访问统计 | `Admin/UserStat` + `OnGetChartData`（主折线三 Y 轴 + 箱线 + K 线） | ① | `ListPage` + 图表配方 §5.6 | 🧩 |
 | 委托代理 | `Cube/PrincipalAgent` | ① | `ListPage` | ✅ |
@@ -125,10 +140,10 @@
 | 页面 | 端点（`Admin/LovController`） | 类别 | 默认落地 | 状态 |
 |---|---|---|---|---|
 | 值集管理（列表） | `Search`（实体列） | ① | `ListPage` | ✅ |
-| 值集完整配置 | `GET GetConfig?id=`、`POST SaveConfig` | ① | 值集配置页配方 §5.7 | 🧩 |
-| 枚举值（子表） | `BatchSaveEnumItems?id=&items=` | ① | 同上 | 🧩 |
-| 列表配置（子表） | `SaveListConfig?id=&config=` | ① | 同上 | 🧩 |
-| 搜索字段 / 表格列（子表） | `BatchSaveSearchFields` / `BatchSaveTableColumns` | ① | 同上 | 🧩 |
+| 值集完整配置 | `GET GetConfig?id=`、`POST SaveConfig` | ① | `components/cube/LovConfigDrawer.vue`（**已资产化**，4 子表 + 整份保存） | ✅ |
+| 枚举值（子表） | `BatchSaveEnumItems?id=&items=` | ① | 同上（随 `SaveConfig` 整份提交） | ⚠️ 实测无此端点 |
+| 列表配置（子表） | `SaveListConfig?id=&config=` | ① | 同上 | ⚠️ 实测无此端点 |
+| 搜索字段 / 表格列（子表） | `BatchSaveSearchFields` / `BatchSaveTableColumns` | ① | 同上 | ⚠️ 实测无此两端点 |
 | 值集元数据 / 取数代理 | `GET Meta?codes=`、`POST ListData`、`POST BatchLabel` | ① | 运行时由 `api/useLov.ts` 消费（已落地） | ✅ |
 | LIST 型值集选择弹窗 | 同上 | — | `components/cube/LovListField.vue` | ✅ |
 
@@ -139,7 +154,7 @@
 | 数据库管理 | `Admin/Db`（`Index`/`Backup`/`BackupAndCompress`/`Download`） | ③ | `components/cube/DbView.vue` | ✅ |
 | 文件管理 | `Admin/File`（`Index`/`Upload`/`Download`/`Delete`/`Compress`/`Decompress`/Copy/Move/Paste/CancelCopy/ClearClipboard） | ③ | `components/cube/FileView.vue` | ✅ |
 | 定时任务 | `Cube/CronJob` | ① | `ListPage` | ✅ |
-| ↳ **立即执行** | `POST /api/Cube/CronJob/ExecuteNow?name=` | ① | `#row-actions` 配方 §5.1 | 🧩 |
+| ↳ **立即执行** | `POST /api/Cube/CronJob/ExecuteNow?id=` | ① | `src/entityActions.ts`（**已资产化**；形参是 `id` 不是 `name`） | ✅ |
 | 审计日志 | `Admin/Log`（只读） | ① | `ListPage` | ✅ |
 | 应用日志 | `Cube/AppLog` | ① | `ListPage` | ✅ |
 | 应用系统 / 应用模块 | `Cube/App`、`Cube/AppModule` | ① | `ListPage` | ✅ |

@@ -27,6 +27,11 @@ import {
   DEFAULT_CATEGORY,
 } from '@/api/fieldRender';
 import { normalizeSchema, type DataField } from '@/api/useEntityResource';
+import { useRoute } from 'vue-router';
+import PageNav from './PageNav.vue';
+import { settingsNav } from '@/pageNav';
+
+const route = useRoute();
 
 export interface ConfigField {
   name: string;
@@ -86,6 +91,16 @@ const model = reactive<Record<string, any>>({});
 const loading = ref(false);
 const saving = ref(false);
 const metaLoaded = ref(false); // GetFields 是否成功取到元数据
+
+/**
+ * 系统设置页内导航（对齐 MVC 版 `_Object_Nav.cshtml`）。
+ * MVC 把 Core / Sys / Star / XCode / Cube 五个配置控制器做成平级页，用胶囊导航串联；
+ * 这里复刻同一组织方式，避免用户在五个设置页之间「断了路」（只能靠侧栏菜单翻）。
+ * 仅当控制器属于该组时渲染——业务自定义的 Config<T> 不该看到「系统设置」组。
+ */
+const SETTINGS_CONTROLLERS = ['Core', 'Sys', 'Star', 'XCode', 'Cube'];
+const settingsNavItems = computed(() => settingsNav(route.path));
+const showSettingsNav = computed(() => SETTINGS_CONTROLLERS.includes(props.controller));
 
 const _loadUrl = computed(() => props.loadUrl || `/${props.area}/${props.controller}`);
 const _saveUrl = computed(() => props.saveUrl || `/${props.area}/${props.controller}`);
@@ -285,6 +300,8 @@ onMounted(load);
 
 <template>
   <div class="config-view">
+    <!-- 系统设置组页内导航（对齐 MVC `_Object_Nav`）：仅在 Core/Sys/Star/XCode/Cube 之间显示 -->
+    <PageNav v-if="showSettingsNav" :items="settingsNavItems" variant="pills" />
     <t-card :title="title || `${controller} 设置`" :loading="loading">
       <t-form v-if="!loading" :data="model" :rules="rules" label-width="200px" @submit="save">
         <!-- 多分组（category 命中）：分 tab 组织字段 -->

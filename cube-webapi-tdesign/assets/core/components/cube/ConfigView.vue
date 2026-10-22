@@ -23,12 +23,15 @@ import {
   formItemName,
   selectFormControl,
   groupFormItemsByCategory,
-  isEnumType,
   resolveFieldBehavior,
   DEFAULT_CATEGORY,
 } from '@/api/fieldRender';
 import { normalizeSchema, type DataField } from '@/api/useEntityResource';
-import { useLov } from '@/api/useLov';
+import { useRoute } from 'vue-router';
+import PageNav from './PageNav.vue';
+import { settingsNav } from '@/pageNav';
+
+const route = useRoute();
 
 export interface ConfigField {
   name: string;
@@ -88,8 +91,16 @@ const model = reactive<Record<string, any>>({});
 const loading = ref(false);
 const saving = ref(false);
 const metaLoaded = ref(false); // GetFields 是否成功取到元数据
-/** LovController 值集（lovCode → 中文选项），字典字段的唯一标签来源（详见 references/config-controller.md §6） */
-const { lovOptions, load: loadLov } = useLov();
+
+/**
+ * 系统设置页内导航（对齐 MVC 版 `_Object_Nav.cshtml`）。
+ * MVC 把 Core / Sys / Star / XCode / Cube 五个配置控制器做成平级页，用胶囊导航串联；
+ * 这里复刻同一组织方式，避免用户在五个设置页之间「断了路」（只能靠侧栏菜单翻）。
+ * 仅当控制器属于该组时渲染——业务自定义的 Config<T> 不该看到「系统设置」组。
+ */
+const SETTINGS_CONTROLLERS = ['Core', 'Sys', 'Star', 'XCode', 'Cube'];
+const settingsNavItems = computed(() => settingsNav(route.path));
+const showSettingsNav = computed(() => SETTINGS_CONTROLLERS.includes(props.controller));
 
 const _loadUrl = computed(() => props.loadUrl || `/${props.area}/${props.controller}`);
 const _saveUrl = computed(() => props.saveUrl || `/${props.area}/${props.controller}`);
@@ -109,70 +120,13 @@ function pickValue(obj: Record<string, any>, name: string, origName: string): an
   return '';
 }
 
-type Option = { label: string; value: string | number };
-
-/** 数值型 typeName：选项值需与属性类型对齐（见 alignOptions） */
-const NUMERIC_TYPES = new Set([
-  'int16', 'int32', 'int64', 'int', 'long', 'short', 'byte', 'sbyte',
-  'uint16', 'uint32', 'uint64', 'uint', 'ulong', 'ushort',
-  'single', 'float', 'double', 'decimal',
-]);
-
-/**
- * 取字段的内联选项（框架契约有**两种** dataSource 形态，都必须认）：
- *  1) `dataSource` 为数组 `[{text,value}]` —— 实体/旧版元数据形态；
- *  2) `dataSource` 为对象 `{ 值: 标签 }` —— `DataField.ToDictionary()` 的**真实输出形态**。
- *     只判 `Array.isArray` 会把框架下发的对象当成"无选项"丢弃 → 字典字段恒空下拉。
- *  3) `map` 对象 `{ 值: 标签 }`。
- */
-function toOptions(f: DataField): Option[] | undefined {
-  const ds: any = (f as any).dataSource;
-  if (Array.isArray(ds) && ds.length) {
-    return ds.map((d: any) => ({ label: d.text, value: d.value }));
+// 取枚举/字典选项（优先 dataSource，其次 map；后端已内联，无需异步 lookups）
+function toOptions(f: DataField): { label: string; value: string | number }[] | undefined {
+  if (Array.isArray(f.dataSource) && f.dataSource.length) {
+    return f.dataSource.map((d) => ({ label: d.text, value: d.value }));
   }
-  if (ds && typeof ds === 'object') {
-    const arr = Object.entries(ds).map(([k, v]) => ({ label: String(v), value: k }));
-    if (arr.length) return arr;
-  }
-  const mp: any = (f as any).map;
-  if (mp && typeof mp === 'object') {
-    const arr = Object.entries(mp).map(([k, v]) => ({ label: String(v), value: k }));
-    if (arr.length) return arr;
-  }
-  return undefined;
-}
-
-/**
- * 选项值域对齐（关键，否则"修好了仍显示数字"）：
- *   值集（Lov/Meta）与字典的 value 恒为**字符串**（"0"、"255"、"-1"），
- *   而配置对象里 Int32 属性、以及 C# 枚举属性反序列化后都是 **number**。
- *   t-select 按值严格匹配，类型不一致时选不中任何项，界面就退化显示裸数字。
- * 故「数值型 typeName」**与枚举类型字段**都要对齐（漏掉枚举分支时，枚举字段仍显示 2/3）。
- */
-function alignOptions(f: DataField, opts: Option[]): Option[] {
-  const t = String((f.typeName ?? (f as any).type ?? '') || '').trim().toLowerCase();
-  if (!NUMERIC_TYPES.has(t) && !isEnumType(f)) return opts;
-  return opts.map((o) => {
-    const n = typeof o.value === 'number' ? o.value : Number(o.value);
-    return { label: o.label, value: Number.isNaN(n) ? o.value : n };
-  });
-}
-
-/**
- * 字段选项来源（优先级：内联 → 值集）：
- *   1) 内联 `dataSource` / `map`（后端显式内联，最权威）；
- *   2) `lovCode` → `useLov` 拉取的**中文标签**。配置页的字典字段在魔方里必须走这条：
- *      框架 `ConfigController.GetFields` 不下发 dataSource/lovCode，由后端补充映射端点下发
- *      （约定 `GET /api/Sys/ConfigDict/FieldLovs?area=&controller=`，实现见 references/config-controller.md §6）。
- * 都没有则返回 undefined，控件退化为普通输入/number。
- */
-function optionsOf(f: DataField): Option[] | undefined {
-  const inline = toOptions(f);
-  if (inline && inline.length) return alignOptions(f, inline);
-  const code = ((f as any).lovCode ?? '').toString().trim();
-  if (code) {
-    const lov = lovOptions.value[code];
-    if (lov && lov.length) return alignOptions(f, lov.map((o) => ({ label: o.label, value: o.value })));
+  if (f.map && typeof f.map === 'object') {
+    return Object.entries(f.map).map(([k, v]) => ({ label: String(v), value: k }));
   }
   return undefined;
 }
@@ -196,7 +150,7 @@ const renderFields = computed<RenderField[]>(() => {
       .filter((f) => !f.primaryKey && !f.isIdentity)
       .map((f) => {
         const ctrl = selectFormControl(f);
-        const base =
+        const control =
           ctrl === 'switch'
             ? 'switch'
             : ctrl === 'number'
@@ -208,11 +162,7 @@ const renderFields = computed<RenderField[]>(() => {
                   : ctrl === 'select' || ctrl === 'multi-select'
                     ? 'select'
                     : 'input';
-        const opts = optionsOf(f);
-        // 有字典选项即渲染下拉：`selectFormControl` 只看 typeName/itemType/map/dataSource，
-        // **不看 lovCode**，故 Int32 语义字段（如 SecurityMode）会被判成 number 输入框；
-        // 值集补齐后必须在此提升为 select，否则字典形同虚设。Boolean 开关不受影响。
-        const control = opts && opts.length && base !== 'switch' ? 'select' : base;
+        const opts = toOptions(f);
         return {
           name: formItemName(f),
           label: f.displayName ?? f.name,
@@ -303,45 +253,10 @@ async function loadMeta(): Promise<boolean> {
   return false;
 }
 
-/**
- * 补齐字段的值集编码（字段 → lovCode）。
- * 框架 `ConfigController.GetFields` 不下发 lovCode，由后端映射端点提供
- * （约定 `GET /api/Sys/ConfigDict/FieldLovs?area=&controller=`）。取不到时静默跳过，
- * 页面退回原渲染（不阻断）。端点缺失/改名只需改本函数一处。
- *
- * ⚠️ 契约：后端字典键经 System.Text.Json 的 camelCase 策略改写（SecurityMode → securityMode），
- * 故必须**大小写不敏感**匹配字段名，否则恒取不到。
- */
-async function loadFieldLovs(): Promise<void> {
-  if (!metaLoaded.value || !metaFields.value.length) return;
-  try {
-    const q = `?area=${encodeURIComponent(props.area)}&controller=${encodeURIComponent(props.controller)}`;
-    const env = await getApi<any>(`/Sys/ConfigDict/FieldLovs${q}`);
-    const map = unwrap(env) || {};
-    const lower: Record<string, string> = {};
-    for (const [k, v] of Object.entries(map)) lower[String(k).toLowerCase()] = String(v);
-
-    let hit = false;
-    for (const f of metaFields.value) {
-      const code = lower[String(f.name).toLowerCase()];
-      if (!code) continue;
-      (f as any).lovCode = code;
-      hit = true;
-    }
-    // 字段对象为普通对象（非 reactive），替换数组引用以触发 renderFields 重算
-    if (hit) metaFields.value = [...metaFields.value];
-  } catch {
-    /* 无映射（老部署 / 非配置页）→ 静默退化 */
-  }
-}
-
 async function load() {
   loading.value = true;
   try {
     await loadMeta();
-    await loadFieldLovs();
-    // 值集中文标签：lovCode 已在此时补入 metaFields，一次性批量拉取
-    await loadLov(metaFields.value);
     const env = await getApi<Record<string, any>>(_loadUrl.value);
     const obj = unwrap(env) || {};
     const keys = metaLoaded.value
@@ -385,6 +300,8 @@ onMounted(load);
 
 <template>
   <div class="config-view">
+    <!-- 系统设置组页内导航（对齐 MVC `_Object_Nav`）：仅在 Core/Sys/Star/XCode/Cube 之间显示 -->
+    <PageNav v-if="showSettingsNav" :items="settingsNavItems" variant="pills" />
     <t-card :title="title || `${controller} 设置`" :loading="loading">
       <t-form v-if="!loading" :data="model" :rules="rules" label-width="200px" @submit="save">
         <!-- 多分组（category 命中）：分 tab 组织字段 -->

@@ -19,6 +19,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { postRaw, getRaw } from '@/api/http';
+import { encryptPassword } from '@/api/crypto';
 import {
   getToken,
   getRefreshToken,
@@ -93,35 +94,10 @@ export interface LoginOutcome {
 }
 
 /* ----------------------------- 密码加密（RSA-OAEP/SHA-256） ----------------------------- */
-/**
- * 用后端公钥（PKCS#8 SPKI PEM）以 RSA-OAEP/SHA-256 加密密码，返回 Base64 密文。
- * 失败（浏览器不支持 Web Crypto / 公钥非法）返回 null，调用方降级为明文（需 AllowPlainPassword=true）。
+/*
+ * 加密实现已抽到 `@/api/crypto`（见文件顶部 import）：登录与「安全中心 → 修改密码」
+ * 共用同一份实现，避免两处各写一遍（历史缺陷：加密只在 auth store 内私有，第二处只能复制）。
  */
-async function encryptPassword(password: string, publicKeyPem: string): Promise<string | null> {
-  try {
-    if (!crypto?.subtle) return null;
-    const pem = publicKeyPem
-      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-      .replace(/-----END PUBLIC KEY-----/g, '')
-      .replace(/[\r\n\s]/g, '');
-    const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
-    const key = await crypto.subtle.importKey(
-      'spki',
-      der,
-      { name: 'RSA-OAEP', hash: 'SHA-256' },
-      false,
-      ['encrypt'],
-    );
-    const cipher = await crypto.subtle.encrypt(
-      { name: 'RSA-OAEP' },
-      key,
-      new TextEncoder().encode(password),
-    );
-    return btoa(String.fromCharCode(...new Uint8Array(cipher)));
-  } catch {
-    return null;
-  }
-}
 
 /* ----------------------------- 响应归一化（兼容后端 snake_case / PascalCase / 前端 camelCase） ----------------------------- */
 /**

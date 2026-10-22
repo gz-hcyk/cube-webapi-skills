@@ -4,7 +4,7 @@
 所以可以直接整目录拷贝。与之并列的 `references/scaffold/` 是**完整可运行工程**（真相源）。
 
 ```bash
-# 并入既有 Vue3 + Vite 工程：一次拷全 38 个文件（2026-09-13 曾计 31；路径已镜像 src/，无第二层可选项）
+# 并入既有 Vue3 + Vite 工程：一次拷全 50 个文件（2026-09-13 曾计 31、2026-10-04 计 38；路径已镜像 src/，无第二层可选项）
 cp -r assets/core/.  <你的工程>/src/
 ```
 
@@ -62,7 +62,7 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 （精简变体 / 上一代认证架构，**非漂移，无需同步**）；白名单外的报 `DEMO-STALE`（**须同步它**，实测 0 条）。
 判据见 `references/scripts/README.md`《③ 为何是「层次差异」而非「陈旧」》。
 
-## 一、core/ —— 核心（**必拷，38 件一次拷全**）
+## 一、core/ —— 核心（**必拷，50 件一次拷全**）
 
 | 文件（→ 目标路径） | 作用 | 被谁引用 |
 |---|---|---|
@@ -101,6 +101,21 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 | `components/cube/WidgetBoardView.vue` | 工作台部件管理页（`Cube/Widget`：启用禁用 / 分组排序 / 组内排序） | `specialControllers.ts` |
 | `pages/RegisterView.vue` → `src/pages/` | 注册页（`POST /Auth/Register`；开关全部来自 `LoginConfig.register`，成功态按是否需验证分流「待激活 / 可直接登录」） | router |
 | `pages/ForgotPasswordView.vue` → `src/pages/` | 忘记密码页（`/Auth/SendCode` + `/Auth/ResetPassword`；通道选择来自 `LoginConfig.login.sms/mail`） | router |
+| `entityActions.ts` → `src/` | **声明式行操作**：实体页额外动作（吊销令牌 / 清空密码 / 强制下线 / 立即执行 / 值集配置）。新增动作只加配置，不改组件 | ListPage |
+| `pageNav.ts` → `src/` | 页内导航数据（`userCenterNav` / `settingsNav`，对齐 MVC `_User_Nav` / `_Object_Nav`） | AccountView、ConfigView |
+| `api/crypto.ts` → `src/api/` | 密码 Challenge-Response 加密（登录与改密**共用一份**实现） | auth store、AccountView |
+| `components/cube/PageNav.vue` | 页内导航条（tabs / pills，支持下拉子项） | AccountView、ConfigView |
+| `components/cube/PageSection.vue` | 分区卡片（对齐 MVC `.form-section`） | AccountView、LovConfigDrawer |
+| `components/cube/ProfileHeader.vue` | 个人信息头卡（对齐 MVC `.profile-card`） | AccountView |
+| `components/cube/EntityActions.vue` | 行操作渲染器（二次确认 + 失败显式提示 + 客户端动作面板） | ListPage（内置） |
+| `components/cube/LovConfigDrawer.vue` | 值集配置抽屉（4 子表 + 整份 `SaveConfig`） | EntityActions |
+| `components/cube/TenantSwitcher.vue` | 租户切换器（列表来源 + 逐级降级策略） | BasicLayout、AccountView |
+| `pages/AccountView.vue` → `src/pages/` | 个人资料 / 安全中心（组织照 MVC `User/Info.cshtml`） | router |
+| `pages/ActivateView.vue` → `src/pages/` | 账号激活（端点缺失时显式提示并降级） | router |
+| `pages/SsoCallbackView.vue` → `src/pages/` | 第三方登录回跳落地页 | router |
+
+> **新增资产的启用条件、能力开关与端点实测矩阵见 `FEATURES.md`**（含 6 处「实测推翻历史文档」的修正）。
+> 页面版式基线见 `references/mvc-page-organization.md`（MVC 版真实视图 + `profile.css`）。
 
 > `ConfigView` / `DbView` 之所以在 **core**（而非 optional）：它们被 core 的
 > `specialControllers.ts` **静态 import**——只拷 core 却漏掉它们会直接构建失败。

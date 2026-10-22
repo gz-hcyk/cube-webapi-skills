@@ -100,6 +100,16 @@
           <t-link v-if="canEdit" theme="primary" @click="onEdit(row)">编辑</t-link>
           <t-link v-if="canDelete" theme="danger" @click="onDelete(row)">删除</t-link>
           <slot name="row-actions" :row="row" />
+          <!-- 内置功能：声明式额外行操作（吊销令牌 / 强制下线 / 立即执行 / 值集配置），
+               配置见 src/entityActions.ts；未配置的实体零渲染、零请求。 -->
+          <EntityActions
+            v-if="enableEntityActions !== false"
+            :area="area"
+            :controller="controller"
+            :row="row"
+            :setting="setting"
+            :reload="reloadAfterMutation"
+          />
         </t-space>
       </template>
     </t-table>
@@ -127,6 +137,16 @@
           <t-link v-if="canEdit" theme="primary" @click="onEdit(row)">编辑</t-link>
           <t-link v-if="canDelete" theme="danger" @click="onDelete(row)">删除</t-link>
           <slot name="row-actions" :row="row" />
+          <!-- 内置功能：声明式额外行操作（吊销令牌 / 强制下线 / 立即执行 / 值集配置），
+               配置见 src/entityActions.ts；未配置的实体零渲染、零请求。 -->
+          <EntityActions
+            v-if="enableEntityActions !== false"
+            :area="area"
+            :controller="controller"
+            :row="row"
+            :setting="setting"
+            :reload="reloadAfterMutation"
+          />
         </t-space>
       </template>
     </t-enhanced-table>
@@ -192,6 +212,8 @@ import { useLookups, type LookupOverrides } from '../../api/useLookups';
 import { useLov } from '../../api/useLov';
 import FormDialog from './FormDialog.vue';
 import DetailDrawer from './DetailDrawer.vue';
+import EntityActions from './EntityActions.vue';
+import { actionsOf } from '../../entityActions';
 // 列表页四段结构（对标魔方 MVC 的 List.cshtml 分部视图）：
 // Navbar（标题/路径）、SearchBar（查询条件）、Toolbar（新增/批量删除）、Footer（统计/记录数）
 // —— 四段已按「公共组件层只保留被多处复用的组件」原则内联进本文件（见对应 script 分区）。
@@ -221,6 +243,11 @@ const props = defineProps<{
    * 注意：`GetPage.setting.enableKey` 的魔方语义是**关键字（Q）搜索框**，不是主键列，两者勿混用。
    */
   showIdColumn?: boolean;
+  /**
+   * 是否渲染「额外行操作」（src/entityActions.ts 声明的动作）。默认 true。
+   * 设 false 可让本页退回纯元数据驱动（如只读报表页不想出现任何动作按钮）。
+   */
+  enableEntityActions?: boolean;
 }>();
 
 const res = useEntityResource(props.area, props.controller);
@@ -259,8 +286,10 @@ const columns = computed(() => {
     () => lovOptions.value,
   );
   // 列表末尾追加操作列（若未由后端字段提供）：固定宽度并钉在右侧（fixed 列需明确 width 才能正确固定）
+  // 额外行操作会追加在同一格内，故按动作数加宽，避免按钮折行/被挤压（每个动作约 68px）
   if (!cols.some((c) => c.colKey === 'operation')) {
-    cols.push({ colKey: 'operation', title: '操作', fixed: 'right', width: 120 });
+    const extraActions = props.enableEntityActions === false ? 0 : actionsOf(props.area, props.controller).length;
+    cols.push({ colKey: 'operation', title: '操作', fixed: 'right', width: 120 + extraActions * 68 });
   }
   return cols;
 });
