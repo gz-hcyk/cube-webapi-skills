@@ -113,6 +113,15 @@ interface ApiEnvelope<T> {
 | `sortable` | `el-table-column sortable="custom"` |
 | `visible` | ⚠️ 实测恒为 `false`，**不可用于判断隐藏列** |
 
+> ⚠️ **`dataSource` 有双形态**：`{text,value}[]`（上面示例）**或** `{ 值: 标签 }` **对象** ——
+> 后者才是 `DataField.ToDictionary()` / 配置类（`ConfigController<T>`）的真实输出形态。
+> 只判 `Array.isArray` 会把对象形态当成「无选项」丢弃，务必先 `Object.entries` 兜一层。
+>
+> ⚠️ **`ConfigController<T>`（配置页）的 `GetFields` 既无 `dataSource` 也无 `lovCode`**
+> （字段由 `ObjectController.GetMembers()` 反射属性生成；实测 82/23/15 个字段全部为 0），
+> 需后端另发映射端点补 `lovCode`，链路与后端实现见 TDesign 技能 `references/config-controller.md` §6
+> 与 `cube-webapi-backend` §9.2。
+
 > **布尔位一律写 `=== true`**：Cube 的 `DataField` 是非空 `bool`，`false` 也会下发，不能靠"键缺失"判断。
 > `nullable` 是例外：只在可空时下发 `true`。键缺失表示非空（必填），不是第三态的「可空」。`required` 同样经常缺键，不能把缺键当成 `false`。
 

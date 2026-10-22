@@ -28,6 +28,15 @@
 
 **判定枚举**：`typeName` 非空且不在基础类型集合内 → 枚举。`Sex` 字段的 `typeName` 是 `SexKinds`，不能按字段名猜。
 
+> ⚠️ **判定链不含 `lovCode`（2026-10-22 实测）**：`selectFormControl` 只看 `itemType / typeName / mapField / map / dataSource`。
+> 仅靠 `lovCode` 才有选项的字段（典型：`ConfigController<T>` 配置页，链路同 TDesign 技能
+> `references/config-controller.md` §6）会被判成 `number` / `input`。
+> **调用方自行组装表单项时，必须「有选项 ⇒ 提升为 select」**（`switch` 除外），否则补了值集也不生效。
+>
+> ⚠️ **选项值域必须与字段值类型对齐**：值集（`Lov/Meta`）与字典的 `value` 恒为**字符串**（`"0"`/`"255"`/`"-1"`），
+> 而枚举与数值属性反序列化后是 **number**。`el-select` 按值**严格匹配**，类型不一致会选不中任何项 →
+> 界面露出裸数字。归一判据用 **「数值型 typeName」‖ 枚举类型**：只判数值型会漏掉枚举字段（实测枚举字段仍显示 `2`）。
+
 ## 2. 字段映射（E2，最容易被写成 bug 的一条）
 
 ### 2.1 什么是映射字段

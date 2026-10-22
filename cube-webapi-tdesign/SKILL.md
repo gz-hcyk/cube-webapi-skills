@@ -738,7 +738,7 @@ export function usePerms() {
 ### 4.17 特殊基础控制器 ConfigController<T>（无 GetPage，单列处理）
 
 `ConfigController<T>`（后端见 backend §9）：只提供 Get（读 `Config<T>.Current` 单对象）+ Update（Copy+Save）；**无 `GetPage`/`Index` 列表接口，但有 `GetFields`**（`?kind=EditForm` 返回 `DataField[]`）。**绝不能塞进 `ListPage`**（`loadSchema` 调 GetPage 404 → 空白表）。
-处理：① 路由识别——不能靠命名启发式（`MailConfig`/`OAuthConfig`/`SmsConfig`/`Parameter` 实际都是 `EntityController`；真 `ConfigController<T>` 反而不带 Config 名：`Cube`/`Sys`/`XCode`/`Core`），必须走 `SPECIAL_CONTROLLERS` 注册表显式声明；② 取数：`GetFields?kind=EditForm`（元数据）+ `GET /{area}/{controller}`（单对象，**不走 `extractListPayload`**）；③ 渲染：复用 `buildFormItems`/`buildFormRules` 元数据驱动（不可用时静态/推断兜底）+ 按 `category` 分 tab（复用 `groupFormItemsByCategory`，默认分组「基础设置」可 `defaultCategory` 覆盖）；④ 保存 `POST /{area}/{controller}` 回存。可复用：`assets/core/components/cube/ConfigView.vue`、`references/config-controller.md`。
+处理：① 路由识别——不能靠命名启发式（`MailConfig`/`OAuthConfig`/`SmsConfig`/`Parameter` 实际都是 `EntityController`；真 `ConfigController<T>` 反而不带 Config 名：`Cube`/`Sys`/`XCode`/`Core`），必须走 `SPECIAL_CONTROLLERS` 注册表显式声明；② 取数：`GetFields?kind=EditForm`（元数据）+ `GET /{area}/{controller}`（单对象，**不走 `extractListPayload`**）；③ 渲染：复用 `buildFormItems`/`buildFormRules` 元数据驱动（不可用时静态/推断兜底）+ 按 `category` 分 tab（复用 `groupFormItemsByCategory`，默认分组「基础设置」可 `defaultCategory` 覆盖）；④ 保存 `POST /{area}/{controller}` 回存。**⑤ 字典字段（易漏）**：框架 `GetFields` 既不下发 `dataSource` 也不下发 `lovCode` → 枚举/字典字段会显示裸数字；须由后端映射端点补 `lovCode` 再走 `useLov`，且 `selectFormControl` **不看 `lovCode`**，有选项时必须提升为 `select`、并把选项值域按「数值型 typeName ‖ 枚举类型」转成 number（否则严格匹配失败仍显示数字）。详见 `references/config-controller.md` §6。可复用：`assets/core/components/cube/ConfigView.vue`、`references/config-controller.md`。
 
 ### 4.18 非实体 ControllerBaseX 控制器（自定义端点专属页）
 

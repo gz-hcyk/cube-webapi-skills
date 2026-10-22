@@ -1126,6 +1126,88 @@ public class PlaceCodeMigrateJob : CubeJobBase<PlaceCodeMigrateArgument>
 - **入口唯一化**：抽成作业后**删掉原有启动钩子**（Web 预热 + 其它进程 `IHostedService`），否则多进程并发执行同一写逻辑（本例 `PlaceCodeMigrateJob` 即删了 Web `PreheatHostedService` 调用与 IoT.Server 启动宿主两处）。
 - 参考实现：`Web/Jobs/BatteryPredictJob.cs`（业务扫描）、`Web/Jobs/AlertPushJob.cs`（外部通道推送 + 参数回退）。
 
+### 9.2 配置页字段字典（Lov）补齐 —— `GetFields` 不下发字典（实测 2026-10-22，Cube 6.13.2026.802）
+
+**事实（先记住再动手）**：`ConfigController<T>.GetFields` 走 `ObjectController.GetMembers(Type)` **反射属性**，
+只填 `Name / DisplayName / Description / Type / Category`，**既不设 `DataSource` 也不设 `LovCode`**；
+`DataField.ToDictionary()` 里的 `dataSource` 仅来自控制器显式挂的 `DataSource` 委托
+（"枚举自动生成选项"是 6.15+ 的行为，6.13 没有）。实测：Admin/Cube 82、Admin/Xcode 23、Admin/Core 15 个字段，
+带 `dataSource`/`lovCode` 者 **0 个** ⇒ 凡字典字段在前端一律退化成裸数字。
+
+**补齐三步**（前端渲染见 `cube-webapi-tdesign` `references/config-controller.md` §6）：
+
+1. **值集本身**——框架库枚举（`Migration`/`NameFormats`/`LogLevel`）无中文特性、不可改写，
+   故在**项目自有命名空间**定义同值同序的镜像枚举，成员用 `[Description("中文")]`：
+
+   ```csharp
+   namespace YourApp.Data;
+   /// <summary>表名/字段名大小写格式（镜像 NewLife.XCode.NameFormats，仅用于值集展示）</summary>
+   public enum ConfigNameFormat
+   {
+       [Description("默认（保持原样）")] Default = 0,
+       [Description("全大写")]           Upper = 2,
+       [Description("下划线分隔")]       Underline = 4,
+   }
+   ```
+
+   ⚠️ **枚举成员只能用 `[Description]`**：`[DisplayName]` 的 `AttributeUsage` 不含枚举成员，编译报 **CS0592**。
+   `LovRegistry.GetEnumOptions` 的取值顺序是 `DisplayName → Description → 成员名`，所以 `[Description]` 足够。
+
+2. **注册值集**——`AddCubeLov(o => o.ScanNamespace("YourApp.Data"))` + `UseCubeLov()`（已有则无需改）。
+   ⚠️ **`ScanNamespace` 只为"被实体列引用"的枚举写 `LovDefinition` 记录**，纯展示用镜像枚举不会被写库；
+   但 `LovController.Meta` 是**代码优先反射**（按 `Enum.{类型全名}` 解析已加载程序集），
+   实测手工删掉 `LovDefinition` 行后仍返回中文选项 ⇒ **不需要 seed SQL，也不需要重启前先建表**。
+
+3. **字段 → lovCode 映射端点**——框架控制器不可继承改写（同名重定义会撞路由），故项目侧加只读端点：
+
+   ```csharp
+   [SysArea]
+   [DisplayName("配置字典")]
+   [Menu(0, false, Mode = MenuModes.Admin)]        // 不进侧栏
+   public class ConfigDictController : ControllerBaseX
+   {
+       static readonly Dictionary<String, Dictionary<String, String>> _fieldLovs = new(StringComparer.OrdinalIgnoreCase)
+       {
+           // 键=控制器名；值=字段名→值集编码
+           ["xcode"] = new(StringComparer.OrdinalIgnoreCase)
+           {
+               ["Migration"]  = "Enum.YourApp.Data.ConfigMigration",   // 枚举型字段
+               ["NameFormat"] = "Enum.YourApp.Data.ConfigNameFormat",
+           },
+           ["cube"] = new(StringComparer.OrdinalIgnoreCase)
+           {
+               ["SecurityMode"]  = "Enum.YourApp.Data.ConfigSecurityMode",   // Int32 语义字段
+               ["SameSiteMode"]  = "Enum.YourApp.Data.ConfigSameSiteMode",
+           },
+       };
+
+       /// <summary>取指定控制器的字段值集映射。无映射返回空对象，前端静默退化</summary>
+       [AllowAnonymous]                                        // 与框架 GetFields 同级（它本身也是 AllowAnonymous）
+       [DisplayName("字段值集")]
+       [HttpGet]
+       public ApiResponse<Object> FieldLovs(String? area, String? controller)
+       {
+           var key = (controller ?? String.Empty).Trim();
+           if (key.IsNullOrEmpty()) return Api.Ok((Object)new Dictionary<String, String>());
+           return Api.Ok((Object)(_fieldLovs.TryGetValue(key, out var map) ? map : new Dictionary<String, String>()));
+       }
+   }
+   ```
+
+**两个易漏点**：
+
+- **"Int32 但语义是字典"的字段必须进映射表**：`SecurityMode`（0 关闭/1 观察/2 拦截/3 自动）、
+  `SameSiteMode`（-1 未指定/0 None/1 Lax/2 Strict）在框架里声明为 `Int32`，`typeName` 无从识别，
+  只能按「控制器 + 字段名」登记。**登记前先用 §9 的 `GetFields` 核对该字段在当前框架版本里是否存在**
+  （实测 6.13 的 `CubeSetting` 没有 `SecurityMode`，master 才有）。
+- **返回字典的键会被 camelCase 化**（`SecurityMode` → `securityMode`，`System.Text.Json` 命名策略作用于字典键），
+  前端必须大小写不敏感匹配；后端不要试图"防呆"改成 PascalCase 的 `Dictionary` 包装——那只是把坑换个位置。
+
+**验收**：`GET /api/{area}/{controller}/GetFields?kind=EditForm`（确认字段存在）→
+`GET /api/Sys/ConfigDict/FieldLovs?area=&controller=`（确认映射）→
+`GET /api/Admin/Lov/Meta?lovCode=Enum.YourApp.Data.ConfigXxx`（确认中文选项）；
+最后原样 `PUT` 一次配置对象，确认 number 型字典值回写 200 且值不变。
+
 ---
 
 ## 十、数据范围权限（行级 / 数据权限）

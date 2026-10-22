@@ -19,6 +19,15 @@
 8. 基础类型兜底：`DateTime` → `datetime`；`Date` → `date`；整数/浮点 → `number`；
    `String` 且 `length > 200` → `textarea`；默认 → `input`
 
+> ⚠️ **判定链不含 `lovCode`（2026-10-22 实测）**：`selectFormControl` 只看 `itemType / typeName / mapField / map / dataSource`。
+> 仅靠 `lovCode` 才有选项的字段（典型：`ConfigController<T>` 配置页，见 `config-controller.md` §6）
+> 会被判成 `number` / `input`。**调用方自行组装表单项时，必须「有选项 ⇒ 提升为 select」**（`switch` 除外），
+> 否则补了值集也不生效。
+>
+> ⚠️ **选项值域必须与字段值类型对齐**：值集（`Lov/Meta`）与字典的 `value` 恒为**字符串**（`"0"`/`"255"`/`"-1"`），
+> 而枚举与数值属性反序列化后是 **number**。TDesign / Element 的 select 均按值**严格匹配**，类型不一致会选不中任何项 →
+> 界面露出裸数字。归一判据用 **「数值型 typeName」‖ `isEnumType(f)`**：只判数值型会漏掉枚举字段（实测枚举字段仍显示 `2`）。
+
 > **如何判定 `typeName` 是枚举类型名**：真实 NewLife.Cube 的 `typeName` 既返回基础类型
 > （`Int32`/`String`/`Boolean`/`Double`/`DateTime`/`Int64`），也返回**枚举类型名**
 > （实测：`DepartmentTypes`、`SexKinds`、`MenuTypes`、`DataScopes`、`RoleTypes`）。

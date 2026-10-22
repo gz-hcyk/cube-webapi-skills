@@ -109,3 +109,70 @@ import { orderSettingFields } from '@/configs/orderSetting';
   前端保存后 `load()` 刷新即可，无需手动 merge。
 - **权限**：`ConfigController<T>` 同样受 `[EntityAuthorize]` 动作级拦截；若用户无 Update 权限，
   `ConfigView` 保存会 403，需按业务隐藏保存按钮（权限位数据仍须后端在菜单树/扩展字段下发，见 SKILL.md §4.10）。
+
+## 6. 字典字段（枚举 / 值集）：配置页最容易漏的一条链路
+
+> 实测环境：Cube **6.13.2026.802**（2026-10-22）。跨版本请先按 §6.5 抓一次 `GetFields` 复核。
+
+### 6.1 现象与根因（**两条叠加**，只修一条都不见效）
+
+现象：配置页里「反向工程 / 日志等级 / Cookie 模式」这类字段，界面显示 `2`、`-1` 这样的裸数字。
+
+| # | 根因 | 证据 |
+|---|------|------|
+| 1 | **后端不下发字典**：`ConfigController<T>.GetFields` 走 `ObjectController.GetMembers()` 反射属性，只填 `Name/DisplayName/Description/Type/Category`，**不设 `DataSource`，也不设 `LovCode`** | 实测 Admin/Cube 82 字段、Admin/Xcode 23、Admin/Core 15 —— **0 个**字段带 `dataSource`/`lovCode` |
+| 2 | **前端不接字典通道**：`ConfigView.toOptions()` 只认 `dataSource` **数组** + `map` 对象，既不调 `useLookups` 也不调 `useLov`；而框架 `DataField` 的 `dataSource` 真实形态是 **`{值:标签}` 对象** | `selectFormControl` 判为 select 但选项为空 → `t-select` 露出裸数值；`Int32` 语义字段直接渲染 number 输入框 |
+
+注意：实体页（GetPage 驱动）不受影响 —— 那条链路后端 `SetLov` 会下发 `lovCode`，前端 `useLov` 能消费。
+**唯独 `ConfigController<T>` 这条支路没有任何字典出口**，因为它的字段来自反射而非 XCode 字段集合。
+
+### 6.2 后端要补两件东西（详见 `cube-webapi-backend` §9.2）
+
+1. **值集本身**：框架库枚举（`Migration`/`NameFormats`/`LogLevel`）无中文特性、不可改写，
+   须在**项目自有命名空间**下定义同值同序的镜像枚举（成员用 `[Description("中文")]`）；
+   由 `AddCubeLov(o => o.ScanNamespace("你的命名空间"))` 注册为 `Enum.{命名空间}.{枚举名}` 值集。
+2. **字段 → lovCode 映射端点**：框架控制器不可继承改写，故项目侧加一个只读端点，约定
+   `GET /api/Sys/ConfigDict/FieldLovs?area=&controller=` → `{ 字段名: lovCode }`。
+
+### 6.3 前端四步（`assets` 模板已内置，无需重写）
+
+```
+loadMeta()        → GET /{area}/{controller}/GetFields?kind=EditForm
+loadFieldLovs()   → GET /Sys/ConfigDict/FieldLovs?area=&controller=  → 给 metaFields 补 lovCode
+loadLov(fields)   → GET /Admin/Lov/Meta?lovCode=...                 → 拿中文标签（useLov）
+optionsOf(f)      → 内联 dataSource/map 优先，其次 lovCode；再 alignOptions 值域对齐
+```
+
+顺序不能颠倒：**补 lovCode 必须在 `loadLov` 之前**（`useLov.load` 只收集字段上已有的 `lovCode`）。
+
+### 6.4 三个必踩的坑
+
+1. **`selectFormControl` 不看 `lovCode`** —— 它的判定链只有 `itemType → Boolean → 映射字段 → xxxId → 枚举类型 → map/dataSource → 基础类型`。
+   因此 `Int32` 语义字段（如 `SecurityMode`）即便补了 lovCode 仍被判成 `number`。
+   **解法**：`renderFields` 里凡 `optionsOf(f)` 有选项就把控件提升为 `select`（`switch` 除外）。
+2. **值域必须对齐，且枚举字段也要对齐** —— 值集 `value` 恒为**字符串**（`"0"`/`"255"`/`"-1"`），
+   而配置对象里枚举与 `Int32` 属性反序列化后都是 **number**。`t-select` 按值严格匹配，类型不一致就选不中 → 仍显示数字。
+   `alignOptions` 的判据要写成 **`数值型 typeName` ‖ `isEnumType(f)`**；只写前者时，枚举字段（`Migration`/`LogLevel`）会继续显示 `2`（实测踩过）。
+3. **映射端点的字典键会被 camelCase 化** —— `System.Text.Json` 的命名策略作用于**字典键**（`SecurityMode` → `securityMode`）。
+   前端必须**大小写不敏感**匹配字段名，否则恒取不到（`getApi` 的规范化也不救字典键）。
+
+### 6.5 验收方法（两步，缺一不可）
+
+```bash
+# ① 后端：逐字段看有没有 dataSource/lovCode（先用 admin 登录拿 JWT）
+curl -s "http://127.0.0.1:PORT/api/Admin/Xcode/GetFields?kind=EditForm" -H "Authorization: Bearer $T"
+curl -s "http://127.0.0.1:PORT/api/Sys/ConfigDict/FieldLovs?area=Admin&controller=Xcode"
+curl -s "http://127.0.0.1:PORT/api/Admin/Lov/Meta?lovCode=Enum.你的命名空间.Migration"
+```
+
+```js
+// ② 浏览器：断言控件类型与显示文案（CDP，读 .t-form__item，别只看接口）
+Array.from(document.querySelectorAll('.t-form__item')).map(it => ({
+  lab: it.querySelector('label')?.innerText.trim(),
+  isSelect: !!it.querySelector('.t-select'),
+  val: it.querySelector('input')?.value,
+})).filter(x => x.isSelect);
+// 期望：{ lab:'反向工程', isSelect:true, val:'增量迁移' }
+```
+
+⚠️ 配置页常按 `category` 分组渲染 **tab**，未激活 tab 的字段不在 DOM 里 —— 断言前先点开对应 tab，否则会误判「该字段没有下拉」。

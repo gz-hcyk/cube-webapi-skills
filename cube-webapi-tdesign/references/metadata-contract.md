@@ -119,6 +119,17 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 | `map` | `Record<string,string>`? | 枚举/字典映射（值→显示） | 下拉选项 + 列表回显 label |
 | `dataSource` | `{text,value}[]` \| `Record<string,string>`（**双形态**）? | 外键/数据字典选项源 | 下拉选项（优先级低于 `map`），经 `fieldRender.dictEntries()` 归一 |
 
+> ℹ️ **`dataSource` / `lovCode` 的可得性按控制器类型分叉（2026-10-22 实测 Cube 6.13.2026.802）**：
+> - **实体控制器**（`EntityController`，字段来自 XCode 字段集合）：`SetLov` 显式下发 `lovCode`
+>   （`Enum.{类型全名}` 或 `List.*`）；`dataSource` 由 `FieldItem` / `DataSource` 委托产生，形态见上表双形态。
+> - **`ConfigController<T>`（配置页）**：字段由 `ObjectController.GetMembers()` **反射属性**生成，
+>   **既无 `dataSource` 也无 `lovCode`**（实测 Admin/Cube 82、Admin/Xcode 23、Admin/Core 15 个字段，带字典信息者 **0 个**）。
+>   配置页要出中文下拉，必须由后端另发映射端点补 `lovCode`，前端再用 `useLov` 消费 ——
+>   完整链路见 `config-controller.md` §6。
+> - ⇒ **不要用「元数据里没有字典信息」反推「该字段没有字典」**；配置页这条支路必须显式补。
+> - ⚠️ 收到对象形态的 `dataSource` 时，`Array.isArray` 判断会把它判成「无选项」而丢弃；
+>   归一化请走 `fieldRender.dictEntries()`（或自行兼容 `Object.entries`），不要只判数组。
+
 > **必填判定（三级，2026-09-23 收敛，务必按此实现）**：`required` 是 UI 语义、`nullable` 是数据库约束，二者**不可互相推导**。
 > - `required === true` → 必填；
 > - 否则 `nullable === false`（明确 NOT NULL）→ 必填；
