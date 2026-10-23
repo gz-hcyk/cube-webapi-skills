@@ -806,3 +806,70 @@ function onUserMenu(d: DropdownClickValue) {
 比反复猜选择器快得多。另：**「命令失败了」也要先确认命令到底有没有真的执行**
 （`EXIT`、日志**时间戳**、落盘变化）——见 SKILL.md §4.1.1「宿主环境三条硬约束」。
 
+## G20 ★★★ 角色授权表格三连坑：0 掩码段不落库 / GetMenuTree 嵌套未摊平 / 数据源选错（2026-10-23 NV8021X 实测）
+
+配方见 SKILL §4.12.1，组件 `assets/core/components/cube/RoleMenuEditor.vue`（`references/scaffold/src/` 同步）。
+
+1. **`菜单ID#0` 段会被 XCode 丢弃** —— PUT `permission="19#0"` 读回 `""`；`"1#1,19#0"` 读回 `"1#1"`。
+   ⇒ 「菜单可见但零操作」**无法表达**，开放的最小粒度只能是查看（1）。
+   ⇒ 所有「取消到 0」的地方都要**删段**，`parse()` 忽略 0 段；写串后必须读回校验（静默消失，不报错）。
+2. **`/api/Admin/Index/GetMenuTree` 返回嵌套树**（子节点在 `children` 里）。只存顶层数组 → 矩阵只渲染出
+   几个分组、子级全丢（实测 9 行 vs 应有 37 行）。必须递归摊平成数组，再建 `byParent` 索引。
+3. **数据源不能用 `/api/Admin/Menu` 扁平表**：它**不带 `permissions` 字典**，自定义位（16/32/64/128…）全丢。
+   位列表唯一权威源 = GetMenuTree 节点 `permissions`；字典为空才回退内置 1/2/4/8。
+
+验收脚本三坑（真机实测）：
+- 列表操作列「编辑」是 `<a>` 不是 `<button>`；
+- 拿「管理员」测父子联动会**方向反转**（它本来就全授权，点击等于取消）——换普通角色测；
+- 保存后表格行序会漂移 —— 按行**名称**定位，别用 `nth(i)`。
+
+## G21 ★★★ 编辑回填把 null 写进多选字段 → 首帧崩溃、弹窗打不开（2026-10-23 实测，`18642e2`）
+
+症状：某实体编辑弹窗**点了没反应**（无弹窗、无网络错误），控制台反复
+`TypeError: object null is not iterable`（TDesign 内部 `getMultipleContent` = select 多选回显迭代入参）。
+
+根因：回填流程 `Object.assign(formData, row)` 把行里的 `null`（如 `Role.DataDepartmentIds`）写进多选字段，
+`await res.getById()` 之间的**渲染间隙**让 `t-select multiple` 收到 null 当场崩；
+归一化（`deserializeMultiValue` → `[]`）排在 await 之后，来不及兜。
+
+修法：归一化抽成 `normalizeMultiFields()`，**每次 `Object.assign` 之后同步调用**（assign(row) 后一次、
+assign(entity) 后一次），不依赖 await 之后的单次循环。
+
+泛化铁律：**多选控件 v-model 永远不允许 null/undefined** —— 凡把后端行数据写进 `formData` 的路径
+（初始 build / row 兜底 / entity 覆盖 / 编辑回填），每条落点都要跟一次归一化。
+
+排查提示：症状像「弹窗组件坏了」时，先 `git stash` 暂存本次改动做**基线对照** —— 同样崩 = 存量缺陷，
+别在原地怀疑刚写的新逻辑（实测该缺陷先于本次改动就存在）。
+
+## G22 ★★★ 一条控件链只允许链首一个 v-if：误用会让链尾 v-else 兜底命中 → 同一字段两个控件（2026-10-23 实测，`7f8042c`）
+
+症状：某控件类型渲染出**两个控件**（如权限表格旁多出一个 `permission` 明文输入框），界面上多一行。
+
+根因：v-if / v-else-if 链里插入新分支时写成独立 `v-if`（而非接续上一分支），Vue 视其为**新链起点**；
+原链尾的 `<t-input v-else>`（文本兜底）与前序条件无关，条件全 false 时照样命中。
+
+排查：断言容器内 `querySelectorAll('input.t-input__inner').length`；或检查分支序列里是否出现两个连续 `v-if`。
+
+铁律：**同一条控件链只允许链首一个 `v-if`**，其余一律 `v-else-if`，链尾才可 `v-else`。
+新增控件分支时，把前一个 `v-if` 改成 `v-else-if`。
+
+## G23 ★★ 「魔方原版界面长什么样」——本地 NuGet DLL 里能直接取到 Razor 源码（2026-10-23 实测）
+
+需求：照着 MVC 版某个页面（如 `Role/SetPermission`）做 WebApi + Vue 的等价界面，但手上没有 MVC 源码工程。
+
+做法：Razor 视图被**编译进 DLL 的 UTF-16LE 字面量**，本地 NuGet 缓存即可取原文，离线、无需外网：
+
+```python
+# C:/Users/<user>/.nuget/packages/newlife.cube.core/<ver>/lib/net8.0/NewLife.Cube.dll
+data = open(dll, 'rb').read()
+txt  = data.decode('utf-16-le', errors='ignore')   # 关键：UTF-16LE，不是 UTF-8
+i = txt.find('操作权限')                            # 用界面上的中文列名/按钮文案定位
+print(txt[max(0, i-3000):i+3000])                 # 取上下文即得完整视图结构 + 联动 JS
+```
+
+实测收获（`Role/SetPermission`）：四列 `名称 | 显示名 | 授权 | 操作权限`，授权列 checkbox class
+`authorize` / `auth_child`，操作权限列 `pro_detail`（只读）/ `pro_all`（全部），父子用
+`prochildkey` / `proparentkey` + `child$=` 选择器联动。
+
+用途：① 对齐列/交互语义时**以原版为准**，别凭记忆猜；② 判断某个功能「框架到底自带没有」——
+先取 DLL 看有没有对应视图/动作，比翻官网或源码仓库快。

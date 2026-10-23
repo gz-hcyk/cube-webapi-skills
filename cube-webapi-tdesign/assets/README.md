@@ -134,18 +134,18 @@ node references/scripts/check-assets-copied.mjs references/scaffold   # 期望�
 
 | 文件（→ 目标路径） | 作用 | 启用条件 | 额外依赖 | 验证状态 |
 |---|---|---|---|---|
-| `components/cube/RoleMenuEditor.vue` | 角色权限设置（菜单树 + 权限位勾选，§4.12.1） | 需要角色授权页 | 无 | ✅ scaffold 内有副本，过 `vue-tsc` |
+| `components/cube/RoleMenuEditor.vue` | 角色权限设置（四列授权表格：名称/显示名/授权/操作权限，§4.12.1） | 需要角色授权页 | 无 | ✅ scaffold 内有同步副本，过 `vue-tsc` |
 | `components/cube/PriceYuanInput.vue` | 金额输入（元/分换算） | 有金额字段 | 无 | ✅ 同上 |
 | `components/cube/ThemeShowcase.vue` | 设计令牌板（可视化验证 `/theme`，已挂 DEV 路由） | 想看令牌全景 | 无 | ✅ 同上 |
 
-### ★ 2026-09-13：取消可选项分层，`assets/` 收敛为单层 `core/`（当日 31 个文件；2026-10-04 复数为 38）
+### ★ 2026-09-13：取消可选项分层，`assets/` 收敛为单层 `core/`（当日 31 个文件；2026-10-23 复数为 50）
 
 - **旧分层判据**：「是否被 core 文件静态 import」。它只对「**缺了就构建失败**」的件有解释力
   —— 如 `IconPicker.vue`（`FormDialog.vue` 对其静态 import，漏拷即 `Cannot find module`）。
 - **为何取消**：`RoleMenuEditor` / `PriceYuanInput` / `ThemeShowcase` 属**零引用配方件**
   —— 不拷不报错、拷了也不报错 ⇒ 落在两可地带 ⇒「拷不拷」全靠记忆。
   这正是历史上 `IconPicker` 被漏拷的同一成因。收敛后规则回到一句：
-  **一个目录、一次 `cp -r`、当前 38 个文件全拷**（2026-09-13 为 31），无需记哪件在哪个子目录。
+  **一个目录、一次 `cp -r`、当前 50 个文件全拷**（2026-09-13 为 31），无需记哪件在哪个子目录。
 - **已知代价**（接受）：`core/` 变重，含 3 件默认工程零引用的文件
   （实测：覆盖后再 `Grep PriceYuanInput|RoleMenuEditor|ThemeShowcase` 于工程 `src/`，无任何 import 命中，
   唯一同名命中是 `router/index.ts` 指向 `pages/ThemeShowcase.vue`——**同名不同文件**）。

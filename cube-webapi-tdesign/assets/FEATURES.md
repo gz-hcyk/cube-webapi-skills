@@ -59,7 +59,7 @@
 
 | 缺口 | 现状 | 建议 |
 |---|---|---|
-| 角色权限矩阵 | `RoleMenuEditor.vue` 已在资产内，但 6.15 **没有** `Role/PermissionTree` / `SavePermission` 动作（Role 控制器只有 11 个标准实体动作） | 需要该功能时由后端自建端点，再按 `RoleMenuEditor` 契约接线；不要假设框架自带 |
+| 角色权限矩阵 | ✅ **已资产化**（`RoleMenuEditor.vue` = 四列授权表格）。**不需要自建端点**：`Role.Permission` 走 Role 实体标准 `PUT` 保存，前端只需把勾选结果序列化成 `菜单ID#掩码` 串。⚠ 6.15 确实**没有** `Role/PermissionTree` / `SavePermission` 动作——那是 MVC 版的路由，WebApi 版靠实体 PUT | 照 SKILL §4.12.1 接线；写串后读回校验（掩码 0 的段会被 XCode 丢弃） |
 | 账号注销 | 无 `User/CloseAccount` 端点 | 已改为「导出个人数据」；真要做注销须后端自建 |
 | 账号激活 | 无 `Auth/Activate` | 同上；页面已做显式降级提示 |
 | 统计图表页 / 地区地图页 / AI 浮窗 | 本轮**未资产化**（不在「高频必用子集」内） | 仍按 `cube-page-catalog.md` §5.5/§5.6/§5.9 的配方落地 |

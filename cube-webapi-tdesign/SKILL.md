@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-tdesign
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、自定义权限位、按钮权限位显隐、整块渲染、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、自定义权限位、按钮权限位显隐、整块渲染、四列授权表格、授权列、只读全部两档、0 掩码段不落库、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
 ---
 
 # cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
@@ -263,8 +263,8 @@ mkdir -p src/stores src/styles          # all 用单数 store/style，本项目�
 node -e "const f='package.json',p=JSON.parse(require('fs').readFileSync(f,'utf8'));delete p.scripts.prepare;p.private=true;require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 
 # ④ 套用技能资产与工程外壳（**三步，只做第一步工程跑不起来**）
-cp -r <skill>/assets/core/. src/                  # ④-1 交付载荷 38 个文件（唯一拷贝动作）
-cp -r <skill>/references/scaffold/src/. src/      # ④-2 在 38 个文件之外再补 24 个文件（外壳 + DEV 页 + 上游基础设施）
+cp -r <skill>/assets/core/. src/                  # ④-1 交付载荷 50 个文件（唯一拷贝动作）
+cp -r <skill>/references/scaffold/src/. src/      # ④-2 在 50 个文件之外再补 24 个文件（外壳 + DEV 页 + 上游基础设施）
 cp <skill>/references/scaffold/vite.config.ts \
    <skill>/references/scaffold/index.html \
    <skill>/references/scaffold/.env \
@@ -288,8 +288,8 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 >   且**没有 H3 代理、没有 R4 分包**；`index.html` 带腾讯 Aegis 埋点且 `lang="en"`。
 >   ⇒ 直接套用 `references/scaffold/` 的**已补丁外壳**才是正解，不要逐条手工打补丁。
 > - ④-2/④-3 与 ④-1 的关系：`scaffold/src/` ⊃ `assets/core/`（逐件同 md5），故 ④-2 只**新增** 24 件、不会与 ④-1 打架；
->   这正是 `check-assets-copied.mjs`（只比对 `assets/core` 那 38 个文件）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
-> - 最终 `src/` 应为 **62 个文件 = 38 + 24**（与 `references/scaffold/src/` 同构；计数是文件，不是「项」），可用 `find src -type f | wc -l` 自证。2026-09-13 写过的 55 = 31 + 24 已过时。
+>   这正是 `check-assets-copied.mjs`（只比对 `assets/core` 那 50 个文件）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
+> - 最终 `src/` 应为 **74 个文件 = 50 + 24**（与 `references/scaffold/src/` 同构；计数是文件，不是「项」），可用 `find src -type f | wc -l` 自证。2026-09-13 写过的 55 = 31 + 24 已过时。
 ```
 
 **CLI `all` 产物文件数**：2026-09-13 为 193，2026-10-04 复跑同一 `tdesign-starter-cli@0.5.3` 为 **173**（`find -type f`，不含 `node_modules`）。`--manifest` 打印的是结构清单，条数不等于文件总数。
@@ -601,7 +601,7 @@ export function usePerms() {
 
 - **命名来自后端**：权限项显示名 = 后端 Action 的 `[DisplayName]`（定义见 `cube-webapi-backend` §6.4 / §6.8），前端不得自造权限名；
 - **位值约定（官方口径）**：内置 1/2/4/8（查看/添加/修改/删除），自定义从 16 起，Int32 上限 32 位，同一控制器内不重复；
-- 角色侧勾选这些自定义子项见 §4.12.1 与 `references/permission-editor-integration.md`（当前 RoleMenuEditor 资产只渲染 1/2/4/8，自定义位列需按字典扩展）。
+- 角色侧勾选这些自定义子项见 §4.12.1 与 `references/permission-editor-integration.md`（RoleMenuEditor 已按节点 `permissions` 字典**动态渲染自定义位列**，新增业务位无需改组件）。
 
 ### 4.11 组件 / 页面选型策略
 
@@ -637,17 +637,29 @@ export function usePerms() {
 
 ### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
 
-`Role.Permission` 契约（位模型见官方 [角色菜单与权限控制](https://www.newlifex.com/cube/permission)）：逗号分隔 `菜单ID#权限位掩码`（`1#3`；`3=查看+新增`；`-1`=全动作；位 `1查看/2新增/4修改/8删除`）。通用表单把 Permission 渲染成 `t-input`——**必须换成勾选 UI**。自定义业务位（16/32/64/128…）同串参与：`16#16`=仅授予「入库」，`16#48`=`16|32`（入库+取消入库），权限项名 = 后端 Action `[DisplayName]`（官方 [permission_custom](https://www.newlifex.com/cube/permission_custom) 实测：角色编辑页该菜单下出现「出库 / 取消出库」子项，值 16/32）。
+`Role.Permission` 契约（位模型见官方 [角色菜单与权限控制](https://www.newlifex.com/cube/permission)）：逗号分隔 `菜单ID#权限位掩码`（`1#3` = 查看+新增；`-1` = 全动作；内置位 `1查看/2添加/4修改/8删除`，自定义业务位 16/32/64/128… 同串叠加，权限项名 = 后端 Action `[DisplayName]`）。通用表单把 Permission 渲成 `t-input`——**必须换成授权表格**。
 
-**资产（已按 Cube MVC SetPermission 形态定型，开箱即用）**：`assets/core/components/cube/RoleMenuEditor.vue` = **行内勾选平铺版**（菜单树 DFS 平铺、每行 查看/新增/修改/删除 独立 checkbox；父子位级联动——勾父动作位自动授予/收回全部子孙、不误伤其它位；全展开/全折叠工具栏 + 授权菜单数 Tag + 列头；序列化仅输出 `perm>0`，`-1` 透传）。完整接入三步 + 验收清单 + 坑表见 `references/permission-editor-integration.md`：
+**资产（四列授权表格，形态对齐 Cube MVC `Role/SetPermission`）**：`assets/core/components/cube/RoleMenuEditor.vue`（`references/scaffold/src/` 内有同步副本）：
 
-1. **拷贝** `assets/core/components/cube/RoleMenuEditor.vue` → `src/components/cube/`（依赖 `getApi`/TDesign，菜单源 `/api/Admin/Menu`）。
-2. **ListPage**：`isRolePage = area==='Admin' && controller==='Role'`；formItems（add/edit 共用）把 `String(it.key).toLowerCase()==='permission'` 的项改写为 `{ control:'role-permission', category:'权限设置', rules:[] }` → `groupByCategory` 自动生成「权限设置」页签。
-3. **FormDialog**：懒加载该组件；含该项时 `dialogWidth=1000px`；模板 `template v-for` 分流把 `role-permission` **整块渲染**（全宽 div，勿套带 label 的 `t-form-item`，避免表单标签栏残留）。
+| 列 | 内容 |
+|---|---|
+| 名称 | 菜单 `name`（英文代码名），层级缩进 + 折叠箭头，父级加粗 |
+| 显示名 | 菜单 `displayName`（中文） |
+| 授权 | **仅父级行**：整块开关（勾上 → 自身+全部子孙补段，无位的落「查看」；取消 → 整支删段） |
+| 操作权限 | 父级 `只读`/`全部` 两档（互斥，状态由数据反解）；叶子逐位勾选，位列表由节点 `permissions` 字典驱动（内置 4 位 + 自定义位动态出现），`-1` 全动作透传 |
 
-高频坑（详见指南）：特判 key 是 camelCase `permission`（勿写 `'Permission'`）；组件数据源必须 `/api/Admin/Menu`（vite 下无前缀打到 SPA）；Role 详情/列表记得过滤 permission 明文；自动化验收以 PUT body 真实 postData 为最终判据（父勾「查看」→ `1#1,...,56#1` 级联；取消 → `Permission:""`）。
+- **数据源**：`GET /api/Admin/Index/GetMenuTree`（`getRaw`，调用点写全 `/api`）——返回**嵌套树**，组件内递归摊平；节点 `permissions` 字典是**权限位列表的唯一权威源**（空则回退 1/2/4/8）。**勿用 `/api/Admin/Menu` 扁平表**（不带字典，自定义位全丢）。
+- **子级无授权框**：授权由操作位隐含（勾任一位即开放）——刻意设计，理由见下条硬约束。
 
-⚠️ **自定义权限位列扩展（官方 permission_custom 要求）**：当前 `RoleMenuEditor.vue` 资产只渲染 1/2/4/8 四个内置位列，>8 的自定义位（16/32…）不会出现勾选框。后端一旦定义业务权限位（§4.10.1），必须按菜单 `permissions` 字典扩展组件——把 >8 的位按字典值（权限项名）渲染为额外 checkbox 列，序列化仍输出 `菜单ID#掩码`（验收：角色页出现「入库」勾选项 → PUT body 含 `16#16`）。扩展点与坑表见 `references/permission-editor-integration.md` §5。
+★ **硬约束：XCode 的 Role 保存/加载丢弃 `菜单ID#0` 段**（实测 PUT `permission="19#0"` 读回 `""`）⇒「菜单可见但零操作」**无法表达**，开放的最小粒度只能是查看（1）；「取消到 0」必须**删段**，`parse()` 也要忽略 0 段。凡写 Permission 串的逻辑，写完必须读回校验（0 段静默消失，不报错）。
+
+**三步接入**（完整代码 + 验收清单 + 坑表见 `references/permission-editor-integration.md`）：
+
+1. **拷贝** `assets/core/components/cube/RoleMenuEditor.vue` → `src/components/cube/`；`api/fieldRender.ts` 的 `FieldControl` 联合类型补 `'role-permission'`。
+2. **FormDialog**：`isRolePage = area==='Admin' && controller==='Role'`；`items` 把 `String(it.name).toLowerCase()==='permission'` 的项改写为 `{ control:'role-permission', label:'', category:'权限设置', full:true }`（→ `groupByCategory` 自动生成「权限设置」页签）；`rules` 删 `permission`；含该项时 `dialogWidth='1160px'`；模板里作为 **v-if 链第一支**（后续控件一律 `v-else-if`），label 壳用 `.form-item--rme :deep(.t-form__label){display:none}` 隐藏。
+3. **ListPage / DetailDrawer**：Role 页过滤 `permission` 字段（授权串不外露明文，只在编辑弹窗维护）。
+
+高频坑（详见指南）：特判 key 是 camelCase `permission`（勿写 `'Permission'`）；`t-tree-select` 等分支**误写独立 `v-if` 会让链尾 `t-input v-else` 兜底命中 → 同一字段渲染两个控件**（矩阵旁多出明文框），必须接成 `v-else-if`；自定义位不出现＝数据源用了扁平 Menu 表；只渲染顶层＝`GetMenuTree` 未摊平；自动化验收以 PUT body 真实 postData 为最终判据（父勾「查看」→ `id#1` 级联；父勾「只读」→ 全支掩码 1；父勾「全部」→ 全支 `-1`）。
 
 ### 4.12.2 API 清单接口 `GET /Cube/Apis`（权威接口清单 + 实体/动作判定）
 
@@ -974,7 +986,7 @@ MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolb
 
 ## 六、常见陷阱（高频精选 + 全量排障入口）
 
-> **全量 96+ 条陷阱（含症状→根因→修复→assets 指针）已外移至 `references/troubleshooting.md`，按 9 组分类**：G1 后端契约/权限 / G2 请求层与代理 / G3 字段映射选型 / G4 列表表格渲染 / G5 树形 / G6 表单校验控件 / G7 登录会话外壳 / G8 前端工程 / G9 Lov+CDP 验收。**异常先查该文件**（组目录定位 → 读条目），**另有 G10~G19 为后续实测追加的独立条目**（配置体系 / 生成器行为 / 外键字典 / 菜单导航 / 骨架与演示页之辨 / 资产回补 / 同源故障 / 建站缺步 / caret 版本漂移 / **验收判据陷阱**），以下仅保留最高频行为警示：
+> **全量 96+ 条陷阱（含症状→根因→修复→assets 指针）已外移至 `references/troubleshooting.md`，按 9 组分类**：G1 后端契约/权限 / G2 请求层与代理 / G3 字段映射选型 / G4 列表表格渲染 / G5 树形 / G6 表单校验控件 / G7 登录会话外壳 / G8 前端工程 / G9 Lov+CDP 验收。**异常先查该文件**（组目录定位 → 读条目），**另有 G10~G23 为后续实测追加的独立条目**（配置体系 / 生成器行为 / 外键字典 / 菜单导航 / 骨架与演示页之辨 / 资产回补 / 同源故障 / 建站缺步 / caret 版本漂移 / **验收判据陷阱** / **角色授权表格三连坑（0 掩码·嵌套树·数据源）** / **回填多选 null 首帧崩溃** / **控件链 v-if 兜底双控件** / **本地 DLL 取 MVC 原版视图**），以下仅保留最高频行为警示：
 
 1. **「源码改对了错误照旧」→ 先怀疑 stale 构建产物（第一名）**：改契约/登录类代码后四步闭环——① `npm run build` 退出码 0；② `grep dist/assets/index-*.js` 确认新关键字**存在**、旧 bug 关键字**消失**（如应见 `category:0` 且无 `category:""`）；③ 浏览器硬刷新；④ dev 模式重启会话。最快判定：node 直接跑 `normToken` 喂真实 JSON。
 2. **登录契约**：SPA 用 `POST /Auth/Login`（非 `/Admin/User/Login`）、`username` 非 `userName`、`category` 传枚举整数（`''`/`'Password'` → `code:-2`）、令牌 snake_case 走 `normToken` 三向兜底、`LoginConfig.oAuth` 大写 A。真实 HTTP 响应是字段名唯一权威。
@@ -998,7 +1010,7 @@ MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolb
 ### ① 骨架 —— 退出条件：`check-starter-align.mjs` 退出码 0
 
 - [ ] **C1** 工程由 `printf '\n' | td-starter init <名> -type vue3 -temp all` 生成（**完整脚手架血统**），且 `node references/scripts/check-starter-align.mjs <工程目录>` **退出码 = 0**（CLI 骨架齐全、`prepare` 已删、必需依赖在位、`@` 别名 vite+tsconfig 成对、`index.html` 有 favicon 与挂载点；脚本自动判 `all`/`lite` 血统）
-- [ ] ★★★ **第④步三步都做了**：`src/` 共 **62 个文件 = `assets/core` 38 + `references/scaffold/src` 独有 24**（`find src -type f | wc -l` 自证；计数是文件）；
+- [ ] ★★★ **第④步三步都做了**：`src/` 共 **74 个文件 = `assets/core` 50 + `references/scaffold/src` 独有 24**（`find src -type f | wc -l` 自证；计数是文件）；
   **工程根外壳取自 `references/scaffold/`**（`vite.config.ts` / `index.html` / `.env*` / `package.json`），**不是** CLI 的上游版。
   ⚠️ 漏做此步时**上面那个闸门仍会全绿**，但 `src/router/index.ts` 还 import 已删的 `./modules` ⇒ **工程根本跑不起来**（见 troubleshooting G17）
 - [ ] ★ **工程能真的启动**：`npx vite build` 或 `npm run dev` 不报 `Cannot find module './modules'` / `./style/variables.less`；`main.ts` 已引 `tokens.css` + `theme-dark.css` 且调了 `setting.load()`（骨架文件在场 ≠ 接线正确）
@@ -1159,12 +1171,12 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 | **core** | `assets/core/components/cube/ThemeShowcase.vue` | 设计令牌板（`/theme` 可视化验证）✅ 已随 scaffold 验证 · **零引用配方件** |
 | — | `references/scaffold/src/router/index.ts` | 路由模板（登录门禁 + `/dashboard` + `/entity/:area/:controller` 泛型兜底 + DEV 验证路由） |
 
-> ★ **2026-09-13：取消 `assets/optional/` 层，改为单层 `core/`**（该日计 31 个文件；2026-10-04 复数为 **38 个文件**）。原先「按需拷」的三件
+> ★ **2026-09-13：取消 `assets/optional/` 层，改为单层 `core/`**（该日计 31 个文件；2026-10-23 复数为 **50 个文件**）。原先「按需拷」的三件
 > （`RoleMenuEditor` / `PriceYuanInput` / `ThemeShowcase`）全部并入 `core/`。理由：**分层的唯一判据是
 > 「是否被 core 文件静态 import」，而这判据只对「缺了就构建失败」有意义**；这三件属**零引用配方件**
 > ——不拷不报错、拷了也不构建报错（`vue-tsc` 会编译它们，与主链路无关）——落在两可地带，
 > 导致「拷不拷」全靠使用者记忆，正是历史上 `IconPicker` 被漏拷的事故成因。
-> 收敛为「**一个目录、一次 `cp -r`、当前 38 个文件全拷**」后，`check-assets-copied.mjs` 的判据也变成单向可验证。
+> 收敛为「**一个目录、一次 `cp -r`、当前 50 个文件全拷**」后，`check-assets-copied.mjs` 的判据也变成单向可验证。
 > 代价（已确认）：`core` 变重；这三件在默认工程里**零引用**（`ThemeShowcase.vue` 仅与同名
 > `pages/ThemeShowcase.vue` DEV 路由巧合重名，**不是**同一个文件）。
 
@@ -1187,7 +1199,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
 > **工程外壳**（`main.ts` / `App.vue` / `router/index.ts` / `index.html` / `tsconfig.json` / `vite.config.ts` / `public/favicon.ico` / `src/types/env.d.ts`）不在 `assets/` 里——它们**由 `td-starter` 生成**、随 `references/scaffold/` 提供；`check-starter-align.mjs` 就是用来守住这条边界的。
 > ⚠️ **外壳清单随血统不同**：`all` 是 `src/types/env.d.ts`（**无** `tsconfig.node.json` / `src/vite-env.d.ts`），`lite` 是 `tsconfig.node.json` + `src/vite-env.d.ts`。
 >
-> ★ **四根构成（2026-09-13 由三根扩为四根；同日 scaffold 由 `lite` 血统重生为 `all`）**：`references/scaffold/src/`（唯一真相源，2026-10-04 为 **62 个文件**）= `assets/core/`（**38 个文件**，必拷）
+> ★ **四根构成（2026-09-13 由三根扩为四根；同日 scaffold 由 `lite` 血统重生为 `all`）**：`references/scaffold/src/`（唯一真相源，2026-10-23 为 **74 个文件**）= `assets/core/`（**50 个文件**，必拷）
 > **+ 工程外壳 `all` 版**（`App.vue` / `main.ts` / `router/index.ts`）**+ DEV 演示页 1 件**
 > （`pages/LovDemoView.vue`，`/lov-demo` 路由用，生产不注册）**+ `all` 保留的上游基础设施**
 > （`src/types/`5 件、`src/locales/`4 件、`src/config/`3 件、`src/constants/`1 件、`src/hooks/`1 件、`src/styles/*.less`5 件）。
@@ -1304,7 +1316,7 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
   - ★ **修漂移也是一条命令**：`node references/scripts/sync-assets.mjs`（把主真相源 `references/scaffold/src/` 单向覆盖到 `assets/core/`）。默认 `--check` 只报不改，避免误覆盖。
   - ⚠️ **这些闸门判据正交，不能互相替代，也不允许只跑其中一个**（D-17 实测踩坑）：
     - `check-assets-copied.mjs` = 「工程 `src/` ↔ 技能 `assets/`」→ **看不见**技能内部两镜像之间的漂移；
-    - `scan-assets-refs.mjs` = 「`assets/core/`（38 个文件） ↔ `references/scaffold/src/`（62 个文件）」判子集且逐件同 md5 → **看不见**目标工程；
+    - `scan-assets-refs.mjs` = 「`assets/core/`（50 个文件） ↔ `references/scaffold/src/`（74 个文件）」判子集且逐件同 md5 → **看不见**目标工程；
     - 反面案例：D-15 回补时 `MenuSidebar.vue` 只写了 `assets/core/` 一份，`references/scaffold/src/` 那份漏了 `const route = useRoute();`（但仍在用 `route.path`）→ 脚手架生成出来**编译即失败**；当时只因跑了 `check-assets-copied`（全绿）就以为收工，漂移潜伏了整轮。
     - 这就是 `check-all.mjs` 存在的唯一理由：**把「跑全部」变成一条命令**，从结构上消灭「挑着跑」。
   - ★ **聚合器自身也要过「假全绿自检」**：写完/改完断言类工具，注入一个人造漂移确认它**会变红**。
@@ -1322,8 +1334,8 @@ cp -r assets/core/.   <工程>/src/        # 唯一拷贝动作（38 文件，�
   - ★ **资产的真实结构是「两镜像」（**没有第三份**），不是「三副本」**（2026-09-13 全量实测；照字面去同步 demo 是错的）：
     | 层 | 件数 | 角色 | 参与同步？ |
     |---|---|---|---|
-    | `references/scaffold/src/` | **62 个文件** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
-    | `assets/core/` | **38 个文件** | **① 的严格子集**（= 62 − 24 个骨架/上游文件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
+    | `references/scaffold/src/` | **74 个文件** | **主真相源**：完整可运行工程（CLI 骨架 + 全部业务资产），`check-starter-align.mjs` 的默认校验目标 | ✅ 改这里 |
+    | `assets/core/` | **50 个文件** | **① 的严格子集**（= 74 − 24 个骨架/上游文件；独有件 0、逐件同 md5），是**唯一拷贝源**（`cp -r assets/core/. <工程>/src/`） | ✅ 跟着改 |
     | ~~`references/demo/src/`~~ | 28 | **已于 2026-09-13 归档移出技能**（→ 技能仓库 `.archive/cube-webapi-tdesign--demo-lite/`）。它从来不是 ① 的副本，而是 lite 血统的另一代工程（含 7 件 ① 没有的资产） | ❌ **已不参与**：`tri-diff.mjs` 默认不再拿它当对照根，需 `--demo` 显式启用 |
   - 因此：**改一个文件 ＝ 改两处**（主真相源 `references/scaffold/src/` → 派生 `assets/core/`）。
     **不要手工双写**——改完真相源直接 `node references/scripts/sync-assets.mjs` 派生，再跑聚合入口确认 `core/scaffold 差异数: 0`。
