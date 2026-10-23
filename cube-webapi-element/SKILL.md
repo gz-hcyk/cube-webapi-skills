@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-element
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 Vue 3 + Vite + Element Plus 前端。先从官方脚手架（create-vue）初始化工程，再按设计令牌并入可复用资产；核心是「组件化 + 模板继承」：一个 ListPage/FormDialog/DetailDrawer 基类 + 字段渲染器，让每个实体的增删改查从 GetPage 元数据自动生成，新增实体不写页面。含字段映射双模式（列表显名 / 表单下拉）、ParentID 树形表格与树形下拉、X-Tenant 多租户、GetMenuTree 动态菜单与同层互斥展开、GetPage.setting 按钮权限、政务蓝设计令牌与明暗双主题、vite 代理与 /api 前缀族、生产构建与子路径部署。触发词：搭魔方 WebApi 前端、Element Plus 前端、vue3 vite element-plus、生成实体管理页面、新增实体页面、对接 GetFields/GetPage、字段映射、外键下拉、枚举下拉、树形表格、树形下拉、动态菜单、GetMenuTree、同层互斥、手风琴菜单、按钮权限、多租户前端、X-Tenant、暗色主题、品牌色换肤、设计令牌、组件化、模板继承、配置式列表页、create-vue 初始化、脚手架、vite 代理、/api 前缀、405 修改删除、多选崩溃、菜单空白、登录 404、生产部署子路径。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 Vue 3 + Vite + Element Plus 前端。先从官方脚手架（create-vue）初始化工程，再按设计令牌并入可复用资产；核心是「组件化 + 模板继承」：一个 ListPage/FormDialog/DetailDrawer 基类 + 字段渲染器，让每个实体的增删改查从 GetPage 元数据自动生成，新增实体不写页面。含字段映射双模式（列表显名 / 表单下拉）、ParentID 树形表格与树形下拉、X-Tenant 多租户、GetMenuTree 动态菜单与同层互斥展开、GetPage.setting 按钮权限、政务蓝设计令牌与明暗双主题、vite 代理与 /api 前缀族、生产构建与子路径部署。触发词：搭魔方 WebApi 前端、Element Plus 前端、vue3 vite element-plus、生成实体管理页面、新增实体页面、对接 GetFields/GetPage、字段映射、外键下拉、枚举下拉、树形表格、树形下拉、动态菜单、GetMenuTree、同层互斥、手风琴菜单、按钮权限、多租户前端、X-Tenant、暗色主题、品牌色换肤、设计令牌、组件化、模板继承、配置式列表页、create-vue 初始化、脚手架、vite 代理、/api 前缀、405 修改删除、多选崩溃、菜单空白、登录 404、角色权限设置、RoleMenuEditor、权限矩阵、授权列、四列授权表格、permission 明文框、只读全部两档、生产部署子路径。"
 ---
 
 # cube-webapi-element —— 魔方 WebApi 的 Vue 3 + Element Plus 前端
@@ -19,7 +19,8 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 Vue 3 + Vite + Element
 | 响应信封、路由前缀、GetPage/DataField 契约 | `references/metadata-contract.md` |
 | 颜色/字体/间距/组件规格/暗色/无障碍 | `references/design-tokens.md` |
 | 三种落地方式、薄页面、父子表、扩控件 | `references/page-composition.md` |
-| 症状 → 根因 → 修法（18 组） | `references/troubleshooting.md` |
+| 角色授权表格（Role `permission` 四列授权、0 掩码约束） | `references/permission-editor-integration.md` |
+| 症状 → 根因 → 修法（25 组） | `references/troubleshooting.md` |
 | 可拷贝代码 | `assets/core/**`（映射见 `assets/README.md`） |
 | 工程闸门 | `scripts/check-project.mjs` |
 | 后端契约权威（控制器/权限/JWT/部署） | `cube-webapi-backend` 技能 |
@@ -175,6 +176,7 @@ GET /api/{area}/{controller}/GetPage
 | 可选 | 树形实体 | 元数据命中 `ParentID` 自动生效，无需改代码 |
 | 可选 | 特殊控制器（Config / 报表 / DB） | 见 `page-composition.md` §2.3 |
 | 可选 | 父子表内嵌明细 | 见 `page-composition.md` §6 |
+| 可选 | 角色授权表格（Role 的 `permission` 字段） | §5.7.1 + `permission-editor-integration.md` |
 
 ---
 
@@ -372,6 +374,17 @@ function onOpen(index: string) {
 | 行双击进详情 | `setting.enableTableDoubleClick !== false` |
 
 前端只做 UI 隐显，真实鉴权永远在后端。
+
+#### 5.7.1 角色授权设置（RoleMenuEditor）
+
+「系统管理 → Role」的 `permission` 字段是 `菜单ID#权限位掩码` 串，通用表单会渲成**明文输入框**——必须换成
+四列授权表格（名称 / 显示名 / 授权 / 操作权限），资产已含 `components/cube/RoleMenuEditor.vue`。
+
+- **四列**：名称（英文 `name`，层级缩进 + 折叠）｜显示名（`displayName`）｜授权（**仅父级行**，整块开关）｜操作权限（父级 `只读`/`全部` 两档、互斥；叶子逐位，含 16/32/64/128 自定义位）
+- **数据源** `GET /api/Admin/Index/GetMenuTree`（`getRaw`）：返回**嵌套树，必须递归摊平**；节点 `permissions` 字典是权限位列表的**唯一权威源**（空则回退 1/2/4/8）。勿用 `/api/Admin/Menu` 扁平表（不带字典）
+- ★ **硬约束**：XCode 丢弃 `id#0` 段 ⇒ 「菜单可见但零操作」无法表达，开放最小粒度 = 查看（1）；「取消到 0」必须**删段**
+- **接线三处**：`FieldControl` 补 `'role-permission'`；FormDialog 把 `permission` 项改写为 `{control:'role-permission', label:'', category:'权限设置', full:true}`、`rules` 删 `permission`、`dialogWidth='1160px'`，模板中作为 **v-if 链第一支**（后续 `v-else-if`，否则链尾 `el-input v-else` 兜底命中 → 明文框与表格同时出现）；ListPage / DetailDrawer 过滤 `permission` 明文
+- 完整代码 + 验收清单 + 坑表：`references/permission-editor-integration.md`
 
 ### 5.8 多租户
 

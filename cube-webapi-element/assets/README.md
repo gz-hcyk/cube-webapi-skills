@@ -21,7 +21,7 @@ cp <skill>/assets/env.example ./.env.local     # 按项目改这三项
 | `api/http.ts` | `src/api/http.ts` | 唯一 axios 层（`http` + `rawHttp` 双实例） |
 | `api/fieldRender.ts` | `src/api/fieldRender.ts` | 字段 → 控件 / 列 / 选项 / 规则 |
 | `api/useEntityResource.ts` | `src/api/useEntityResource.ts` | 实体页数据基类 |
-| `components/cube/*.vue` | `src/components/cube/` | 七个通用组件：ListPage、FormDialog、DetailDrawer、FieldControl、MenuItems、AuthShell、SettingPanel |
+| `components/cube/*.vue` | `src/components/cube/` | 八个通用组件：ListPage、FormDialog、DetailDrawer、FieldControl、MenuItems、AuthShell、SettingPanel、RoleMenuEditor（角色授权表格，接不接线见 §5.7.1） |
 | `layouts/BasicLayout.vue` | `src/layouts/BasicLayout.vue` | 侧栏 + 顶栏 + 内容区 |
 | `views/*.vue` | `src/views/` | 登录 / 工作台 / 泛型实体页 |
 | `stores/auth.ts`、`stores/setting.ts` | `src/stores/` | 鉴权与外观 |

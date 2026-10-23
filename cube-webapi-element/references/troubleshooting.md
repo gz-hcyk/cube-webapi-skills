@@ -111,6 +111,17 @@ Cannot read properties of null (reading 'Symbol(Symbol.iterator)')
 `el-select multiple` 的 `v-model` 必须是数组。`deserializeMultiValue` 永远返回数组；
 新增表单初始化时 `form[prop] = []`（`FormDialog.emptyValue` 已处理）。
 
+★ **编辑回填路径是更隐蔽的缺口**（2026-10-23 实测：Role 编辑弹窗**完全打不开**，控制台反复
+`object null is not iterable`）：`Object.assign(formData, row)` 把后端行里的 `null`（如
+`DataDepartmentIds: null`）直接写进多选字段，而 `await res.getById()` **之间已渲染一帧**，
+`el-select multiple` 收到 null 当场崩——归一化循环排在 await 之后，来不及兜。
+
+修法：把多值/范围归一化抽成 `normalizeMultiFields()`，**每次 `Object.assign` 之后同步调用一次**
+（assign(row) 后、assign(entity) 后各一次），不依赖 await 之后的单次循环。
+
+泛化铁律：**多选控件的 v-model 永远不允许是 null/undefined**。凡把后端行数据写进 `formData` 的路径
+（初始 build / row 兜底 / entity 覆盖 / 编辑回填），每条落点都必须跟一次归一化；新增回填路径时逐条核对。
+
 ## G9 暗色不生效
 
 三处接线，缺一即死代码：
@@ -214,3 +225,21 @@ element-plus/theme-chalk/dark/css-vars.css
 
 `tokens.css` 必须**在组件库之后**，否则它的 `:root` 变量会被组件库默认值覆盖。
 `create-vue` 生成的 `import './assets/main.css'` 必须删掉。
+
+## G24 ★★★ 角色授权表格：0 掩码段不落库 / GetMenuTree 嵌套未摊平（2026-10-23 实测）
+
+配方见 SKILL §5.7.1，组件 `components/cube/RoleMenuEditor.vue`。
+
+1. **`菜单ID#0` 段会被 XCode 丢弃** —— PUT `permission="19#0"` 读回 `""`。⇒ 开放最小粒度＝查看（1）；
+   「取消到 0」必须删段；写串后读回校验（0 段静默消失，不报错）。
+2. **`/api/Admin/Index/GetMenuTree` 是嵌套树**（`children`）——必须递归摊平，否则只渲染顶层分组、子级全丢。
+3. **数据源勿用 `/api/Admin/Menu`**（不带 `permissions` 字典，自定义位 16/32/64/128 全丢）。
+
+## G25 ★★★ 同一字段渲染出两个控件：v-if 链尾 v-else 兜底命中（2026-10-23 实测）
+
+症状：权限表格旁多出一个 `1#1,6#1…` 明文输入框（同一字段两个控件）。
+
+根因：`el-tree-select` 分支写成了独立 `v-if`，Vue 视为新链起点；链尾 `el-input v-else` 条件恒真命中。
+
+修法：新分支接成 `v-else-if`，**一条控件链只允许链首一个 `v-if`**。
+排查：数容器内 `input` 个数，或看分支序列是否出现两个连续 `v-if`。
