@@ -16,3 +16,7 @@ examples/equipment-ledger/**/.vite/
 examples/equipment-ledger/**/*.db
 examples/equipment-ledger/**/*.db-wal
 examples/equipment-ledger/**/*.db-shm
+
+# WorkBuddy 运行时状态（自动化记忆等），非技能资产，不入库
+# 注：.workbuddy/memory/YYYY-MM-DD.md 工作日志仍需跟踪，故只忽略子目录
+.workbuddy/memory/automations/
