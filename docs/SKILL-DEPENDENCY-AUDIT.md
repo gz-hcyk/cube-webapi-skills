@@ -270,3 +270,19 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 
 - `project-architecture` 落后上游、`cube-mvc-backend` 本地分叉：属上游手工拷贝技能的内容级漂移，按 §5.4.2 / §5.4.3 另行处理（涉及覆盖 / 回灌决策，需单独确认）；
 - `cube-webapi-element` 的完备性评估（其与 backend 契约的一致性深审）不在本轮范围。
+
+### 8.6 第二轮：依赖装用铁律（同日）
+
+用户要求「依赖的安装与同步更新升格为技能铁律，本地缺依赖则提示用户安装」，并明确 tdesign 的依赖 `cube-webapi-backend` **来源是本仓库**（上游 `NewLifeX/NewLife.Skills` 并无 `cube-webapi-*` 系列，见 §3.3）。提交 `4d963af`（三份 SKILL.md，+105 / −13）：
+
+| 文件 | 改动要点 |
+|---|---|
+| `cube-webapi-backend/SKILL.md` | 新增「铁律：依赖先装后用、用前同步」：装机核验（缺即提示用户安装）＋同步核验（落后先同步；分叉不覆盖）；元流程补 ⓪ 依赖体检；「技能衔接」要点同步更新 |
+| `cube-webapi-tdesign/SKILL.md` | **依赖来源纠正**：原依赖段把 `cube-webapi-backend` 指向 `NewLifeX/NewLife.Skills`（错误来源，该指引作废），改为本仓库同仓来源＋同款铁律；二·前置条件挂体检入口 |
+| `cube-webapi-element/SKILL.md` | 新增「依赖的新生命团队技能」段（同仓来源）＋同款铁律；二·前置条件补依赖体检项 |
+
+自此依赖标准为「**先装后用、用前同步**」（装机核验＋同步核验两道），见三份 SKILL.md 的同名铁律；本节核验矩阵与 §六 复核命令为其执行底稿。
+
+**连带修复**：`cube-webapi-tdesign` 原第 311 行**孤立围栏**（无语言标记的单独一行，2026-09-13 起即存在）——经围栏配对状态机核验，其后 70+ 行正文（删除前为 312–387 行，含表格/清单）会被渲染为代码块；删除后该文件围栏 24 条全部配对（backend 80 条 / element 30 条同法复检正常，无同类缺陷）。
+
+**复核**：三份改动后围栏配平；`NewLifeX/NewLife.Skills` 在 tdesign / element 中的残留仅存于「不要到上游找它」的澄清语境（backend 中为上游三分技能的正规来源指引）；提交标题经 od 复核无 BOM。
