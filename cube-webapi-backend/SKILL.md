@@ -23,19 +23,20 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 | 端到端示例（IoTHub：选型+数据范围+权限位+多租户） | `references/example-iothub.md` |
 | 挂链开号（业务实体→魔方 User 登录账号、初始密码+首登强制改密、批量补开） | `references/open-account.md` |
 | curl 冒烟探针脚本（登录→token→401 五步） | `references/curl-smoke.md` |
-| 前端如何消费（camelize/normToken/登录页/代理） | `cube-webapi-tdesign`（前端消费契约归其职责） |
+| 前端如何消费（camelize/normToken/登录页/代理） | `cube-webapi-tdesign` / `cube-webapi-element`（按前端栈择一；前端消费契约归其职责） |
 
 ## 版本与组件选型
 
 新建项目的 .NET SDK 版本、xcodetool 与 NewLife 组件版本，一律按「铁律：新建项目的 SDK 与组件版本选型」执行——**SDK 让用户选，工具与组件一律取最新稳定版，本文不再钉任何版本**。
 
-## 依赖的新生命团队技能（本仓库并不包含其中三份）
+## 依赖的新生命团队技能
 
-本仓库只有 `cube-webapi-backend` 与 `cube-webapi-tdesign`。下面三份**不在本仓库**，也不要把它们拷进本仓库冒充已内置：
+本仓库现有 `cube-webapi-backend`、`cube-webapi-tdesign`、`cube-webapi-element` 三份。下面三份**不在本仓库**，也不要把它们拷进本仓库冒充已内置：
 
 | 技能 | 用途 | 本技能何处引用 | 是否在本仓库 |
 |---|---|---|---|
 | `cube-webapi-tdesign` | 前端 TDesign 消费端（GetFields/GetPage 元数据驱动） | 元流程 ⑦、第九节、第十四节 | 在 |
+| `cube-webapi-element` | 前端 Element Plus 消费端（同 tdesign 职责的第二种变体，二者择一） | 元流程 ⑦（替代路径） | 在 |
 | `cube-mvc-backend` | 魔方 MVC 版后台（字段定制 ListField 扩展属性速查） | 文件头字段定制说明 | **不在** |
 | `project-architecture` | 分层架构选型（两层起步、按需渐进三层） | 元流程 ① | **不在** |
 | `xcode-data-modeling` | Model.xml 数据建模（表/字段/索引/外键 Map/ShowIn） | 元流程 ② | **不在** |
@@ -114,7 +115,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 ④ 编译检查              → dotnet build，错误清零
 ⑤ 补充业务代码          → 在实体类（业务方法/Search/枚举访问）与控制器（字段定制/自定义 Action/权限位）中补充，生成代码不手改
 ⑥ 编译检查              → dotnet build，错误清零
-⑦ 创建前端项目          → 使用 cube-webapi-tdesign 技能（TDesign Vue Next，GetFields/GetPage 元数据驱动）
+⑦ 创建前端项目          → 使用 cube-webapi-tdesign 技能（TDesign Vue Next，GetFields/GetPage 元数据驱动）；若目标项目栈为 Element Plus，改用本仓库的 cube-webapi-element
 ⑧ 前端编译、测试        → npm run build + npm run dev 自测（列表/表单/详情/空状态/错误状态）
 ⑨ 前后端联调测试        → 登录鉴权、CRUD、字段名以 camelCase 为准（见 §14.2）、权限显隐、导出、分页排序筛选
 ```
@@ -122,7 +123,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 要点：
 - **模型先行**：所有实体/控制器由 Model.xml 驱动生成，需求变更先改 XML 再重新生成，禁止手改生成器产物（会被覆盖）；字段/表结构调整一律走「改 Model.xml → xcodetool 重新生成 → 编译检查」。
 - **两次编译检查是硬闸门**：③ 生成后、⑤ 业务补充后各一次，任何修复后编译错误数必须为 0。
-- **技能衔接**：①② 依赖的 `project-architecture`、`xcode-data-modeling` **不在本仓库**。读不到就停，不要手写实体冒充生成结果。⑦ 依赖本仓库的 `cube-webapi-tdesign`。
+- **技能衔接**：①② 依赖的 `project-architecture`、`xcode-data-modeling` **不在本仓库**。读不到就停，不要手写实体冒充生成结果。⑦ 依赖本仓库的 `cube-webapi-tdesign` 或 `cube-webapi-element`（前端栈二者择一）。
 - **`xcode` 的副作用（实测；`xcode-data-modeling` 不在本仓库，写在这里）**：
   - 生成结束会执行 `dotnet tool update xcodetool -g --prerelease`，把刚装的稳定版换成预发布版。本仓库没有看到关闭开关。生成后立刻执行 `dotnet tool update xcodetool -g` 装回最新稳定版（见「铁律：新建项目的 SDK 与组件版本选型」），否则下一次生成用的是 beta。
   - 没有 `ModelVersion` 的 `Model.xml` 会被改写：补上版本号，`<ChineseFileName>` 被改成 `True`，部分 `Length` 被删掉，实体文件名变成中文（如 `设备.cs`）。示例 XML 要么带上当前 `ModelVersion`，要么接受这次重写。
@@ -964,7 +965,7 @@ public partial class PortalVisit : Entity<PortalVisit> { /* ... */ }
 - 反过来，**手写 DDL 建出来的索引会被框架当成模型外的多余物**：日志出现
   `DDL模式[On]，禁止修改表[Xxx]：Drop Index IX_...`（`On` 只提示不真删，`Full` 会真删）。
 - 另：手写实体**必须**带 `[BindTable]`，否则 `TableItem.Create` 直接抛 `ArgumentOutOfRangeException (Parameter 'type')`、
-  表永远建不出来 —— 详见 skill `xcode-handwritten-entity` 必做件 0。
+  表永远建不出来 —— 相关硬规则（`BindIndex`、`Entity<T>` 基类、`Item` 名冲突、String 列必须声明 `Length`）见本地技能 `newlife-build-and-xcode-entity`。
 
 **MySQL 分支的写法修正**：不要指望「先查 `information_schema.statistics` 判断存在性再建」——
 实测所用的 XCode **未对外开放可直接执行标量/聚合查询的 DAL 入口**
