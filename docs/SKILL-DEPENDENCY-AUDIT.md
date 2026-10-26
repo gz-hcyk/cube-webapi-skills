@@ -307,3 +307,29 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 **未动**：`docs/SKILL-VALIDATION.md`（历史验证报告，其「字段定制指向 `cube-mvc-backend`」等表述为审计时点记录，按该文档「记录保留，没有删」惯例留存，不追改）；`cube-webapi-tdesign` / `cube-webapi-element` 本就无 `cube-mvc-backend` 引用，无需改动；backend 的 description 中「不适用于 MVC 服务器渲染后台（用 `cube-mvc-backend`）」为**反向路由提示**（不构成依赖），保留。
 
 **修正后装机/同步核验对象**：同仓 2 份（`cube-webapi-tdesign`、`cube-webapi-element`）＋上游 2 份（`project-architecture`、`xcode-data-modeling`）。
+
+### 8.8 第四轮：上游技能同步落地（同日）
+
+用户要求「从 GitHub 仓库更新技能」。本轮把「同步核验」从检查动作落实为**实际更新**：范围＝同仓 3 份＋ `~/.workbuddy/skills` 里与 `NewLifeX/NewLife.Skills@master` 同名的 10 份。
+
+**通道**：`github.com:443` 再次进入阻断窗口（`git pull` 4 连败：`Connection was reset` / 443 连不上），全程改用始终可达的 `api.github.com`：`git/trees/master?recursive=1` 取全树 sha、`contents` + `Accept: application/vnd.github.raw` 取文件字节，逐份 `git hash-object` 对撞。同仓 `gz-hcyk/cube-webapi-skills` 经 `commits/main` 核对：远端尖端 `58e9685` ＝ 本地 HEAD，无需拉取。
+
+**判定方法（在 blob 对撞上加两道）**：① 本地 blob 是否出现在该文件的上游修订历史（落后 / 分叉）；② 本地 blob 是否存在于上游对象库（`git/blobs/{sha}`：200＝真实历史修订，404＝上游从未有过、系本地独有）。
+
+| 技能 | 判定 | 处理 |
+|---|---|---|
+| `benchmark-testing` | 落后（＝rev2，对象库 200） | ✅ 更新至 `79b92c4`：新增「开始前确认」 |
+| `project-architecture` | 落后（＝rev2，对象库 200） | ✅ 更新至 `1f55f54`：**§5.4.2 / §8.5 遗留项就此闭环** |
+| `xml-comment-enrichment` | 落后（＝rev2，对象库 200） | ✅ 更新至 `944b74b` |
+| `doc-writer` | 对象库 404，但差异仅为旧形态（转义围栏不可渲染、遗留 `agent:` 字段、缺尾换行），无本地增补 | ✅ 更新至上游修正版 `03723db`（判断性更新，原件已备份） |
+| `cross-compatibility-testing`、`xcode-data-modeling` | 字节一致 | —（无需处理） |
+| `cube-mvc-backend` | 分叉：本地多「关联列替换」等段（对象库 404） | ⛔ 不覆盖 |
+| `e2e-testing` | 领先：本地多「离线探针」整段（对象库 404） | ⛔ 不覆盖 |
+| `testing-strategy` | 领先：本地多「失败与挂起诊断」整段（对象库 404） | ⛔ 不覆盖 |
+| `development-process` | 双向分叉：本地多「2.9 新人开发上手指南」等，上游多「1.3 核心竞品」等 | ⛔ 不覆盖（待合并） |
+
+**终态**：10 份中 6 份与上游字节一致；4 份为本地独有分叉（受保护，未动）。
+
+**备份**：被更新的 4 份原件（含原 mtime）存于 `C:/Users/admin/tmp/skills-backup-2026-10-26/`。
+
+**未决**：4 份分叉技能的「三方合并 / 回灌上游」待单独确认，本次零改动。
