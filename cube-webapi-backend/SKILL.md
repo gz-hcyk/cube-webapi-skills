@@ -47,6 +47,44 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 **缺失时停止**：`project-architecture`、`xcode-data-modeling`、`cube-mvc-backend` 读不到时，停在对应元流程步骤。不要手写实体类或控制器，再当成 `xcode` 的生成结果。
 
+## 铁律：依赖先装后用、用前同步（不可违反）
+
+> 上表依赖**必须先装到位再开工，且保持与来源仓库同版**：缺了先提示用户安装，落后先同步。不得用「手写 / 凭记忆代答」绕过对应依赖；「就地阅读」（不安装）只能作为用户知情的降级路径。
+
+**第一步 · 装机核验（缺即提示安装）**：逐份检查本机技能目录（WorkBuddy 为 `~/.workbuddy/skills/<技能名>/`；其他宿主换成各自的技能目录）：
+
+```bash
+for s in cube-mvc-backend project-architecture xcode-data-modeling cube-webapi-tdesign cube-webapi-element; do
+  [ -f "$HOME/.workbuddy/skills/$s/SKILL.md" ] && echo "OK       $s" || echo "MISSING  $s"
+done
+```
+
+出现 `MISSING` → **立即向用户提示安装**（不要拖到对应步骤才说）。提示口径：
+
+> ⚠️ 本技能依赖以下技能，本机尚未安装：**`<缺失名单>`**
+>
+> - **同仓两份**（`cube-webapi-tdesign`、`cube-webapi-element`）：来源本仓库 `https://github.com/gz-hcyk/cube-webapi-skills`——克隆后把对应目录 junction（Windows：`mklink /J`）或复制到本机技能目录（供自动加载，无需重启对话）；
+> - **上游三份**（`cube-mvc-backend`、`project-architecture`、`xcode-data-modeling`）：来源 `https://github.com/NewLifeX/NewLife.Skills` 的 `.github/skills/<技能名>/`——整目录取到本机技能目录。
+>
+> 需要的话我可以代为安装；装好后告诉我，我再继续对应步骤。若环境受限暂不能安装，请说明——我会按「获取方式」从来源仓库就地阅读，并标明这是降级路径。
+
+装好前：缺失所对应的元流程步骤不得进入（见上「缺失时停止」）；**不得**手写实体类/控制器冒充生成结果。
+
+**第二步 · 同步核验（用前查一次，落后先同步）**：
+
+- **同仓两份**：本仓库（`https://github.com/gz-hcyk/cube-webapi-skills`）执行 `git pull --ff-only`（junction 安装自动生效；拷贝安装则重拷对应目录）。
+- **上游三份**：与 `NewLifeX/NewLife.Skills@master` 逐份比对文件指纹——本地 `git hash-object` 与远端 GitHub API 的 `sha` 同为 blob 哈希，可直接对撞：
+
+```bash
+git hash-object "$HOME/.workbuddy/skills/xcode-data-modeling/SKILL.md"
+curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/skills/xcode-data-modeling/SKILL.md?ref=master" | grep '"sha"'
+```
+
+  两侧不一致：**落后 → 更新到上游版本**（重新取整目录覆盖）；**本地领先/分叉 → 不得覆盖**（已有先例：`cube-mvc-backend` 本地含上游没有的「关联列替换」增补，正确做法是比对后回灌上游）。
+- 网络不可达：如实说明「同步核验未完成」，不得假装已核验；装机核验不受影响，仍须完成。
+
+完整核验矩阵与复核命令见本仓库 `docs/SKILL-DEPENDENCY-AUDIT.md`。
+
 ## 铁律：前端菜单必须后端动态下发（不可违反）
 
 - **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /api/Admin/Index/GetMenuTree`（区域族，**带 `/api`**）。2026-10-04 复测：带 `/api` 为 HTTP 200，不带 `/api` 为 404。**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
@@ -109,6 +147,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 基于魔方 WebApi 的完整项目按以下路线推进，每一步有明确产出与检查点，**编译错误必须清零后才能进入下一步**：
 
 ```
+⓪ 依赖体检              → 按「铁律：依赖先装后用、用前同步」做装机核验 + 同步核验；缺依赖先提示用户安装，落后先同步，装好前不得进入后续步骤
 ① 搭建项目框架          → 使用 project-architecture 技能（分层选型、目录结构、.sln/.csproj 落地）；SDK/组件版本选型见「铁律：新建项目的 SDK 与组件版本选型」
 ② 生成 XML 数据模型     → 使用 xcode-data-modeling 技能，根据需求文档/设计文档编写 Model.xml（表、字段、索引、外键 Map）
 ③ 代码生成              → 使用 xcodetool（xcode 命令 / Build.tt，一律最新稳定版）从 Model.xml 生成实体类 + WebApi 控制器
@@ -123,7 +162,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 要点：
 - **模型先行**：所有实体/控制器由 Model.xml 驱动生成，需求变更先改 XML 再重新生成，禁止手改生成器产物（会被覆盖）；字段/表结构调整一律走「改 Model.xml → xcodetool 重新生成 → 编译检查」。
 - **两次编译检查是硬闸门**：③ 生成后、⑤ 业务补充后各一次，任何修复后编译错误数必须为 0。
-- **技能衔接**：①② 依赖的 `project-architecture`、`xcode-data-modeling` **不在本仓库**。读不到就停，不要手写实体冒充生成结果。⑦ 依赖本仓库的 `cube-webapi-tdesign` 或 `cube-webapi-element`（前端栈二者择一）。
+- **技能衔接**：开工前先做 ⓪ 依赖体检（见「铁律：依赖先装后用、用前同步」）——缺依赖先提示用户安装，落后先同步。①② 依赖的 `project-architecture`、`xcode-data-modeling` **不在本仓库**。读不到就停，不要手写实体冒充生成结果。⑦ 依赖本仓库的 `cube-webapi-tdesign` 或 `cube-webapi-element`（前端栈二者择一）。
 - **`xcode` 的副作用（实测；`xcode-data-modeling` 不在本仓库，写在这里）**：
   - 生成结束会执行 `dotnet tool update xcodetool -g --prerelease`，把刚装的稳定版换成预发布版。本仓库没有看到关闭开关。生成后立刻执行 `dotnet tool update xcodetool -g` 装回最新稳定版（见「铁律：新建项目的 SDK 与组件版本选型」），否则下一次生成用的是 beta。
   - 没有 `ModelVersion` 的 `Model.xml` 会被改写：补上版本号，`<ChineseFileName>` 被改成 `True`，部分 `Length` 被删掉，实体文件名变成中文（如 `设备.cs`）。示例 XML 要么带上当前 `ModelVersion`，要么接受这次重写。

@@ -27,6 +27,41 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 Vue 3 + Vite + Element
 
 ---
 
+## 依赖的新生命团队技能
+
+本技能依赖**本仓库的同仓兄弟技能**（**不在** `NewLifeX/NewLife.Skills` 上游仓库）：
+
+| 技能 | 用途 | 本技能何处引用 | 来源 |
+|---|---|---|---|
+| `cube-webapi-backend` | 后端契约权威（路由/响应信封/字段描述符/权限位/数据范围/JWT/部署 Playbook） | 资源导航表、§八 分工 | **本仓库**：`https://github.com/gz-hcyk/cube-webapi-skills` |
+
+## 铁律：依赖先装后用、用前同步（不可违反）
+
+> 上表依赖**必须先装到位再开工，且保持与本仓库同版**：缺了先提示用户安装，落后先同步。不得用「凭记忆代答后端契约」绕过对应依赖；「就地阅读」（不安装）只能作为用户知情的降级路径。
+
+**第一步 · 装机核验（缺即提示安装）**：检查本机技能目录（WorkBuddy 为 `~/.workbuddy/skills/<技能名>/`；其他宿主换成各自的技能目录）：
+
+```bash
+[ -f "$HOME/.workbuddy/skills/cube-webapi-backend/SKILL.md" ] && echo "OK       cube-webapi-backend" || echo "MISSING  cube-webapi-backend"
+```
+
+出现 `MISSING` → **立即向用户提示安装**（不要拖到读后端契约时才说）。提示口径：
+
+> ⚠️ 本技能依赖 `cube-webapi-backend`（后端契约权威），本机尚未安装。
+>
+> - **来源是**本仓库 `https://github.com/gz-hcyk/cube-webapi-skills`（**同仓兄弟技能**）——克隆后把 `cube-webapi-backend/` 目录 junction（Windows：`mklink /J`）或复制到本机技能目录（供自动加载，无需重启对话）；
+> - **不要**到 `NewLifeX/NewLife.Skills` 上游仓库去找它——上游**没有** `cube-webapi-*` 系列。
+>
+> 需要的话我可以代为安装；装好后告诉我，我再继续对应步骤。若环境受限暂不能安装，请说明——我会从该仓库就地阅读，并标明这是降级路径。
+
+装好前：后端契约相关步骤不得进入；**不得**凭记忆手写后端契约细节冒充权威。
+
+**第二步 · 同步核验（用前查一次，落后先同步）**：本仓库（`https://github.com/gz-hcyk/cube-webapi-skills`）执行 `git pull --ff-only`（junction 安装自动生效；拷贝安装则重拷 `cube-webapi-backend/` 目录）。网络不可达：如实说明「同步核验未完成」，不得假装已核验；装机核验不受影响，仍须完成。
+
+完整核验矩阵与复核命令见本仓库 `docs/SKILL-DEPENDENCY-AUDIT.md`。
+
+---
+
 ## 铁律 E1：组件化 + 模板继承（最高优先级，违反即不合格）
 
 魔方 MVC 的 `List.cshtml` / `_Form_*.cshtml` / `ListTree.cshtml` 是"共享骨架 + 按字段选视图"。
@@ -215,6 +250,7 @@ src/
 - Node `^22.18.0 || >=24.12.0`（与当前 `create-vue` 的 `engines.node` 一致）。低于 22.18 时 CLI 会报 `EBADENGINE`。后端已用 `cube-webapi-backend` 暴露标准实体 API。
 - 后端默认端口示例 `5052`，与 `vite.config.ts` 的 `API_TARGET` 对齐。
 - 浏览器支持 CSS 变量与 `:focus-visible`（现代浏览器均满足）。
+- **依赖先装到位**：`cube-webapi-backend` 必须先装且与本仓库同版——装机核验 + 同步核验见「铁律：依赖先装后用、用前同步」，缺失先提示用户安装。
 
 ## 三、第①步：脚手架
 

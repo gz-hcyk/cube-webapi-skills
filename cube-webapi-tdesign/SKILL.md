@@ -30,20 +30,38 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 后端契约（路由、响应信封、字段描述符）权威定义在 `cube-webapi-backend`；本技能聚焦**前端消费方式**。
 
-## 依赖的新生命团队技能（缺失请到仓库补齐）
+## 依赖的新生命团队技能
 
-本技能与以下**新生命团队技能**协同工作，若本地技能目录缺失其中任一项，请按下方方式补齐：
+本技能依赖**本仓库的同仓兄弟技能**（**不在** `NewLifeX/NewLife.Skills` 上游仓库）：
 
-| 技能 | 用途 | 本技能何处引用 |
-|---|---|---|
-| `cube-webapi-backend` | 后端契约权威（路由/响应信封/字段描述符/权限位/数据范围/JWT/部署 Playbook） | 资源导航表、§五 分工、父子表铁律 |
+| 技能 | 用途 | 本技能何处引用 | 来源 |
+|---|---|---|---|
+| `cube-webapi-backend` | 后端契约权威（路由/响应信封/字段描述符/权限位/数据范围/JWT/部署 Playbook） | 资源导航表、§五 分工、父子表铁律 | **本仓库**：`https://github.com/gz-hcyk/cube-webapi-skills` |
 
-**仓库地址**：`https://github.com/NewLifeX/NewLife.Skills`
+## 铁律：依赖先装后用、用前同步（不可违反）
 
-- 技能在仓库中的路径：`.github/skills/<技能名>/`（每个子目录含 `SKILL.md`）。
-- **WorkBuddy 用户**：把缺的 `<技能名>/` 目录整目录复制到 `~/.workbuddy/skills/<技能名>/` 即可，无需重启对话（下次触发自动加载）。
-- **VS Code Copilot 用户**：克隆仓库后执行 `.\scripts\install-copilot-assets.ps1`，会自动同步全部技能到 `%USERPROFILE%\.copilot\skills\`（详见仓库 README）。
-- 也可直接将整个仓库克隆到本地，按需把 `.github/skills/` 下所需子目录拷入上述技能目录。
+> 上表依赖**必须先装到位再开工，且保持与本仓库同版**：缺了先提示用户安装，落后先同步。不得用「凭记忆代答后端契约」绕过对应依赖；「就地阅读」（不安装）只能作为用户知情的降级路径。
+
+**第一步 · 装机核验（缺即提示安装）**：检查本机技能目录（WorkBuddy 为 `~/.workbuddy/skills/<技能名>/`；其他宿主换成各自的技能目录）：
+
+```bash
+[ -f "$HOME/.workbuddy/skills/cube-webapi-backend/SKILL.md" ] && echo "OK       cube-webapi-backend" || echo "MISSING  cube-webapi-backend"
+```
+
+出现 `MISSING` → **立即向用户提示安装**（不要拖到读后端契约时才说）。提示口径：
+
+> ⚠️ 本技能依赖 `cube-webapi-backend`（后端契约权威），本机尚未安装。
+>
+> - **来源是**本仓库 `https://github.com/gz-hcyk/cube-webapi-skills`（**同仓兄弟技能**）——克隆后把 `cube-webapi-backend/` 目录 junction（Windows：`mklink /J`）或复制到本机技能目录（供自动加载，无需重启对话）；
+> - **不要**到 `NewLifeX/NewLife.Skills` 上游仓库去找它——上游**没有** `cube-webapi-*` 系列。
+>
+> 需要的话我可以代为安装；装好后告诉我，我再继续对应步骤。若环境受限暂不能安装，请说明——我会从该仓库就地阅读，并标明这是降级路径。
+
+装好前：后端契约相关步骤不得进入；**不得**凭记忆手写后端契约细节冒充权威。
+
+**第二步 · 同步核验（用前查一次，落后先同步）**：本仓库（`https://github.com/gz-hcyk/cube-webapi-skills`）执行 `git pull --ff-only`（junction 安装自动生效；拷贝安装则重拷 `cube-webapi-backend/` 目录）。网络不可达：如实说明「同步核验未完成」，不得假装已核验；装机核验不受影响，仍须完成。
+
+完整核验矩阵与复核命令见本仓库 `docs/SKILL-DEPENDENCY-AUDIT.md`。
 
 ## 铁律：菜单必须后端动态生成 + 品牌点击回 dashboard（不可违反）
 
@@ -222,7 +240,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 ## 二、前置条件
 
-Node ≥ 22.22.1（与 `references/scaffold/package.json` 的 `engines.node` 相同；`lint-staged@17` 要求这个下限，22.12 会在 `npm install` 上报 EBADENGINE）。后端已用 `cube-webapi-backend` 暴露标准实体 API。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。默认开发端口与后端对齐：`references/scaffold/vite.config.ts` 的 `API_TARGET` 为 `http://127.0.0.1:5052`。
+Node ≥ 22.22.1（与 `references/scaffold/package.json` 的 `engines.node` 相同；`lint-staged@17` 要求这个下限，22.12 会在 `npm install` 上报 EBADENGINE）。后端已用 `cube-webapi-backend` 暴露标准实体 API——该技能**开工前必须先装到位**：装机核验 + 同步核验见「铁律：依赖先装后用、用前同步」，缺失先提示用户安装。设计令牌 `assets/core/styles/tokens.css`/`tokens.ts` 落地见 §4.14。默认开发端口与后端对齐：`references/scaffold/vite.config.ts` 的 `API_TARGET` 为 `http://127.0.0.1:5052`。
 
 ## 三、第③步的内部顺序（落点索引）
 
@@ -290,7 +308,6 @@ npx vue-tsc --noEmit && npx vite build                           # 见 R4/R5
 > - ④-2/④-3 与 ④-1 的关系：`scaffold/src/` ⊃ `assets/core/`（逐件同 md5），故 ④-2 只**新增** 24 件、不会与 ④-1 打架；
 >   这正是 `check-assets-copied.mjs`（只比对 `assets/core` 那 50 个文件）与 `check-starter-align.mjs`（守骨架）**判据正交**的原因。
 > - 最终 `src/` 应为 **74 个文件 = 50 + 24**（与 `references/scaffold/src/` 同构；计数是文件，不是「项」），可用 `find src -type f | wc -l` 自证。2026-09-13 写过的 55 = 31 + 24 已过时。
-```
 
 **CLI `all` 产物文件数**：2026-09-13 为 193，2026-10-04 复跑同一 `tdesign-starter-cli@0.5.3` 为 **173**（`find -type f`，不含 `node_modules`）。`--manifest` 打印的是结构清单，条数不等于文件总数。
 
