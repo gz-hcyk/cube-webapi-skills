@@ -7,8 +7,8 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 # Cube WebApi 快速开放框架（前后端分离 API）
 
-> 字段定制（ListFields / AddFormFields / EditFormFields / SearchFields / DetailFields）的**完整方法速查**
-> 与 ListField 扩展属性，与 MVC 版本完全一致，参见 `cube-mvc-backend` skill。本 skill 专注 WebApi 差异点：
+> 字段定制（ListFields / AddFormFields / EditFormFields / SearchFields / DetailFields）与 ListField 扩展属性，
+> 写法与 MVC 版一致；**WebApi 场景的要点与陷阱本文已内置**（静态构造器、`RemoveField` 逐字段多参、Map 派生字段处理等，见下文各节）。本 skill 专注 WebApi 差异点：
 > 路由约定、标准响应模型、字段元数据接口、鉴权与 JWT、只读/配置控制器、多租户数据权限。
 
 第三代魔方（NewLife.Cube）的后台/实体控制器统一以 `/api` 为前缀暴露标准 REST 接口，
@@ -31,21 +31,22 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 
 ## 依赖的新生命团队技能
 
-本仓库现有 `cube-webapi-backend`、`cube-webapi-tdesign`、`cube-webapi-element` 三份。下面三份**不在本仓库**，也不要把它们拷进本仓库冒充已内置：
+本仓库现有 `cube-webapi-backend`、`cube-webapi-tdesign`、`cube-webapi-element` 三份。下面两份**不在本仓库**，也不要把它们拷进本仓库冒充已内置：
 
 | 技能 | 用途 | 本技能何处引用 | 是否在本仓库 |
 |---|---|---|---|
 | `cube-webapi-tdesign` | 前端 TDesign 消费端（GetFields/GetPage 元数据驱动） | 元流程 ⑦、第九节、第十四节 | 在 |
 | `cube-webapi-element` | 前端 Element Plus 消费端（同 tdesign 职责的第二种变体，二者择一） | 元流程 ⑦（替代路径） | 在 |
-| `cube-mvc-backend` | 魔方 MVC 版后台（字段定制 ListField 扩展属性速查） | 文件头字段定制说明 | **不在** |
 | `project-architecture` | 分层架构选型（两层起步、按需渐进三层） | 元流程 ① | **不在** |
 | `xcode-data-modeling` | Model.xml 数据建模（表/字段/索引/外键 Map/ShowIn） | 元流程 ② | **不在** |
+
+> 本技能属**魔方 WebApi 版前后端分离架构**，**不依赖** `cube-mvc-backend`（MVC 服务器渲染版）——不要把它列入安装/同步核验对象。
 
 `xcodetool` 的代码生成模板同样不在本仓库（见元流程末尾的外部缺口）。
 
 **获取方式**（不依赖 Windows 家目录）：打开或克隆 `https://github.com/NewLifeX/NewLife.Skills`，阅读 `.github/skills/<技能名>/SKILL.md`。浏览器直接打开该路径，或 `git clone` 后在仓库里读，都可以。不要把「拷到 `C:/Users/.../.workbuddy/skills`」写成唯一入口。
 
-**缺失时停止**：`project-architecture`、`xcode-data-modeling`、`cube-mvc-backend` 读不到时，停在对应元流程步骤。不要手写实体类或控制器，再当成 `xcode` 的生成结果。
+**缺失时停止**：`project-architecture`、`xcode-data-modeling` 读不到时，停在对应元流程步骤。不要手写实体类或控制器，再当成 `xcode` 的生成结果。
 
 ## 铁律：依赖先装后用、用前同步（不可违反）
 
@@ -54,7 +55,7 @@ argument-hint: 说明要做什么：新建 Area 并生成实体 CRUD API、控�
 **第一步 · 装机核验（缺即提示安装）**：逐份检查本机技能目录（WorkBuddy 为 `~/.workbuddy/skills/<技能名>/`；其他宿主换成各自的技能目录）：
 
 ```bash
-for s in cube-mvc-backend project-architecture xcode-data-modeling cube-webapi-tdesign cube-webapi-element; do
+for s in project-architecture xcode-data-modeling cube-webapi-tdesign cube-webapi-element; do
   [ -f "$HOME/.workbuddy/skills/$s/SKILL.md" ] && echo "OK       $s" || echo "MISSING  $s"
 done
 ```
@@ -64,7 +65,7 @@ done
 > ⚠️ 本技能依赖以下技能，本机尚未安装：**`<缺失名单>`**
 >
 > - **同仓两份**（`cube-webapi-tdesign`、`cube-webapi-element`）：来源本仓库 `https://github.com/gz-hcyk/cube-webapi-skills`——克隆后把对应目录 junction（Windows：`mklink /J`）或复制到本机技能目录（供自动加载，无需重启对话）；
-> - **上游三份**（`cube-mvc-backend`、`project-architecture`、`xcode-data-modeling`）：来源 `https://github.com/NewLifeX/NewLife.Skills` 的 `.github/skills/<技能名>/`——整目录取到本机技能目录。
+> - **上游两份**（`project-architecture`、`xcode-data-modeling`）：来源 `https://github.com/NewLifeX/NewLife.Skills` 的 `.github/skills/<技能名>/`——整目录取到本机技能目录。
 >
 > 需要的话我可以代为安装；装好后告诉我，我再继续对应步骤。若环境受限暂不能安装，请说明——我会按「获取方式」从来源仓库就地阅读，并标明这是降级路径。
 
@@ -73,14 +74,14 @@ done
 **第二步 · 同步核验（用前查一次，落后先同步）**：
 
 - **同仓两份**：本仓库（`https://github.com/gz-hcyk/cube-webapi-skills`）执行 `git pull --ff-only`（junction 安装自动生效；拷贝安装则重拷对应目录）。
-- **上游三份**：与 `NewLifeX/NewLife.Skills@master` 逐份比对文件指纹——本地 `git hash-object` 与远端 GitHub API 的 `sha` 同为 blob 哈希，可直接对撞：
+- **上游两份**：与 `NewLifeX/NewLife.Skills@master` 逐份比对文件指纹——本地 `git hash-object` 与远端 GitHub API 的 `sha` 同为 blob 哈希，可直接对撞：
 
 ```bash
 git hash-object "$HOME/.workbuddy/skills/xcode-data-modeling/SKILL.md"
 curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/skills/xcode-data-modeling/SKILL.md?ref=master" | grep '"sha"'
 ```
 
-  两侧不一致：**落后 → 更新到上游版本**（重新取整目录覆盖）；**本地领先/分叉 → 不得覆盖**（已有先例：`cube-mvc-backend` 本地含上游没有的「关联列替换」增补，正确做法是比对后回灌上游）。
+  两侧不一致：**落后 → 更新到上游版本**（重新取整目录覆盖）；**本地领先/分叉 → 不得覆盖**（已有先例：本地版本含上游没有的增补，正确做法是比对后回灌上游，而不是直接覆盖）。
 - 网络不可达：如实说明「同步核验未完成」，不得假装已核验；装机核验不受影响，仍须完成。
 
 完整核验矩阵与复核命令见本仓库 `docs/SKILL-DEPENDENCY-AUDIT.md`。

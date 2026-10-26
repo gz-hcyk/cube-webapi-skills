@@ -12,9 +12,10 @@
 
 ## 一、结论速览
 
-**相关技能共 5 份**，按角色分三类：
+**相关技能共 5 份**，按角色分四类：
 
-- **上游依赖 3 份**（本技能要先读、缺失即停）：`project-architecture`、`xcode-data-modeling`、`cube-mvc-backend`
+- **上游依赖 2 份**（本技能要先读、缺失即停）：`project-architecture`、`xcode-data-modeling`
+- **非依赖 1 份（2026-10-26 同日修正）**：`cube-mvc-backend` —— WebApi 版前后端分离架构**不需要** MVC 版技能；原判依赖作废，其核验记录降级为历史留痕（见 §8.7）
 - **同仓下游交接 2 份**（本技能交付后交给对方）：`cube-webapi-tdesign`、`cube-webapi-element`
 - **幽灵引用 1 处**：`xcode-handwritten-entity` —— 全链路（本地仓库、本地技能目录、上游 NewLife.Skills）均不存在，且上游历史提交中也从未出现过
 
@@ -42,7 +43,8 @@
 |---|---|---|---|---|---|
 | `project-architecture` | 分层架构选型（两层起步、按需渐进三层） | `NewLifeX/NewLife.Skills` @ `master` | `.github/skills/project-architecture/` | ✅ `~/.workbuddy/skills/project-architecture` | 元流程 ①（L111）、技能衔接（L125）、依赖表（L40） |
 | `xcode-data-modeling` | Model.xml 数据建模（表 / 字段 / 索引 / 外键 Map / ShowIn） | 同上 | `.github/skills/xcode-data-modeling/` | ✅ `~/.workbuddy/skills/xcode-data-modeling` | 元流程 ②（L112）、副作用说明（L126）、技能衔接（L125）、依赖表（L41） |
-| `cube-mvc-backend` | 魔方 MVC 版后台（字段定制 ListField 扩展属性速查） | 同上 | `.github/skills/cube-mvc-backend/` | ✅ `~/.workbuddy/skills/cube-mvc-backend` | 文件头字段定制说明（L11）、依赖表（L39） |
+
+> **修正（2026-10-26 同日）**：`cube-mvc-backend` 原列为第 3 份上游依赖，经确认 **WebApi 版前后端分离架构不依赖 MVC 版技能**，已从依赖清单移除（见 §8.7）。其本地 vs 上游的核验记录保留于 §3.2 / §5.4.3 作为历史留痕，不再属于装机/同步核验对象。
 
 ### 2.2 同仓下游交接（本技能交付后交给对方）
 
@@ -81,11 +83,13 @@
 | `project-architecture` | `1ddf70e8` | `1f55f54a` | 23,484 → **25,396 B** | 2026-09-03 | ⚠️ **本地落后**（上游最后提交 `0769690`，2026-09-25，含「简单优先（约 90% 覆盖）」等新增） |
 | `cube-mvc-backend` | `ea324052` | `f00aa964` | 11,272 → **10,172 B** | 2026-09-17 | ⚠️ **本地分叉（本地更新）**：本地多出「关联列替换」段（`[Map(nameof(DeviceID)…)]`），上游最后提交 `8bf93b5`，2026-07-15 |
 
+> 上表为审计时点（2026-10-26 上午）的核验留痕。其中 `cube-mvc-backend` **不是**本技能依赖（同日修正，见 §8.7）——保留该行仅为版本漂移判定的完整记录。
+
 ### 3.3 上游仓库现状
 
 - `NewLifeX/NewLife.Skills` 默认分支 `master`，最后推送 2026-10-20。
 - `.github/skills/` 现含 10 份：`benchmark-testing`、`cross-compatibility-testing`、`cube-mvc-backend`、`development-process`、`doc-writer`、`e2e-testing`、`project-architecture`、`testing-strategy`、`xcode-data-modeling`、`xml-comment-enrichment`。
-- 本技能依赖表所引的 3 份**全部在列** ⇒ 上游侧无缺件，问题只在本地版本与技能内文案。
+- 本技能依赖表所引的上游 **2 份**全部在列 ⇒ 上游侧无缺件，问题只在本地版本与技能内文案。
 
 ---
 
@@ -146,7 +150,7 @@
 | 项 | 现状 | 说明 |
 |---|---|---|
 | `~/.workbuddy/skills/cube-webapi-element` junction | ❌ 不存在 | `origin/main` README 已声明该映射，但本机未建；且仓库工作区尚无该目录（落后），即便现在建 junction 也会指向空 |
-| `~/.workbuddy/skills/cube-mvc-backend`、`project-architecture`、`xcode-data-modeling` | ✅ 均为普通目录（非 junction） | 来自 NewLife.Skills 的手工拷贝，**不受本仓库 git 管理** ⇒ 版本漂移不会被本仓库察觉（本轮即发现 1 落后 1 分叉） |
+| `~/.workbuddy/skills/cube-mvc-backend`、`project-architecture`、`xcode-data-modeling` | ✅ 均为普通目录（非 junction） | 来自 NewLife.Skills 的手工拷贝，**不受本仓库 git 管理** ⇒ 版本漂移不会被本仓库察觉（本轮即发现 1 落后 1 分叉）。**2026-10-26 同日修正**：`cube-mvc-backend` 已判非依赖（见 §8.7）——本技能需跟踪的漂移仅余 `project-architecture` 一项 |
 
 ---
 
@@ -187,7 +191,7 @@
 
 1. 先建 junction 再拉取是无效的（目录尚不存在）；正确顺序：本仓库 `git pull --ff-only`（20 提交纯快进）→ 再按 `origin/main` README 建 `cube-webapi-element` junction。
 2. `project-architecture` 落后：从 `NewLifeX/NewLife.Skills@master` 取 `SKILL.md`（25,396 B）覆盖本地。
-3. `cube-mvc-backend` 本地分叉：**不要**直接取上游覆盖（会丢本地新增的「关联列替换」段）；应先比对后把本地增补回灌上游，或在技能内标注本地偏差。
+3. `cube-mvc-backend` 本地分叉：**不要**直接取上游覆盖（会丢本地新增的「关联列替换」段）；应先比对后把本地增补回灌上游，或在技能内标注本地偏差。（2026-10-26 同日修正：该技能已判**非依赖**，本项作废；记录保留。）
 4. 拉取后须复查 D1/D2 是否仍存在 —— 本轮已确认它们在 `origin/main` 上同样存在，**拉取不会自动修掉**，仍需按 §5.1/§5.2 手改。
 
 ---
@@ -205,7 +209,7 @@ git rev-parse origin/main:cube-webapi-backend/SKILL.md origin/main:cube-webapi-t
 
 # 3) 上游技能：本地 vs GitHub（blob 比对）
 cd /c/Users/admin/.workbuddy/skills
-git hash-object cube-mvc-backend/SKILL.md project-architecture/SKILL.md xcode-data-modeling/SKILL.md
+git hash-object project-architecture/SKILL.md xcode-data-modeling/SKILL.md
 curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/skills/project-architecture/SKILL.md" | grep '"sha"'
 
 # 4) 幽灵引用与「必做件 0」零命中
@@ -268,7 +272,7 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 
 ### 8.5 遗留项（本轮明确未动）
 
-- `project-architecture` 落后上游、`cube-mvc-backend` 本地分叉：属上游手工拷贝技能的内容级漂移，按 §5.4.2 / §5.4.3 另行处理（涉及覆盖 / 回灌决策，需单独确认）；
+- `project-architecture` 落后上游：属上游手工拷贝技能的内容级漂移，按 §5.4.2 另行处理（涉及覆盖决策，需单独确认）；原并列的 `cube-mvc-backend` 本地分叉项已随同日非依赖修正作废（不再是本技能同步对象，见 §8.7）；
 - `cube-webapi-element` 的完备性评估（其与 backend 契约的一致性深审）不在本轮范围。
 
 ### 8.6 第二轮：依赖装用铁律（同日）
@@ -286,3 +290,20 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 **连带修复**：`cube-webapi-tdesign` 原第 311 行**孤立围栏**（无语言标记的单独一行，2026-09-13 起即存在）——经围栏配对状态机核验，其后 70+ 行正文（删除前为 312–387 行，含表格/清单）会被渲染为代码块；删除后该文件围栏 24 条全部配对（backend 80 条 / element 30 条同法复检正常，无同类缺陷）。
 
 **复核**：三份改动后围栏配平；`NewLifeX/NewLife.Skills` 在 tdesign / element 中的残留仅存于「不要到上游找它」的澄清语境（backend 中为上游三分技能的正规来源指引）；提交标题经 od 复核无 BOM。
+
+### 8.7 第三轮：`cube-mvc-backend` 非依赖修正（同日）
+
+用户明确：`cube-webapi-backend` / `cube-webapi-tdesign` / `cube-webapi-element` 是**魔方 WebApi 版前后端分离架构**，**不需要**依赖 `cube-mvc-backend`（MVC 服务器渲染版）。§8.6 复核段所称「上游三分技能」随此修正为「上游两份」。
+
+**落实（`cube-webapi-backend/SKILL.md`）**：
+
+- 依赖表移除 `cube-mvc-backend` 行，并加注「本技能属 WebApi 版前后端分离架构，不依赖 MVC 版技能——不要列入安装/同步核验对象」；
+- 「缺失时停止」、装机核验 for 循环、提示口径、同步核验统一改为「上游两份」（余 `project-architecture`、`xcode-data-modeling`）；
+- 文件头字段定制说明：删去「参见 `cube-mvc-backend` skill」，改为「WebApi 场景的要点与陷阱本文已内置」（静态构造器 / `RemoveField` 逐字段多参 / Map 派生字段处理，均见下文各节）；
+- 分叉处置先例去名化（原理保留：本地领先/分叉不得覆盖，应比对后回灌上游）。
+
+**本文档同步**：§1 结论、§2.1 依赖清单、§3.3 计数按新口径修正；§3.2 / §四附表 / §5.4.3 / §8.5 等相关记录降级为历史留痕并就地标注。
+
+**未动**：`docs/SKILL-VALIDATION.md`（历史验证报告，其「字段定制指向 `cube-mvc-backend`」等表述为审计时点记录，按该文档「记录保留，没有删」惯例留存，不追改）；`cube-webapi-tdesign` / `cube-webapi-element` 本就无 `cube-mvc-backend` 引用，无需改动；backend 的 description 中「不适用于 MVC 服务器渲染后台（用 `cube-mvc-backend`）」为**反向路由提示**（不构成依赖），保留。
+
+**修正后装机/同步核验对象**：同仓 2 份（`cube-webapi-tdesign`、`cube-webapi-element`）＋上游 2 份（`project-architecture`、`xcode-data-modeling`）。
