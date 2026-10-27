@@ -300,6 +300,26 @@ export function selectListComponent(fields: DataField[]): ListComponent {
   return isTreeSchema(fields) ? 'tree' : 'flat';
 }
 
+/** 外键取值类型（整型 / Guid）：String 型、名带 Id 后缀的字段不在此列 */
+const FOREIGN_KEY_VALUE_TYPES = new Set([
+  'int16', 'int32', 'int64', 'int', 'long', 'short', 'byte', 'sbyte',
+  'uint16', 'uint32', 'uint64', 'uint', 'ulong', 'ushort', 'guid',
+]);
+
+/**
+ * 单值外键选型闸门：字段名虽以 ID/Id 结尾，但必须再满足其一才判为外键下拉——
+ *   ① 带显式选项源：`map` / `dataSource` / `lovCode`；
+ *   ② 值为整型或 Guid（约定式外键，前端靠 useLookups 兜底取选项）。
+ * 由此避免把 `OAuthConfig.AppId`（「应用标识」，String 型、名带 Id 后缀却非外键）
+ * 这类普通字符串字段误渲染成无选项下拉。
+ */
+export function isSelectableForeignKey(f: DataField): boolean {
+  const lc = (f.lovCode ?? '').toString().trim();
+  if (f.map || f.dataSource || lc) return true;
+  const t = ((f.typeName ?? f.type ?? '') as string).trim().toLowerCase();
+  return FOREIGN_KEY_VALUE_TYPES.has(t);
+}
+
 /**
  * 表单控件选型（元数据驱动，按优先级自上而下，首个命中即采用）。
  *
@@ -309,7 +329,8 @@ export function selectListComponent(fields: DataField[]): ListComponent {
  *    → 多选下拉；为 ParentID → 树形下拉；其余 → 单选下拉
  * 4. 字段名 `xxxIDs/xxxIds`（复数外键）→ 多选下拉
  * 5. `typeName` 为枚举类型名（非基础类型）→ 单选下拉
- * 6. 字段名 `xxxID/xxxId`：ParentID → 树形下拉；其余 → 单选下拉
+ * 6. 字段名 `xxxID/xxxId` **且**过值类型闸门（带 `map`/`dataSource`/`lovCode`，或值为
+ *    整型/Guid）：ParentID → 树形下拉；其余 → 单选下拉；未过闸门则落回第 8 条
  * 7. 有 `map`/`dataSource` → 单选下拉
  * 8. 按基础 `typeName` 兜底：DateTime/数字/长文本/输入
  */
@@ -358,8 +379,8 @@ export function selectFormControl(f: DataField): FieldControl {
   // 5) 枚举类型名（非基础类型）→ 单选下拉
   if (isEnumType(f)) return 'select';
 
-  // 6) 单值外键 xxxID/xxxId
-  if (isIdField(f)) {
+  // 6) 单值外键 xxxID/xxxId：还需过「值类型闸门」（带选项源或整型/Guid）才判下拉
+  if (isIdField(f) && isSelectableForeignKey(f)) {
     return f.name.toLowerCase() === 'parentid' ? 'tree-select' : 'select';
   }
 

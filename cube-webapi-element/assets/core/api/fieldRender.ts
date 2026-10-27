@@ -415,9 +415,29 @@ export function multiLabels(f: DataField, value: unknown, lookups?: LookupMap): 
 
 /* ------------------------------ 控件选型 ------------------------------ */
 
+/** 外键取值类型（整型 / Guid）：String 型、名带 Id 后缀的字段不在此列 */
+const FOREIGN_KEY_VALUE_TYPES = new Set([
+  'int16', 'int32', 'int64', 'uint16', 'uint32', 'uint64', 'byte', 'sbyte', 'guid',
+]);
+
+/**
+ * 单值外键选型闸门：字段名虽以 ID/Id 结尾，但必须再满足其一才判为外键下拉——
+ *   ① 带显式选项源：`map` / `dataSource` / `lovCode`；
+ *   ② 值为整型或 Guid（约定式外键，前端靠 useLookups 兜底取选项）。
+ * 由此避免把 `OAuthConfig.AppId`（「应用标识」，String 型、名带 Id 后缀却非外键）
+ * 这类普通字符串字段误渲染成无选项下拉。
+ */
+export function isSelectableForeignKey(f: DataField): boolean {
+  const lc = String(f.lovCode ?? '').trim();
+  if (f.map || f.dataSource || lc) return true;
+  const t = String(f.typeName ?? '').toLowerCase();
+  return FOREIGN_KEY_VALUE_TYPES.has(t);
+}
+
 /**
  * 选型优先级（命中即返回，顺序不可调）：
- * itemType 特化 → Boolean → 映射字段(mapField) → 复数外键 → 枚举 → xxxID → map/dataSource → 基础类型
+ * itemType 特化 → Boolean → 映射字段(mapField) → 复数外键 → 枚举 → xxxID(且过值类型闸门)
+ * → map/dataSource → 基础类型
  */
 export function selectFormControl(f: DataField): FieldControl {
   const item = String(f.itemType ?? '').toLowerCase();
@@ -437,7 +457,7 @@ export function selectFormControl(f: DataField): FieldControl {
   if (isIdsField(f)) return 'multi-select';
   if (isEnumType(f)) return 'select';
 
-  if (isIdField(f)) {
+  if (isIdField(f) && isSelectableForeignKey(f)) {
     if (refersToParent(f)) return 'tree-select';
     return 'select';
   }
