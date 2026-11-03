@@ -1,4 +1,4 @@
-﻿---
+---
 name: cube-webapi-backend
 description: 使用 NewLife.Cube（魔方）第三代 WebApi 快速开放框架开发前后端分离的后台 REST API 时使用。适用场景：基于 EntityController/ReadOnlyEntityController/EntityTreeApiController/ControllerBaseX 暴露 /api 标准 CRUD 接口；用 GetFields/GetPage 字段元数据驱动动态列表/表单；配置 AddCube/UseCube 启动、数据层预热（EntityFactory.InitAll/InitConnection）、登录与 JWT（Auth/Login、Bearer/X-Token）；设计自定义权限体系（PermissionFlags 权限位、Menu 菜单、EntityAuthorize 鉴权、401/403）；实现数据范围权限（Role.DataScopes、IDataScope/DataScopeInterceptor、DataPermission 表达式、IFieldScope 脱敏）；多租户隔离、自定义业务权限（审批/下发指令等）、导出。触发词：魔方 WebApi、NewLife.Cube、Cube API、EntityController、GetFields、元数据驱动接口、权限位、数据权限、前后端分离后台、数据库预热、InitConnection。挂链开号场景触发词：给业务人员开登录账号、魔方建 User、初始密码、首登强制改密、批量补开账号。不适用于 MVC 服务器渲染后台（用 cube-mvc-backend）与前端页面生成（用 cube-webapi-tdesign）。触发词：生成部署包、生产部署包、发布部署包、上线部署、Linux+Nginx+systemd 反向代理、SQLite 部署、dotnet publish 跨平台、appsettings.Production、Nginx 反向代理模板、冒烟验证、新增实体验收、枚举 LOV 值集（SetLov）、外键映射字段、实体验收核查、魔方定时作业（CronJob/CubeJobBase，周期任务替代启动钩子）。
 agent_created: true
