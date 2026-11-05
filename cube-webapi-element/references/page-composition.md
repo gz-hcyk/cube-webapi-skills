@@ -70,6 +70,24 @@ export const SPECIAL_VIEWS: Record<string, () => Promise<any>> = {
 
 资产里的 `EntityView` **不会**读取这张表，默认始终渲染 `ListPage`。要启用专属视图，需自己在 `EntityView` 里按 `area/controller` 查表，命中再渲染，否则退回 `ListPage`。`ConfigView.vue` / `DbView.vue` 不在本技能资产中。
 
+#### 哪些控制器该进注册表？（2026-11-05 反射实证，NewLife.Cube 6.15.2026.901）
+
+用 MetadataLoadContext 反射 `~/.nuget/packages/newlife.cube/<版本>/lib/net8.0/NewLife.Cube.dll`，把 Admin 内置 26 个控制器的基类全部定论：
+
+| 控制器 | 基类 | 页面形态 | 是否进注册表 |
+|---|---|---|---|
+| Cube / Sys / Core / XCode / **Star** | `ConfigController<T>` | ConfigView 单对象表单（PUT 保存） | **需要**（5 件套齐） |
+| User / Role / Menu / Department / Tenant / TenantUser / UserConnect / UserToken / UserOnline / AccessRule / Parameter / **MailConfig / SmsConfig / OAuthConfig** / Lov | `EntityController<,>` | 通用 ListPage（GetPage 五段式） | **不要** |
+| Log / OAuthLog / UserStat | `ReadOnlyEntityController<T>` | 只读 ListPage | **不要** |
+| Db / File / Index | `ControllerBaseX` | 专属页 | **需要** |
+
+两条纪律：
+
+- **注册表最小化**：实体族绝不进注册表——登记会把 GetPage 驱动的通用页锁死成错误形态（专属视图没有 CRUD schema，反而丢功能）。默认**只登记** Config 五件套 + Db + File。
+- **命名陷阱**：`MailConfig` / `SmsConfig` / `OAuthConfig` 名字带 Config，却是**实体控制器**（返回 GetPage，走通用页），不要凭名字想当然登记成 ConfigView。
+
+File 版本敏感警示：`FileController.Index` 在部分版本区间（如 6.15.2026.901 所处的 8edda30~18b08e3 提交区间）返回 `Json(0,"ok")` 空壳，端点存在但丢文件列表；升级后行为可能改变。登记决策**随框架版本重估**，详见 tdesign 技能 `references/troubleshooting.md` G1 组同名条目与 `references/cube-page-catalog.md` §4.4/§六（含离线反射配方全文）。
+
 ## 3. ListPage 接口
 
 | Prop | 类型 | 默认 | 说明 |

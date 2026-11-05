@@ -124,15 +124,35 @@
 
 ### 4.4 系统设置（**配置控制器 ②**，全部走 `ConfigView`）
 
+> ★★ **2026-11-05 反射实证（NewLife.Cube 6.15.2026.901，MetadataLoadContext 读 TypeDef 表）**：
+> 26 个 Admin 内置控制器的基类已全部定论，此前 §4.4/§六 的「待核实」项清零。
+> **方法级判据**：`GetPage` 探针只能判定「是不是实体页」；基类反射才能判定「是不是配置页」——
+> 命名完全不可靠（`MailConfig`/`SmsConfig`/`OAuthConfig` 名字带 Config 却是**实体**，见下表）。
+
+| 控制器 | 基类（6.15.2026.901 反射） | 页面形态 | 是否需登记 `specialControllers.ts` |
+|---|---|---|---|
+| `Cube` / `Sys` / `Core` / `XCode` / **`Star`** | `ConfigController<T>` | 单对象表单 `ConfigView`（PUT 保存） | **需要**（5 件套齐） |
+| `User` `Role` `Menu`(EntityTree) `Department` `Tenant` `TenantUser` `UserConnect` `UserToken` `UserOnline` `AccessRule` `Parameter` `MailConfig` `SmsConfig` `OAuthConfig` | `EntityController<,>` / `EntityTreeController<,>` | 通用 `ListPage`（GetPage 驱动） | **不需要**（泛型路由自动兜住） |
+| `Log` / `OAuthLog` / `UserStat` | `ReadOnlyEntityController<T>` | 通用 `ListPage`（只读） | 不需要 |
+| `Lov` | `EntityController<T>`（GetConfig/SaveConfig/Meta 等自有动作） | `ListPage` + LovConfigDrawer | 不需要 |
+| `Db` / `File` / `Index` | `ControllerBaseX`（自定义端点，无 GetPage） | 专属页 | 需要 |
+| `Role` 额外 | 同上 + `PermissionTree` / `SavePermission` | 权限矩阵见 permission-editor-integration.md | — |
+| `User` 额外 | 同上 + `ChangePassword`/`ClearPassword`/`RevokeTokens`/`SendVerifyCode` 等 | entityActions 行操作 | — |
+| `UserOnline` 额外 | 同上 + `Kick` | entityActions 行操作（**GET**） | — |
+
+> **结论性纪律（注册表最小化）**：实体族 19 个**绝不登记**——登记了反而把 GetPage 驱动的通用页
+> 锁死成错误形态；只有 `ConfigController<T>` 族与 `ControllerBaseX` 自定义族需要显式策划。
+> 判定顺序：先 GetPage 探针（404 ⇒ 非实体）→ 再按需反射基类或查框架源码定形态。
+
 | 页面 | 控制器 | 说明 | 默认落地 | 状态 |
 |---|---|---|---|---|
 | 系统设置（Cube） | `Admin/Cube` | `CubeSetting` 单对象（JWT/令牌/注册/登录/主题/版权…） | `ConfigView` | ✅ |
 | 系统信息（Sys） | `Admin/Sys` | `SysSetting` 单对象 | `ConfigView` | ✅ |
 | 核心设置（Core） | `Admin/Core` | 核心设置 | `ConfigView` | ✅ |
 | 数据层设置（XCode） | `Admin/XCode` | 数据层设置 | `ConfigView` | ✅ |
-| 星尘设置（Star） | `Admin/Star` | 星尘设置 | 待核实（见 §六） | 🔎 |
-| 字典参数 | `Admin/Parameter` | **实体**（有 GetPage）→ `ListPage` | `ListPage` | ✅ |
-| 邮件 / 短信 / OAuth 配置 | `Admin/MailConfig`、`SmsConfig`、`OAuthConfig` | 疑为**实体** → `ListPage`（若 GetPage 404 再改登记） | `ListPage` | 🔎 |
+| 星尘设置（Star） | `Admin/Star` | `StarController : ConfigController<StarSetting>`（2026-11-05 反射实证） | `ConfigView`（登记 `kind:'config'`, PUT） | ✅ |
+| 字典参数 | `Admin/Parameter` | `EntityController<Parameter, ParameterModel>`（反射实证） | `ListPage` | ✅ |
+| 邮件 / 短信 / OAuth 配置 | `Admin/MailConfig`、`SmsConfig`、`OAuthConfig` | **三者均为 `EntityController<,>`**（反射实证）——名字带 Config 却是实体 | `ListPage` | ✅ |
 | OAuth 日志 | `Admin/OAuthLog` | 实体 | `ListPage` | ✅ |
 
 ### 4.5 值集（Lov）
@@ -313,12 +333,26 @@ async function revokeTokens(row: any, reload: () => void) {
 
 ## 六、需实测后启用的清单（🔎）——**不要凭命名直接改注册表**
 
+> ★★ **2026-11-05 状态**：Admin 区域内置控制器已**全部定论**（§4.4 反射实证表），本清单仅剩
+> Cube 区域与业务自定义控制器。对锁版本的项目，**反射基类**是比 GetPage 探针更强的判据
+> （探针只分实体/非实体，反射直接给出页面形态）——离线可用配方见下。
+
 | 候选 | 判定方法 | 若 404 则 |
 |---|---|---|
-| `Admin/Star`（星尘设置） | 请求 `GET /api/Admin/Star/GetPage` | 在 `specialControllers.ts` 登记 `{ kind:'config', view: ConfigView }` |
-| `Admin/SmsConfig` / `MailConfig` / `OAuthConfig` | 同上 | 同上（登记为 config） |
-| `Cube/OrderManager` | 同上 | 若 404 但 `GetInfo` 可用 → 登记专用页 |
-| 其它自定义控制器 | 同上 | 按 §三 分类选择组件 |
+| ~~`Admin/Star`~~ | **已定论**：`ConfigController<StarSetting>` → 登记 config | — |
+| ~~`Admin/SmsConfig` / `MailConfig` / `OAuthConfig`~~ | **已定论**：三者均为 `EntityController<,>` → **不登记**，走 ListPage | — |
+| `Cube/OrderManager` | `GET /api/Cube/OrderManager/GetPage` 探针 | 若 404 但 `GetInfo` 可用 → 登记专用页 |
+| 其它自定义控制器 | 探针 → 反射基类（见下方离线配方） | 按 §三 分类选择组件 |
+
+**离线反射配方（不启动后端即可定形态，实测可用）**：写一个 net8.0 控制台工程，引用
+`System.Reflection.MetadataLoadContext`，把运行时共享框架（`dotnet/shared/Microsoft.NETCore.App` +
+`Microsoft.AspNetCore.App` 全量 DLL）+ 包目录（`newlife.cube`/`newlife.core`/`newlife.xcode`/
+`newlife.remoting`/`newlife.agent`/`newlife.stardust` 各版本下优先 `net8.0`、回退 `netstandard2.1`）
+全喂给 `PathAssemblyResolver`，对目标程序集 `GetTypes()` 过滤 `Areas.*.Controllers`，
+逐个输出 `BaseType.Name` + `DeclaredOnly` 公有方法——基类与方法签名一次拿全。
+**坑**：依赖包版本必须与主包 nuspec 对齐（如 Cube 6.15.2026.901 ↔ Core 11.19.901 ↔ XCode 12.2.901
+↔ Stardust 3.10.901，包名是 `newlife.stardust` 不是 `stardust`）；单类型反射失败要 try/catch 逐个容错，
+否则一个 StarController 就中断全表。
 
 ---
 
