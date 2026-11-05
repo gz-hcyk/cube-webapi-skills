@@ -118,7 +118,11 @@ GET /api/{area}/{controller}/GetPage
   令牌只经 `src/api/token.ts` 读写，**禁止**任何组件自己 `localStorage.getItem('...token')`。
 - **E3-2** 令牌头只发 `Authorization: Bearer <jwt>`（发 `Authentication` 会 401）。
 - **E3-3** 前缀按「控制器有没有 `[Area]`」分族：区域族必带 `/api`，根族不带。
-  菜单是区域族：`/api/Admin/Index/GetMenuTree`（漏 `/api` → 静默空白，不报错）。
+  菜单端点**两个族各有一个**，别搞混（2026-11-05 双端点实测）：
+  - `GET /api/Admin/Index/GetMenuTree` —— **区域族，必须写全 `/api`**（漏 `/api` → 静默空白，不报错）。**子级按 `Visible` 过滤**，隐藏页收不到。
+  - `GET /Cube/MenuTree` —— **根族，一定不能带 `/api`**。全层不滤 `Visible`，隐藏页完整返回（带 `visible:false`）。
+  
+  两者选哪个见 **E4-M1**。
 - **E3-4** vite 代理按前缀族配：`/api` 一条覆盖全部区域族；`/Auth` `/Mfa` `/Sso` `/Cube` `/Content` 列根族。
   **禁止**写 `'/Admin'`（会吃掉前端页面路由）。
 
@@ -128,7 +132,30 @@ GET /api/{area}/{controller}/GetPage
 
 ## 铁律 E4：菜单只来自后端
 
-- **E4-M1** 业务菜单唯一权威 = `GET /api/Admin/Index/GetMenuTree`。前端**禁止** push 菜单项、禁止硬编码业务入口。
+- **E4-M1** 业务菜单唯一权威 = 后端菜单树端点。前端**禁止** push 菜单项、禁止硬编码业务入口。
+  **两个端点二选一**（2026-11-05 源码 + 实测）：
+
+  | 端点 | 过滤口径 | 隐藏菜单 | 选它的场景 |
+  |---|---|---|---|
+  | `GET /api/Admin/Index/GetMenuTree` | 顶层不滤；**子级 `Where(m => m.Visible)`** | 收不到 | 只做侧边栏导航 |
+  | `GET /Cube/MenuTree` | 只做 `IsAccessible`（权限/租户），**完全不看 `Visible`** | 完整返回，带 `"visible": false` | 导航 + 隐藏页 + **授权矩阵** |
+
+  - 授权矩阵（`RoleMenuEditor`）**必须**用 `/Cube/MenuTree`：区域族端点把隐藏页滤掉了，管理员无法给隐藏页授权。
+  - `/Cube/MenuTree` 匿名访问会 **302 跳登录页**（Cookie 认证的重定向），带登录态实测 200 JSON。
+    ⇒ **判端点协议形态必须带登录态探**，别把 302 当成「该端点不是 API」——这个误判曾把「不可用」写进技能。
+  - 该端点令牌走**请求上下文 Cookie**，不是 `Authorization`；SPA 同源 / vite 代理下自动携带。
+  - `parentID` 实测为 `null`（父关系只存在 `children` 嵌套里）⇒ 父子索引必须由嵌套回填，不能只读字段：
+    ```ts
+    const walk = (nodes: any[], pid: number) => {
+      for (const x of nodes) {
+        const pid2 = Number(x.parentId ?? x.parentID ?? 0) || pid;  // 有值优先，否则用嵌套位置
+        if (!m.has(pid2)) m.set(pid2, []);
+        m.get(pid2)!.push(x);
+        if (Array.isArray(x.children)) walk(x.children, Number(x.id) || 0);
+      }
+    };
+    ```
+  - vite 代理**大小写敏感**：`/Cube/MenuTree` 只由大写 `'/Cube'` 条目接住，只配 `'/cube'` 会落 SPA 兜底返回 `index.html`。
 - **E4-M2** 要加页面入口 → 改后端；前端只做「url → 前端路由」归一化（`utils/menu.ts` 的 `menuPath`）。
 - **E4-M3** 登录后默认落地 `/dashboard`；点击左上角品牌必须回 `/dashboard`。
 - **E4-M4** 一级菜单若无 `icon`，前端必须按名称关键词补一个（`resolveIcon`），推不出兜底 `Menu`。
@@ -338,13 +365,14 @@ rawHttp  baseURL = 后端根       // 根族：/Auth/*、/Mfa/*、/Cube/*
 ```
 
 调用方规则：`getApi('/Admin/User')`（**不要**写 `/api/Admin/User`）；`getRaw('/Auth/Login')`；
-菜单必须 `getRaw('/api/Admin/Index/GetMenuTree')`（写全）。
+菜单按 E4-M1 选的端点写——区域族 `getRaw('/api/Admin/Index/GetMenuTree')`（写全）；
+根族 `getRaw('/Cube/MenuTree')`（**不带 `/api`**）。
 
 ### 5.2 登录与鉴权（`stores/auth.ts`）
 
 ```ts
 await auth.login(username, password)   // POST /Auth/Login，令牌三向兼容落盘
-await auth.loadMenus()                 // GET /api/Admin/Index/GetMenuTree
+await auth.loadMenus()                 // 菜单树端点（E4-M1 二选一）
 await auth.logout()                    // 清令牌 + 清租户 + 清菜单缓存
 ```
 
@@ -417,7 +445,10 @@ function onOpen(index: string) {
 四列授权表格（名称 / 显示名 / 授权 / 操作权限），资产已含 `components/cube/RoleMenuEditor.vue`。
 
 - **四列**：名称（英文 `name`，层级缩进 + 折叠）｜显示名（`displayName`）｜授权（**仅父级行**，整块开关）｜操作权限（父级 `只读`/`全部` 两档、互斥；叶子逐位，含 16/32/64/128 自定义位）
-- **数据源** `GET /api/Admin/Index/GetMenuTree`（`getRaw`）：返回**嵌套树，必须递归摊平**；节点 `permissions` 字典是权限位列表的**唯一权威源**（空则回退 1/2/4/8）。勿用 `/api/Admin/Menu` 扁平表（不带字典）
+- **数据源** `GET /Cube/MenuTree`（`getRaw`，**不带 `/api`**；带 `/api` 是 404/SPA 兜底）：返回**嵌套树，必须递归摊平**；节点 `permissions` 是 `Dictionary<int,string>`（反编译确认），序列化为 JSON 对象 `{"1":"查看"}`，是权限位列表的**唯一权威源**（空则回退 1/2/4/8）。勿用 `/api/Admin/Menu` 扁平表（不带字典）
+  - **不要用** `/api/Admin/Index/GetMenuTree` 喂授权矩阵：该端点子级 `Where(m => m.Visible)`，隐藏菜单在此不可见 ⇒ 管理员**无法给隐藏页授权**。
+  - 节点 `parentID` 实测为 **`null`**（父关系只在 `children` 里）⇒ 建 `byParent` 索引必须用「字段有值优先、否则用嵌套位置回填」，见 E4-M1 的 `walk` 代码；只读 `parentId` 会导致矩阵只渲染顶层几个分组。
+  - `Role.Permission` 的 `1#3,2#7` 逗号串 与 本字典的 JSON 对象形态**不同**，勿混淆。
 - ★ **硬约束**：XCode 丢弃 `id#0` 段 ⇒ 「菜单可见但零操作」无法表达，开放最小粒度 = 查看（1）；「取消到 0」必须**删段**
 - **接线三处**：`FieldControl` 补 `'role-permission'`；FormDialog 把 `permission` 项改写为 `{control:'role-permission', label:'', category:'权限设置', full:true}`、`rules` 删 `permission`、`dialogWidth='1160px'`，模板中作为 **v-if 链第一支**（后续 `v-else-if`，否则链尾 `el-input v-else` 兜底命中 → 明文框与表格同时出现）；ListPage / DetailDrawer 过滤 `permission` 明文
 - 完整代码 + 验收清单 + 坑表：`references/permission-editor-integration.md`

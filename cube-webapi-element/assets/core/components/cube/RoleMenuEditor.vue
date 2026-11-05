@@ -19,7 +19,9 @@ import { getRaw } from '@/api/http';
  *
  * 契约（NewLife.Cube 标准）：Role.Permission 为逗号分隔的 `菜单ID#权限位掩码`，
  * 例如 `1#3,2#7`（3=查看+添加；-1=全动作）。掩码 0 的段不落库。
- * 菜单源 `GET /api/Admin/Index/GetMenuTree`（区域族必带 /api；根族端点走 rawHttp）。
+ * 菜单源 `GET /Cube/MenuTree`（**根族，不带 /api**）。
+ * ⚠ 不要用 `/api/Admin/Index/GetMenuTree`：区域族端点子级 `Where(m => m.Visible)`，
+ *   `[Menu(0,false)]` 的隐藏页在此根本不出现 ⇒ 管理员无法给隐藏页授权（2026-11-05 反编译+实测）。
  */
 const props = defineProps<{
   modelValue?: string;
@@ -102,11 +104,15 @@ function collapseAll() {
   collapsed.value = new Set(flatRows.value.filter((r) => r.hasChildren).map((r) => r.id));
 }
 
+/** 子 id → 父 id（由嵌套 children 推导；`/Cube/MenuTree` 的 parentID 实测为 null，不能只读字段） */
+const pidOf = ref(new Map<number, number>());
+
 /** 父 → 子 映射 */
 const byParent = computed(() => {
   const m = new Map<number, any[]>();
   for (const x of menus.value) {
-    const pid = Number(x.parentId ?? x.parentID ?? 0) || 0;
+    const id = Number(x.id);
+    const pid = pidOf.value.get(id) ?? (Number(x.parentId ?? x.parentID ?? 0) || 0);
     if (!m.has(pid)) m.set(pid, []);
     m.get(pid)!.push(x);
   }
@@ -282,14 +288,24 @@ watch(
 onMounted(async () => {
   loading.value = true;
   try {
-    // 区域族端点必带 /api（漏前缀会落到 SPA 兜底返回 HTML，静默为空）
-    const r = await getRaw<any[]>('/api/Admin/Index/GetMenuTree');
-    // GetMenuTree 返回嵌套树：递归摊平（含全部子孙），byParent/bitsById 才能索引到每个节点
+    // 根族端点：**不能带 /api**（`/api/Cube/MenuTree` → 404）；Cookie 登录态由 rawHttp 同源携带
+    const r = await getRaw<any[]>('/Cube/MenuTree');
+    // 返回嵌套树：递归摊平（含全部子孙），同时记录「子 id → 父 id」
     if (r?.code === 0 && Array.isArray(r.data)) {
       const all: any[] = [];
-      const collect = (nodes: any[]) => { for (const n of nodes) { if (n) { all.push(n); if (Array.isArray(n.children)) collect(n.children); } } };
-      collect(r.data);
+      const pid = new Map<number, number>();
+      const walk = (nodes: any[], parent: number) => {
+        for (const n of nodes) {
+          if (!n) continue;
+          const id = Number(n.id);
+          all.push(n);
+          pid.set(id, parent);
+          if (Array.isArray(n.children)) walk(n.children, id || parent);
+        }
+      };
+      walk(r.data, 0);
       menus.value = all;
+      pidOf.value = pid;
     }
     permMap.value = parse(props.modelValue);
   } catch (e: any) {

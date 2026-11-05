@@ -30,9 +30,11 @@
 
 三种可能，按顺序排除：
 
-1. **前缀错**。菜单是区域族控制器，必须 `/api/Admin/Index/GetMenuTree`。
-   写成 `/Admin/Index/GetMenuTree` 返回 **404**；但更多时候是落到 SPA 兜底返回 `200 + text/html`，
-   axios 拿到的 `data` 是字符串 → `normalizeMenus` 得到空数组 → 菜单静默为空。
+1. **前缀/族错**。两个菜单端点：
+   - 区域族 `/api/Admin/Index/GetMenuTree`（必须带 `/api`）——写成 `/Admin/Index/GetMenuTree` 返回 **404**；
+     但更多时候是落到 SPA 兜底返回 `200 + text/html`，axios 拿到的 `data` 是字符串 → `normalizeMenus` 得到空数组 → 菜单静默为空。
+   - 根族 `/Cube/MenuTree`（**不能带 `/api`**，`/api/Cube/MenuTree` → 404/兜底 HTML）。它匿名访问会 **302 跳登录**，
+     若你的登录态只在 `Authorization` 里而不带 Cookie，axios 会把它转成 401 → 也表现为菜单空。**这不是端点不可用**。
 2. **请求头错**。只发 `Authorization: Bearer <jwt>`。
    发 `Authentication` → 401；只带 Cookie `.Cube.Session` → 401。
 3. **令牌没落盘**。检查 `localStorage.cube_token` 是否存在；不存在说明 `setTokens` 没被调用，
@@ -232,8 +234,10 @@ element-plus/theme-chalk/dark/css-vars.css
 
 1. **`菜单ID#0` 段会被 XCode 丢弃** —— PUT `permission="19#0"` 读回 `""`。⇒ 开放最小粒度＝查看（1）；
    「取消到 0」必须删段；写串后读回校验（0 段静默消失，不报错）。
-2. **`/api/Admin/Index/GetMenuTree` 是嵌套树**（`children`）——必须递归摊平，否则只渲染顶层分组、子级全丢。
+2. **菜单树是嵌套树**（`children`，`/api/Admin/Index/GetMenuTree` 与 `/Cube/MenuTree` 都是）——必须递归摊平，否则只渲染顶层分组、子级全丢。
+   `/Cube/MenuTree` 的 `parentID` 实测为 **`null`** ⇒ 摊平时要同时记「子 id → 父 id」，`byParent` 只读字段会全挤到根下。
 3. **数据源勿用 `/api/Admin/Menu`**（不带 `permissions` 字典，自定义位 16/32/64/128 全丢）。
+4. **授权矩阵必须用 `/Cube/MenuTree`**：区域族端点子级 `Where(m => m.Visible)`，隐藏页不出现 ⇒ 隐藏页无法授权。
 
 ## G25 ★★★ 同一字段渲染出两个控件：v-if 链尾 v-else 兜底命中（2026-10-23 实测）
 

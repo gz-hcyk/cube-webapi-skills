@@ -170,13 +170,24 @@ if (strayToken.length) fail('令牌唯一事实源（E3-H1）', `组件绕过 to
 
 /* ============================ 5. 端点前缀与代理 ============================ */
 
-const menuFiles = grep(srcFiles, /GetMenuTree/);
+// 菜单树有两个合法端点（E4-M1）：区域族 /api/Admin/Index/GetMenuTree、根族 /Cube/MenuTree。
+// 只看 GetMenuTree 会把换了 /Cube/MenuTree 的工程误判成「没有动态菜单」。
+const menuFiles = grep(srcFiles, /GetMenuTree|Cube\/MenuTree/);
 if (!menuFiles.length) {
-  fail('动态菜单（E4-M1）', '找不到 GetMenuTree 调用');
+  fail('动态菜单（E4-M1）', '找不到菜单树端点调用（/api/Admin/Index/GetMenuTree 或 /Cube/MenuTree）');
 } else {
-  const bad = menuFiles.filter((f) => /['"]\/Admin\/Index\/GetMenuTree['"]/.test(read(f)));
-  if (bad.length) fail('菜单前缀（E3-H2）', `菜单端点漏 /api：${bad.join(', ')}`);
-  else pass('动态菜单（E4-M1）', menuFiles.join(', '));
+  // 区域族：必须带 /api。用 getApi 时 baseURL 已含 /api，路径可省；用 getRaw 则必须写全。
+  const lackApi = menuFiles.filter(
+    (f) => /getRaw\s*\(\s*['"`]\/Admin\/Index\/GetMenuTree['"`]/.test(read(f)),
+  );
+  // 根族：/Cube 在 baseURL 之外，多写 /api 会 404。
+  const extraApi = menuFiles.filter((f) => /['"`]\/api\/Cube\/MenuTree['"`]/.test(read(f)));
+  if (lackApi.length) fail('菜单前缀（E3-3）', `区域族菜单端点漏 /api：${lackApi.join(', ')}`);
+  if (extraApi.length) fail('菜单前缀（E3-3）', `根族菜单端点多了 /api：${extraApi.join(', ')}`);
+  if (!lackApi.length && !extraApi.length) {
+    const cube = menuFiles.filter((f) => /['"`]\/Cube\/MenuTree['"`]/.test(read(f)));
+    pass('动态菜单（E4-M1）', cube.length ? `/Cube/MenuTree（含隐藏页与授权矩阵）` : menuFiles.join(', '));
+  }
 }
 
 const viteSrc = read('vite.config.ts');

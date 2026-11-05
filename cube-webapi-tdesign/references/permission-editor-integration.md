@@ -36,11 +36,25 @@
   ⇒ **「菜单可见但无任何操作权限」无法表达**，开放的最小粒度只能是查看（1）。
   ⇒ 组件里所有「取消到 0」的地方都必须**删段**，不能写 0；`parse()` 也要忽略 0 段（防历史脏值）。
   ⇒ 凡写 Permission 串的逻辑，写完必须读回校验——0 段是**静默消失**，不报错。
-- **数据源**：`GET /api/Admin/Index/GetMenuTree`（`getRaw`，baseURL=`SERVER_BASE` **不含** `/api`，故调用点写全 `/api/...`）。
-  返回**嵌套树**（`children`），节点字段 `id / name / displayName / parentId / children / permissions`。
-  - `permissions` 是权限位字典 `{"1":"查看","2":"添加","16":"入库"}`——**位列表的唯一权威源**；
+- **数据源**：`GET /Cube/MenuTree`（`getRaw`，baseURL=`SERVER_BASE` **不含** `/api`，故调用点写 `'/Cube/MenuTree'`——**一定不能带 `/api`**）。
+  - ★ **必须用这个端点，不能用 `/api/Admin/Index/GetMenuTree`**：区域族端点子级是 `Childs?.Where(m => m.Visible)`，隐藏菜单在此**根本不出现** ⇒ 管理员无法给隐藏页授权（2026-11-05 反编译 + 实测）。
+  - 该端点匿名访问返回 **302 跳登录页**（Cookie 认证重定向），**不是「不是 API」**——带登录态为 200 JSON。写探针脚本时务必带上登录态。
+  - 鉴权走**请求上下文 Cookie**（不是 `Authorization: Bearer`）；SPA 同源 / vite 代理下自动携带。
+  - 返回**嵌套树**（`children`），节点字段 `id / name / displayName / parentID / children / permissions`（注意是 `parentID`，大写）。
+  - `permissions` 是**权限位字典** `{"1":"查看","2":"添加","16":"入库"}`——**位列表的唯一权威源**；反编译确认类型为 `Dictionary<int,string>`，序列化成 JSON 对象而非数组；
   - 空字典/缺字段时回退内置四位；
   - ★ 必须**递归摊平**成数组再建索引，否则只有顶层节点能渲染（历史 bug：只渲染 9 个分组、子级全丢）。
+  - ★★ **`parentID` 实测为 `null`**（父关系只存在于 `children` 嵌套）⇒ 建 `byParent` 索引必须「字段有值优先、否则用嵌套位置回填」：
+    ```ts
+    const walk = (nodes: any[], pid: number) => {
+      for (const x of nodes) {
+        const pid2 = Number(x.parentId ?? x.parentID ?? 0) || pid;  // 关键：null 时回退到嵌套父 id
+        if (!m.has(pid2)) m.set(pid2, []);
+        m.get(pid2)!.push(x);
+        if (Array.isArray(x.children)) walk(x.children, Number(x.id) || 0);
+      }
+    };
+    ```
   - 不要用 `GET /api/Admin/Menu` 扁平表替代——它**不带 `permissions` 字典**，自定义位全丢。
 - 组件依赖：`@/api/http`（`getRaw`）、`tdesign-vue-next`（t-checkbox / t-tag / t-button / t-loading）。后端零改动。
 
@@ -154,7 +168,11 @@ const fields = computed(() =>
 | 现象 | 根因 / 修法 |
 |---|---|
 | 矩阵只渲染出几个顶层分组，子级全没 | `GetMenuTree` 是**嵌套树**，组件必须递归摊平 `children` 再建 `byParent` 索引 |
-| 自定义权限位（16/32…）不出现 | 数据源用了 `/api/Admin/Menu` 扁平表（不带 `permissions` 字典）；换 `GetMenuTree`，位列表按节点字典渲染 |
+| 摊平了但子级还是归错父 / 全挤在根下 | `/Cube/MenuTree` 节点 `parentID` 为 **`null`**，只读字段建不出父子关系。必须用嵌套位置回填：`Number(x.parentId ?? x.parentID ?? 0) \|\| pid` |
+| 矩阵里看不到隐藏页（`[Menu(0,false)]` 的页面无法授权） | 数据源用了区域族 `/api/Admin/Index/GetMenuTree`，其子级已 `Where(m => m.Visible)` 滤掉。换 `/Cube/MenuTree` |
+| 请求 `/Cube/MenuTree` 拿到 302 / 空 | 多半是**未登录或会话失效**（Cookie 认证重定向到登录页），不是端点不可用。带登录态复测；探针脚本须先登录 |
+| `/Cube/MenuTree` 返回 `index.html` | vite 代理大小写敏感，只配了 `'/cube'`。改成 `'/Cube'` |
+| 自定义权限位（16/32…）不出现 | 数据源用了 `/api/Admin/Menu` 扁平表（不带 `permissions` 字典）；换 `/Cube/MenuTree`，位列表按节点字典渲染 |
 | 矩阵旁多出一个 `1#1,6#1…` 明文框 | v-if 链踩坑：`t-tree-select` 写成了独立 `v-if`，Vue 视其为新链起点，链尾 `t-input v-else` 兜底命中 → **同一字段渲染两个控件**。改 `v-else-if` 接回同链（SKILL §4.12.1 铁律：一条控件链只允许链首一个 `v-if`） |
 | 保存后「只勾了授权」的菜单整块消失 | 落了 `id#0`，后端丢弃该段。开放必须落 ≥1 的掩码 |
 | 只读/全部状态错乱、全勾时只读也亮 | 只读判定写成了「含查看位」；正确判据 = 非全部态 && 全支掩码恰为 `1` |

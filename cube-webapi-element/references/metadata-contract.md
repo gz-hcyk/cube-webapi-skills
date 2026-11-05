@@ -24,7 +24,9 @@ interface ApiEnvelope<T> {
 | 族 | 判据 | 前缀 | 例子 |
 |---|---|---|---|
 | 区域族 | 控制器带 `[Area]` | **必须 `/api`** | `/api/Admin/User`、`/api/Admin/Index/GetMenuTree`、`/api/Lab/LabAsset/GetPage` |
-| 根族 | `NewLife.Cube.Controllers.*`，无 Area | **不带 `/api`** | `/Auth/Login`、`/Mfa/Verify`、`/Sso/*`、`/Cube/Lookup`、`/Cube/Apis` |
+| 根族 | `NewLife.Cube.Controllers.*`，无 Area | **不带 `/api`** | `/Auth/Login`、`/Mfa/Verify`、`/Sso/*`、`/Cube/Lookup`、`/Cube/Apis`、`/Cube/MenuTree` |
+
+> 菜单有**两个**端点分属两族：区域族 `/api/Admin/Index/GetMenuTree`（子级按 `Visible` 过滤）、根族 `/Cube/MenuTree`（不滤 `Visible`，隐藏页完整返回，匿名 302 跳登录）。选型见 SKILL 铁律 E4-M1。
 
 - `http` 实例 `baseURL = /api` → 调用方写 `/{area}/{controller}`；
 - `rawHttp` 实例 `baseURL = 后端根` → 调用方写全路径。

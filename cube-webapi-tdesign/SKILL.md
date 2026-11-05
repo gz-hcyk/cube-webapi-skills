@@ -65,7 +65,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 
 ## 铁律：菜单必须后端动态生成 + 品牌点击回 dashboard（不可违反）
 
-- **M1** 业务菜单唯一权威 = 后端 `GET /api/Admin/Index/GetMenuTree`（**区域族必带 `/api`**，只返回当前用户有权限节点）。前端**禁止**手工 push/硬编码业务菜单项展示。
+- **M1** 业务菜单唯一权威 = 后端菜单树端点：`GET /api/Admin/Index/GetMenuTree`（区域族，必带 `/api`）或 `GET /Cube/MenuTree`（根族，无 `/api`）——**二选一的判据见 §4.12 末尾选型表**（要隐藏页进菜单/授权矩阵 → 用后者）。前端**禁止**手工 push/硬编码业务菜单项展示。
 - **M2** 要加页面入口 → 改后端产出菜单节点（实体/API 控制器自动扫出，或显式挂菜单）；前端**只做「后端 url → 前端路由」归一化**（`BasicLayout.onNavigate()`，不产生新菜单项）。
 - **M3** 新项目默认 `dashboard` 首页（登录后 `redirect:'/dashboard'`）；点击左上角品牌（系统名/Logo）必须跳 `/dashboard`。
 - **M4** 一级菜单（顶层节点，`parentID` 为空/null）若后端 `GetMenuTree` 返回节点**无 `icon`**，**前端必须自动分配图标**：按 `name`/`displayName`/`url` 关键词映射（如 `User/Role/Member`→`UserIcon`、`Department/Dept/Group`→`UsergroupIcon`、`Log`→`FileIcon`、`Setting/Config/Parameter`→`SettingIcon`、`Dashboard/Home`→`DashboardIcon`、`Report`→`ChartIcon`），无法推断则回退统一默认图标（如 `AppIcon`/`ViewListIcon`）。一级菜单是视觉锚点，图标缺失最影响观感，故**强制补图标**；二级及以下子菜单沿用同一推断但非强制。
@@ -643,14 +643,29 @@ export function usePerms() {
 
 ★ 父子表关系：子表控制器**不进菜单**（不在一级/二级导航暴露），只作为父表详情下的内嵌区——详见「铁律：父子表前端只展现父表」。凡 `*Line`/`*Item` 实体一律视为子表，菜单渲染时跳过其独立节点。
 
-`GetMenuTree`（`GET /api/Admin/Index/GetMenuTree`，返回 `code:0`+菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
+菜单树（`GET /api/Admin/Index/GetMenuTree` 或 `GET /Cube/MenuTree`，取哪个见本节末尾的选型表；两者返回信封都是 `code:0` + 菜单树数组，节点 `id/name/displayName/fullName/parentID/url/icon/visible/newWindow/permissions/children`）是**框架自带模块清单的唯一权威**（勿用固定候选清单探测，会漏 Lov/地区/附件等、误判纯 MVC 页）。落地**只有两处，均在组件内联，无独立工具模块**：
 
-- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉 `/api/Admin/Index/GetMenuTree`（**区域族必带 `/api`**，try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + **同层互斥展开 `:expand-mutex="true"`（M5；勿写 `accordion`——1.20.7 无此 prop）** + **图标透传（**一级菜单缺 `icon` 按 **M4** 自动补**：后端未给 icon 时按 `name`/`displayName`/`url` 关键词映射，无法推断回退默认图标；映射表见 §4.12.3）**；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
+- **取数 + 渲染 = `assets/core/components/cube/MenuSidebar.vue`**：`onMounted` 拉菜单树端点（默认 `/api/Admin/Index/GetMenuTree`，**区域族必带 `/api`**；若还要让隐藏页进导航/标题，换 `/Cube/MenuTree`——见本节末选型表；try/catch，401 静默），`registerMenuTitles()` 把 `displayName` 登记为页面标题权威源；垂直 `t-menu` / 顶部 `t-head-menu` 双形态 + **同层互斥展开 `:expand-mutex="true"`（M5；勿写 `accordion`——1.20.7 无此 prop）** + **图标透传（**一级菜单缺 `icon` 按 **M4** 自动补**：后端未给 icon 时按 `name`/`displayName`/`url` 关键词映射，无法推断回退默认图标；映射表见 §4.12.3）**；按 `theme` 输出 `.cube-menu--light` / `--dark` 配色分支（**防「白底白字」，历史缺陷 FE-08**）。
 - ★ **模板必须渲染任意三层树（2026-10-09 值班系统实测缺陷）**：一区拆多区后菜单为 顶级→分组→实体 三层，若 `t-submenu` 内把 children 一律渲染成叶子 `t-menu-item`，**第三层实体不渲染**——分组被当叶子点击 → `navigate('/Sched')` → `/entity/Sched` 缺控制器段 → catch-all 弹回 dashboard，观感即「点击菜单没反应」。两处模板（vertical/horizontal）都要写「`hasChildren(c)` → 嵌套 `t-submenu`，否则叶子」的分支；`syncActiveByRoute` 命中第三层时须把中间分组一并塞进 `expanded`，否则刷新/深链后高亮项不可见。
 - ⚠️ **回归脚本禁用「URL 兜底掩盖点击失败」**：菜单点击用例若写成 `click().catch(() => page.goto(url))`，点击失败会被 goto 救活成 PASS（值班系统拆区回归 8/8 即假阳性，缺陷潜伏一周才被人工发现）。点击失败必须直接判 FAIL；「分组未展开导致子项不可见」要在用例内先点父项再断言子项 `visible=true`。
 - **url → 路由归一化 = `assets/core/layouts/BasicLayout.vue` 的 `onNavigate()`**：剥 `~` / 前导斜杠 / `api` 前缀后取前两段 → `/entity/{Area}/{Ctrl}`。后端 url 双格式（业务区相对 `~/Sync`、系统区绝对 `/Admin/User`）在此一并抹平。
 - ★ **节点 `permissions` 是权限位字典**（`{"1":"查看","2":"添加","4":"修改","8":"删除"}`，业务动作叠加 16/32/64/128…），除驱动按钮级权限外，可作**控制器类别的启发式**：含 2/4/8 大概率为实体控制器（有 `Index`/`GetPage`），否则大概率为动作控制器（`Mobile`/`Import`/`Report`/`Widget` 等，取数必然 404）。⚠️ **该启发式有反例**（`Log` 权限位仅 `[1]` 但实为含 `Index`+`GetPage` 的只读实体控制器），**权威判定以 `GET /Cube/Apis` 的 `Index`+`GetPage` 为准**（见 §4.12.2）。仪表盘/统计页据此跳过非实体节点，避免刷屏 404（实测 3 条 → 0 条）。判别式与实测数据见 §4.8 附近「实体 vs 动作控制器判别」。
-- ⚠️ **真实端点是 `/api/Admin/Index/GetMenuTree`（区域族必带 `/api`，实测 200；写成不带前缀的 `/Admin/Index/GetMenuTree` → 404）**；`/Cube/MenuTree` 返回 **HTTP 302**（MVC 页面跳转，非 API），误用会拿到空响应。
+- ⚠️ **两个菜单端点的取舍（2026-11-05 源码 + 双端点实测订正，旧结论写反过）**：
+
+  | 端点 | 路由族 | 过滤口径 | 隐藏菜单（`Visible=0`） | 何时用 |
+  |---|---|---|---|---|
+  | `GET /api/Admin/Index/GetMenuTree` | 区域族，**必带 `/api`**（写成 `/Admin/Index/GetMenuTree` → 404） | 顶层不滤；**子级 `Where(m => m.Visible)`** | **收不到**：服务端就把隐藏子节点剔除了 | 只做导航、不需要隐藏页 |
+  | `GET /Cube/MenuTree` | 根族，**无 `/api`** | `IsAccessible` = 本角色有权 **或** 未被任何角色声明过；**不看 `Visible`** | **完整返回**，带 `"visible": false` | 导航 + 需要隐藏页（标题/面包屑注册、授权矩阵） |
+
+  - **旧版本技能称「`/Cube/MenuTree` 返回 HTTP 302，是 MVC 页面跳转」——该结论是错的，但错因很值得记**。302 是**未登录/会话失效**时的表现（Cookie 认证把匿名请求重定向到登录页），裸 `curl` 探它只会看到 302，于是被误判成「非 API」。**带登录态实测（2026-11-05，`6.15.2026.901`）：返回 `{"code":0,"data":[…]}` 的 200 JSON**，节点结构与区域族端点逐字段一致。两者都在框架 dll 内、都调 `ViewModels.MenuTree.GetMenuTree`（`CubeController.MenuTree(String module = null)` / `IndexController.GetMenuTree(string module)`）。⇒ **判定一个端点是不是 JSON API，必须带登录态探**，匿名探到的 302/401 说明不了协议形态。
+  - ⚠️ **登录态来源是请求上下文（Cookie 会话），不是 Bearer**：该端点属根族，SPA 同源/走 vite 代理时 Cookie 自动携带即可；若你的请求跨域或拦截器只送 `Authorization` 而不带 Cookie，会拿到 302 → 再被 axios 转成 401。**菜单「莫名空白/只剩几项」先查这一条**，别急着怀疑权限数据。
+  - ⚠️ **该端点是按「当前登录用户的角色」收窄的**：子管理员看不到「自己无权 且 已被别的角色声明过」的菜单。因此**在授权矩阵里给子管理员分配超出其自身的权限会被这条挡下**——这是 Cube 原生语义（`IsAccessible`），不是 bug；超级管理员不受影响。
+  - ⚠️ **节点 `parentID` 不可依赖**：同一份数据经 `/Cube/MenuTree` 返回时 `parentID` 实测为 `null`（父关系只体现在 `children` 嵌套里），经区域族端点返回时有值。**一律从 `children` 嵌套推导父子关系**（节点字段有值时优先，作为兜底），否则树会被压平成一堆根节点。根因未见源码级解释，按行为契约处理。
+  - ⚠️ **`visible:false` 节点滤不滤，是产品决策而非技术约束**（换源后必须显式选一边，别让它默认漏进导航）：
+    - **要让隐藏页也出现在菜单里**（"隐藏页面集成进已显示菜单"）→ **不滤**。这些节点的父级本来就是可见分组（系统管理/魔方管理/配置字典等），原样递归渲染即自然并入，不需要另建补充菜单区、也不必改后端的 `Visible`。只需按 url 排除**根本进不了 SPA 的**节点（如 `/Admin/Index`。SPA 自有概览；`/Admin/File` 纯 MVC 视图、无 JSON 端点），否则点了白页。
+    - **要让隐藏页保持隐藏**（默认语义）→ 递归剔除 `visible === false` 的分支（判据用 `!== false` 而非 `=== true`，对缺字段的老接口宽容）。
+    - **两种情况下 `registerMenuTitles()` 都必须吃过滤前的全量树**：隐藏页仍可能被跳转/深链打开，页面标题与面包屑要查得到 `displayName`。
+  - ⚠️ **vite 代理大小写敏感**：`/Cube/MenuTree` 必须由**大写**条目覆盖（`'^/Cube/'` 或 `'/Cube'`）。只配了小写 `'/cube'` 时该请求落到 SPA 兜底、返回 `index.html`（200 + `text/html`），axios 解析失败 → 菜单静默为空、无任何报错。
 
 ### 4.12.1 角色权限设置（RoleMenuEditor）— 开箱即用配方
 
@@ -665,7 +680,18 @@ export function usePerms() {
 | 授权 | **仅父级行**：整块开关（勾上 → 自身+全部子孙补段，无位的落「查看」；取消 → 整支删段） |
 | 操作权限 | 父级 `只读`/`全部` 两档（互斥，状态由数据反解）；叶子逐位勾选，位列表由节点 `permissions` 字典驱动（内置 4 位 + 自定义位动态出现），`-1` 全动作透传 |
 
-- **数据源**：`GET /api/Admin/Index/GetMenuTree`（`getRaw`，调用点写全 `/api`）——返回**嵌套树**，组件内递归摊平；节点 `permissions` 字典是**权限位列表的唯一权威源**（空则回退 1/2/4/8）。**勿用 `/api/Admin/Menu` 扁平表**（不带字典，自定义位全丢）。
+- **数据源**：`GET /Cube/MenuTree`（`getRaw`，根族**不带** `/api`）——**授权矩阵必须用这个端点**：区域族 `/api/Admin/Index/GetMenuTree` 在服务端按 `Visible` 过滤，`[Menu(0,false)]` 的隐藏页在授权界面根本收不到、无法勾选（实测两版编辑器换源后矩阵节点由「漏隐藏页」变为全部 59 项可见可勾）。返回**嵌套树**，组件内递归摊平；节点 `permissions` 字典是**权限位列表的唯一权威源**（空则回退 1/2/4/8）。**勿用 `/api/Admin/Menu` 扁平表**（不带字典，自定义位全丢）。
+- ⚠️ **父子索引必须由 `children` 嵌套推导，不能只读节点 `parentID`**：`/Cube/MenuTree` 的节点 `parentID` 实测为 `null`（父关系只体现在嵌套里），沿用「摊平后按 `x.parentId` 建 `byParent`」会让全部节点落到 `pid=0`、树结构整棵压平（表现为「所有节点都是顶层、没有折叠箭头、父子级联全失效」）。正确做法：摊平时一并递归 `children`，用父节点的 `id` 回填子节点归属；节点自带 `parentId/parentID` 有值时优先（两源通吃）：
+  ```ts
+  const walk = (nodes: any[], pid: number) => {
+    for (const x of nodes) {
+      const pid2 = Number(x.parentId ?? x.parentID ?? 0) || pid;   // 字段有值优先，否则用嵌套回填
+      if (!m.has(pid2)) m.set(pid2, []);
+      m.get(pid2)!.push(x);
+      if (Array.isArray(x.children)) walk(x.children, Number(x.id) || 0);
+    }
+  };
+  ```
 - **子级无授权框**：授权由操作位隐含（勾任一位即开放）——刻意设计，理由见下条硬约束。
 
 ★ **硬约束：XCode 的 Role 保存/加载丢弃 `菜单ID#0` 段**（实测 PUT `permission="19#0"` 读回 `""`）⇒「菜单可见但零操作」**无法表达**，开放的最小粒度只能是查看（1）；「取消到 0」必须**删段**，`parse()` 也要忽略 0 段。凡写 Permission 串的逻辑，写完必须读回校验（0 段静默消失，不报错）。

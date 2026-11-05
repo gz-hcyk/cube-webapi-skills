@@ -21,8 +21,11 @@
 
 1. **0 掩码段不落库**（XCode Role 保存/加载丢弃 `id#0`）⇒ 开放的最小粒度 = 查看（1）；
    「取消到 0」必须**删段**，序列化只输出 `>0` 或 `-1`。
-2. **数据源必须 `GET /api/Admin/Index/GetMenuTree`**（走 `getRaw`，调用点写全 `/api`），
+2. **数据源必须 `GET /Cube/MenuTree`**（走 `getRaw`，**根族不带 `/api`**，写 `'/Cube/MenuTree'`），
    返回嵌套树需**递归摊平**；`permissions` 字典是权限位列表的**唯一权威源**（空则回退 1/2/4/8）。
+   - ⚠ **不能用 `/api/Admin/Index/GetMenuTree`**：区域族端点子级 `Where(m => m.Visible)`，`[Menu(0,false)]` 的隐藏页在此不出现 ⇒ 无法给隐藏页授权（2026-11-05 反编译 + 实测）。
+   - ⚠ `/Cube/MenuTree` 匿名访问 302 跳登录页（Cookie 认证），**不是端点不可用**；带登录态为 200 JSON。
+   - ⚠ 节点 `parentID` 实测为 `null`（父关系只在 `children` 嵌套里）⇒ 摊平时必须同时记「子 id → 父 id」，`byParent` 不能只读 `parentId` 字段，否则全挤到根下。
    不要用 `/api/Admin/Menu` 扁平表——不带字典，自定义位全丢。
 3. **只读/全部状态由数据反解**（全部 = 全支 `-1`；只读 = 非全部且全支恰为 `1`），不存额外状态。
 

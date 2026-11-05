@@ -40,9 +40,10 @@ interface ApiListEnvelope<T> extends ApiEnvelope<T[]> {
 > ⚠️ **修改/删除契约（高频坑，实测 405）**：第三代 WebApi 的修改/删除打**主路由**——`PUT /{area}/{controller}`（主键在 body）、`DELETE /{area}/{controller}?id=xxx`（id 在 query）。写成 `PUT|DELETE /{a}/{c}/{id}`（id 在 URL path）后端无此路由 → 405（详见 SKILL.md §七「编辑保存/删除 405」）。
 
 > ⚠️ **端点前缀按「控制器有没有 `[Area]`」分族（2026-09-13 dump 真实路由表实证，旧结论已推翻）**：
-> - **根族**（`NewLife.Cube.Controllers.*`，无 `[Area]`）→ **不带 `/api`**：登录 `/Auth/Login`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`；加 `/api` 一律 **404**。
+> - **根族**（`NewLife.Cube.Controllers.*`，无 `[Area]`）→ **不带 `/api`**：登录 `/Auth/Login`、字典 `/Cube/Lookup`、签名清单 `/Cube/Apis`、菜单树 `/Cube/MenuTree`；加 `/api` 一律 **404**。
 > - **区域族**（带 `[Area]`，含框架 Area 控制器）→ **必须带 `/api`**：菜单 **`/api/Admin/Index/GetMenuTree`**、实体 `/api/{area}/{controller}`。
 > - ⚠️ **旧版本把菜单写成无前缀 `/Admin/Index/GetMenuTree` 是错的**（`IndexController` 挂 `[AdminArea]`）。漏前缀**不报错**，会落 SPA 兜底返回 `200 + text/html`。详见 SKILL.md 铁律 H2/H3。
+> - ⚠️ **菜单两个端点分属两族**：区域族那条子级 `Where(m => m.Visible)`（隐藏页收不到）；根族 `/Cube/MenuTree` 只看 `IsAccessible`，隐藏页完整返回。**`/Cube/MenuTree` 匿名返回 302 是未登录跳转，不是「不是 API」**。选型见 SKILL.md §4.12 选型表。
 
 ## 3. GetPage —— 前端引导页的核心（一次性取齐 schema）
 

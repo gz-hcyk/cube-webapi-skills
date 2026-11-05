@@ -88,7 +88,18 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 
 ## 铁律：前端菜单必须后端动态下发（不可违反）
 
-- **菜单唯一权威 = 后端 `GetMenuTree`**（只返回当前用户有权限节点）：前端页面菜单**必须**消费 `GET /api/Admin/Index/GetMenuTree`（区域族，**带 `/api`**）。2026-10-04 复测：带 `/api` 为 HTTP 200，不带 `/api` 为 404。**不允许**在前端手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
+- **菜单唯一权威 = 后端菜单树端点**（只返回当前用户有权限节点）：前端页面菜单**必须**消费下列端点之一，**不允许**手工新增/硬编码业务菜单项（如前端常量表手动 push、写死菜单数组）。
+
+  | 端点 | 族 | 过滤口径（源码） | 隐藏菜单 `Visible=0` | 用途 |
+  |---|---|---|---|---|
+  | `GET /api/Admin/Index/GetMenuTree` | 区域族（**带 `/api`**） | 顶层 `fact.Root.Childs` 不滤；**子级 `Childs?.Where(m => m.Visible)`** | **收不到** | 只做导航 |
+  | `GET /Cube/MenuTree` | 根族（**不带 `/api`**） | `menus.Where(IsAccessible)`，**`Visible` 完全不参与** | **完整返回**，带 `"visible": false` | 导航 + 隐藏页 + 授权矩阵 |
+
+  - 2026-10-04 复测：区域族带 `/api` 为 HTTP 200，不带 `/api` 为 404。
+  - **2026-11-05 订正**：`/Cube/MenuTree` 曾被记为「返回 302、不是 API、不可用」——**该结论错误**。302 是**未登录/会话失效**时 Cookie 认证重定向到登录页的表现；带登录态实测 200 JSON。**判定端点协议形态必须带登录态探**。
+  - `IsAccessible` 语义：`(allowedIds.Contains(m.ID) || !permissionedIds.Contains(m.ID)) && (allowTenant || !IsTenantMenu(m))`——本角色有权 **或** 该菜单未被任何角色声明过，才可见。⇒ 子管理员看不到「自己无权且已被别人声明」的菜单是**原生行为**，不是 bug。
+  - 该端点鉴权走**请求上下文 Cookie**，不走 `Authorization: Bearer`；SPA 同源 / vite 代理下自动携带。
+  - 节点 `ParentID` 为 `int?` 且实测为 **`null`**（父关系只存在 `Children` 嵌套里）⇒ 前端建父子索引必须由嵌套回填。
 - 新增某个页面的菜单入口时，**只能在后端产出菜单节点**：实体控制器/自定义 API 控制器被自动扫描后自然会带出（`~/Ctrl` 形态），或显式挂菜单；前端只做「url → 前端路由」的**映射表**（如把 `~/Reconcile` 改写为前端专用路由 `/reconcile`），**映射不算新增菜单**。
 - 例外（允许内置，不视为业务菜单）：登录后默认落地页 **dashboard** 及顶部品牌跳转，作为前端默认首页常驻。
 - **违反判定**：前端代码中出现手工向菜单树 push 业务菜单项/写死业务菜单配置并展示 = 违反；后端已有对应节点却仍需前端手工补 = 后端节点缺失，应补后端而非改前端。
@@ -122,7 +133,7 @@ curl -s "https://api.github.com/repos/NewLifeX/NewLife.Skills/contents/.github/s
 4. **字段元数据驱动界面**：`GetFields`/`GetPage` 按 list/addForm/editForm/detail/search 五组字段集合下发（含 `lovCode`/`mapField`）——前端表单/表格由元数据驱动，不要后端硬编码界面结构或自建字段描述接口。
 5. **枚举中文标签**：`AddCubeLov(o => o.ScanNamespace("实体命名空间"))` + `UseCubeLov()` + `SetLov(...)` 注册 LOV 值集是权威通道——不要自建枚举字典表/翻译接口（`[Map]` 仅为降级通道）。
 6. **登录鉴权与令牌**：`AddCube()` 内置 `Auth/Login`、JWT（Bearer/X-Token）——不要自建登录/签发/校验链路；自定义权限走 `PermissionFlags` 权限位 + `EntityAuthorize` 鉴权，不要另造权限框架。
-7. **菜单**：菜单树由后端 `GetMenuTree` 自动扫描控制器产出（见上方菜单铁律）——不要手工维护菜单表之外的第二套菜单源。
+7. **菜单**：菜单树由后端自动扫描控制器产出（`/api/Admin/Index/GetMenuTree` 或 `/Cube/MenuTree`，见上方菜单铁律）——不要手工维护菜单表之外的第二套菜单源。
 8. **定时作业**：周期任务用 `CronJob` + `CubeJobBase`（§9.1，命名空间 `NewLife.Cube.Jobs`，随程序集自动扫描注册）——不要自建 `Timer`/`TimerX` 调度器（老模板自建调度器与内置 JobService 冲突，会把新作业置 `Enable=false` 禁用掉，迁移时须删）；`AddCube()` 已内含作业调度注册，勿重复调用。
 9. **审计字段**：XCode 实体基类自动维护 `CreateUser`/`CreateTime`/`UpdateUser`/`UpdateTime`——不要自建审计表/审计中间件补记这些字段（控制器侧审计用 `LogOnChange=true`）。
 10. **系统管理能力**：字典参数/访问规则/OAuth 配置/短信配置/应用日志等由框架内置页与接口提供——不要重做同类管理功能。
@@ -682,12 +693,37 @@ public class ProductArea : AreaBase
 > 会让**整个区域分组**（连同其下所有正常菜单）从侧边栏消失。`LastUpdate` 只用于触发重建，
 > 不要顺手把区域可见性也关掉。
 
-**坑 3：`GetMenuTree` 返回全量节点（含 `visible=false`），不做服务端过滤——前端必须自己消费 `visible`。**
-这是最隐蔽的一环：后端标了 `[Menu(0,false)]`、库记录 `Visible=0`，接口返回的 JSON 里那条记录
-**依然在 `children` 数组里**，只是带了个 `"visible": false` 字段。若前端菜单消费层不读这个字段，
-就会被渲染成菜单项——**后端声明完全空转**。
+**坑 3：两个菜单端点的可见性过滤口径**不同**——旧版本技能把这里写反过（2026-11-05 反编译订正）。**
 
-✅ 前端须在映射菜单树时显式过滤（参考实现）：
+`Areas.Admin.Controllers.IndexController.GetMenuTree` 的实际代码：
+
+```csharp
+// 顶层：不滤
+var list = fact.Root.Childs;                 // 区域/一级节点照收
+// 子级：按 Visible 滤！
+return MenuTree.GetMenuTree(p => fact.FindByID(p.ID)?.Childs?.Where(m => m.Visible).ToList(), ...);
+```
+
+⇒ 区域族端点 **子级是过滤掉的**，隐藏菜单在 `children` 里根本不出现。
+
+`Controllers.CubeController.MenuTree` 则只做权限/租户判定，**`Visible` 完全不参与**（源码注释明确写「`Visible=false` 的隐藏菜单也保留返回」）：
+
+```csharp
+Boolean IsAccessible(IMenu m) => (allowedIds.Contains(m.ID) || !permissionedIds.Contains(m.ID))
+    && (allowTenant || MenuHelper.IsTenantMenu(m));
+menus = menus.Where(IsAccessible).ToList();
+```
+
+汇总：
+
+| 端点 | 顶层 | 子级 |
+|---|---|---|
+| `/api/Admin/Index/GetMenuTree` | 不滤 | **`Where(m => m.Visible)`** |
+| `/Cube/MenuTree` | 不滤 | **不滤**（只 `IsAccessible`） |
+
+所以**「前端必须消费 `visible`」只对 `/Cube/MenuTree` 成立**。若前端从区域族端点换到 `/Cube/MenuTree`，原本被后端滤掉的隐藏页会一次性全部冒出来——这是换源时最容易漏的一步。
+
+✅ 用 `/Cube/MenuTree` 时前端须显式决定（这是**产品决策**，不是技术约束）：
 
 ```ts
 interface RawMenuNode { id: number; name: string; url?: string; visible?: boolean; children?: RawMenuNode[] }
@@ -695,7 +731,7 @@ interface RawMenuNode { id: number; name: string; url?: string; visible?: boolea
 function mapChildren(nodes: RawMenuNode[]): MenuNode[] {
   const out: MenuNode[] = []
   for (const n of nodes || []) {
-    if (n.visible === false) continue        // 用 !== false 而非 === true：对老接口/缺字段保持宽容
+    if (n.visible === false) continue        // 用 !== false 而非 === true：对缺字段保持宽容
     // ... url 归一化等
   }
   return out
@@ -703,9 +739,14 @@ function mapChildren(nodes: RawMenuNode[]): MenuNode[] {
 // 区域根节点同样要判断：if (root.visible === false) continue
 ```
 
-**结论：隐藏菜单是「后端声明 + 前端消费」两环，缺一不可。**
+- **要让隐藏页进菜单** → 不滤，只按 url 排除进不了 SPA 的节点（如 `/Admin/Index`、`/Admin/File`）
+- **要让隐藏页保持隐藏** → 递归剔除 `visible === false`
+- **无论哪种**：菜单标题注册表（`registerMenuTitles`）都必须吃**过滤前**的全量树，否则隐藏页详情页标题会退回显示 url
+
+**结论：隐藏菜单是「后端声明 + 前端消费」两环，缺一不可——但该结论以用 `/Cube/MenuTree` 为前提。**
 只改后端 = 菜单照旧显示（坑 3）；只改前端 = 服务器换了库记录又冒出来（坑 2）。
-排查口诀：**先看接口 JSON 里 `visible` 是什么，再看前端有没有读它。**
+用区域族端点时后端已替你把子级隐藏菜单滤掉，此时前端若还按「隐藏页要显示」去设计就会拿不到数据——**先确认用的是哪个端点**。
+排查口诀：**先确认调的是哪个端点，再看接口 JSON 里 `visible` 是什么，最后看前端有没有读它。**
 
 > 实战收益参考：某存量项目补上前端 `visible` 消费后，菜单从 **40 条降到 23 条**，
 > 一次清掉 14 个框架内部页（字典参数/访问规则/OAuth 配置/短信配置/应用日志等）
