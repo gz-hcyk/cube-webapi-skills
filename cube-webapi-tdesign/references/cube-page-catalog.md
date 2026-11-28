@@ -290,13 +290,15 @@ async function revokeTokens(row: any, reload: () => void) {
 
 ### 5.5 AI 助手浮窗（全局）
 
+**完整配方见 [`ai-assistant.md`](ai-assistant.md)**（含契约取证路径、请求体逐字段语义、SSE 事件表、打字机参数、`run_js` 安全边界、验收清单、反模式）。
+
 | 步骤 | 端点 | 说明 |
 |---|---|---|
-| 1. 取配置 | `GET /Cube/GetAiConfig` | 是否启用 + 配色；关闭时**不渲染浮窗** |
-| 2. 对话 | `POST /Ai/AiChat`（SSE 流式） | 请求体带当前页面上下文（`_query` Base64 编码，后端 `DecodePager` 解析） |
-| 3. 浏览器操作回传 | `POST /Ai/OperationResult` | 前端执行后端下发的 `run_js` 后回传结果，完成等待中的工具调用 |
+| 1. 取配置 | `GET /Cube/GetAiConfig` | 是否启用 + 配色；关闭时**不渲染浮窗**（fail-closed） |
+| 2. 对话 | `POST /Ai/AiChat`（SSE 流式） | 请求体带页面上下文：`area`/`controller`（取自 `menuUrl` 拆段）、`url`（`route.path`）、`page`（**`list`/`form`/`detail`，不是路由名**）、`mode`/`id`、`query`（`_query` Base64） |
+| 3. 浏览器操作回传 | `POST /Ai/OperationResult` | 前端执行后端下发的 `run_js` 后回传 `{checkpointId, result}`，完成等待中的工具调用；**不回传则服务端挂 30s** |
 
-实现要点：SSE 用 `fetch` + `ReadableStream` 手工解析（axios 不便流式）；浮窗挂 `BasicLayout`（与 `SettingPanel` 同级），**全局一份**。
+实现要点：SSE 必须 `fetch` + `ReadableStream` 手工解析（`EventSource` 无法带 `Bearer`，axios 不便流式）；浮窗挂 `BasicLayout`（与 `SettingPanel` 同级），**全局一份**；代理白名单须含 `/Cube`（漏配即静默不显示，见 troubleshooting G24-1）。
 
 ### 5.6 统计图表页（`OnGetChartData`）
 

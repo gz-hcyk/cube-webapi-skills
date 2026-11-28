@@ -872,3 +872,55 @@ print(txt[max(0, i-3000):i+3000])                 # 取上下文即得完整视�
 
 用途：① 对齐列/交互语义时**以原版为准**，别凭记忆猜；② 判断某个功能「框架到底自带没有」——
 先取 DLL 看有没有对应视图/动作，比翻官网或源码仓库快。
+
+## G24 ★★★ 框架 AI 助手接入的四类「静默失效」（2026-11-28 ERP/web-td 实测，`e082b7a`）
+
+浮窗配方见 [`ai-assistant.md`](ai-assistant.md) §9。这四个坑的共同点：**都不报错**，只表现为「入口没出现」「答非所问」「输入框没了」「点了没反应」。
+
+### G24-1 vite 代理漏 `/Cube` → AI 入口永不显示
+
+症状：代码写完、开关也开了，页面右下角**始终没有悬浮球**；网络面板里 `/Cube/GetAiConfig` 返回 `200`，
+响应体却是 `<!DOCTYPE html>`（SPA 兜底页）。
+
+根因：代理白名单没有 `/Cube`，请求被 vite 的 history fallback 兜住并返回 `index.html`；
+前端 `JSON.parse` 失败被 `try/catch` 静默吞掉 → `enabled` 保持 `false`。**这是 H3「代理白名单」的直接后果**，
+而 H3 的清单里本来就有 `/Cube`——漏配属于偏离铁律。
+
+修法：`vite.config.ts` 的 server.proxy 补 `/Cube`（与 `/api` `/Auth` `/Mfa` `/Sso` `/Content` 并列）。
+自检：`curl -s -o /dev/null -w "%{content_type}" http://127.0.0.1:5174/Cube/GetAiConfig` → 必须是 `application/json`，出现 `text/html` 即漏配。
+
+### G24-2 `page` 塞路由名 → 实体工具全丢，助手「答非所问」
+
+症状：浮窗能开、能对话，但问「这个列表有哪些字段」时，回答泛泛而谈（「我无法看到当前页面数据」），
+且**没有任何错误**。
+
+根因：框架 `CubeAiChatRequest.Page` 的语义是**页面类型 `list`/`form`/`detail`**，不是路由名。
+把它写成 `route.name`（如 `SaleOrderList`）→ 服务端解析目标控制器能力时判定异常 →
+退回「非实体页」分支，只注册 `get_system_info`/`get_page_context`/`run_js`，
+`get_data_context`/`get_form_schema`/`fill_form` 全部不注册。
+
+修法：按路径后缀判定 `page`；`area`/`controller` 取 `route.meta.menuUrl` 拆段；`url` 用 `route.path`（勿 `fullPath`）。
+回归防线：单测断言 `payload.page === 'list'`、`payload.area === 'Scm'`——这条断言的价值在于**锁语义**，
+不是锁实现（语义漂移不会让任何测试自然变红）。
+
+### G24-3 `t-drawer :footer="false"` 连 `#footer` 插槽一起禁用 → 输入区不渲染
+
+症状：抽屉能弹出、标题正常、**底部输入框和发送按钮完全不存在**；不报错、无警告。
+
+根因：TDesign `t-drawer` 的 `footer={false}` 不是「隐藏默认页脚」，而是「禁用整个 footer 区域」，
+于是自定义 `<template #footer>` 也被丢弃——**插槽被吞掉，不是被覆盖**。
+
+修法：去掉 `:footer="false"`，只用 `#footer` 插槽自带布局；或显式 `:footer="true"` 并接管插槽内容。
+排查提示：这类「某块 DOM 凭空消失」优先怀疑**插槽/属性互斥**，而不是 v-if 条件写错——
+用组件测试 `attachTo: document.body` 后 `document.querySelector` 断在不在，比肉眼盯模板快。
+
+### G24-4 `EventSource` 调 `/Ai/AiChat` → 401，且无法补救
+
+症状：`EventSource` 连接立即失败或返回 401；改用 query 传 token 也无效。
+
+根因：该端点标注 `[EntityAuthorize(PermissionFlags.Detail)]`，需 `Authorization: Bearer`；
+`EventSource` 协议**不支持自定义请求头**，把 token 放 query 后端也不认。
+
+修法：`fetch` + `ReadableStream` 手工解析 SSE（帧 `data: {json}\n\n`，注意跨 chunk 半帧）；
+`AbortController` 顺带解决「停止生成」。这是 H1「唯一 HTTP 层」的**唯一豁免点**——
+豁免条件是「鉴权头必须复用同一令牌来源」，并在代码注释里写明理由，否则下次审查会被当违规改回去。

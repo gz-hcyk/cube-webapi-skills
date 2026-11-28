@@ -1,7 +1,7 @@
 ---
 name: cube-webapi-tdesign
 agent_created: true
-description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、自定义权限位、按钮权限位显隐、整块渲染、四列授权表格、授权列、只读全部两档、0 掩码段不落库、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky。"
+description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前端。基于 GetFields/GetPage 字段元数据驱动，列表/表单/详情页近零代码生成。核心两条规则：(1) 字段映射——列表页 xxxID 显示映射后的名称（不显示原始ID），表单页同字段渲染为映射源下拉（map/dataSource/关联实体）；(2) 组件选型——按后端字段自动选组件，如 ParentID 自动用树形表格+树形下拉。另含 X-Tenant-Id 多租户、GetPage.setting 按钮权限显隐、GetMenuTree 菜单树与 search 搜索栏。触发词：搭魔方 WebApi 前端、生成实体管理页面、对接 GetFields/GetPage、树形表格、字段映射、多租户前端、生成部署包、生产部署包、前端构建同步、vite base 路径、dist 同步 publish、生产上线构建、npm run build、新增实体验收、实体验收、枚举 LOV 值集（SetLov）、枚举下拉、外键下拉、角色权限设置、权限矩阵、RoleMenuEditor 接入、Permission 勾选、自定义权限位、按钮权限位显隐、整块渲染、四列授权表格、授权列、只读全部两档、0 掩码段不落库、菜单同层互斥展开、手风琴菜单、expand-mutex、同级菜单只展开一个、登录页文案、登录页不预填账号密码、登录页不选租户、登录页无租户输入框、注册页不选租户、注册页无租户输入框、认证页去掉租户编码、租户由登录响应头下发。tdesign-starter 初始化项目、td-starter init、tdesign-starter-cli、npx tdesign-starter-cli init、脚手架初始化前端工程、必须使用 tdesign-starter、工程资产对齐 CLI 基线、check-starter-align、td-starter 产物形态、骨架文件缺失、CLI prepare 脚本报错、npm install 失败 is-ci husky、AI 助手浮窗、框架内置 AI、AiChat、GetAiConfig、AISwitch、打字机效果、run_js、OperationResult。"
 ---
 
 # cube-webapi-tdesign —— 魔方 WebApi 的 TDesign Vue Next 前端
@@ -16,6 +16,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 |---|---|
 | 字段→控件全规则、选型优先级、校验规则 | `references/field-renderers.md` |
 | 排障（异常症状 → 根因 → 修复） | `references/troubleshooting.md`（9 组目录先定位症状组） |
+| 框架 AI 助手浮窗（SSE 对话 / 打字机 / `run_js` 浏览器工具） | `references/ai-assistant.md` + troubleshooting **G24** |
 | 登录/令牌/请求层契约 | `references/metadata-contract.md` + troubleshooting G1/G7 |
 | ConfigController<T> 单表单 | `references/config-controller.md` + `assets/core/components/cube/ConfigView.vue` |
 | 设计令牌完整规范 | `references/design-tokens.md` + `assets/core/styles/tokens.css` |
@@ -222,6 +223,7 @@ description: "为 NewLife.Cube 魔方 WebApi 后端生成 TDesign Vue Next 前�
 | 可选 | 特殊控制器专属页（`ConfigController<T>` / `ControllerBaseX`） | §4.17 / §4.18 |
 | 可选 | 搜索栏与统计行、一级菜单图标、角色权限编辑、TreeTable | §4.13 / §4.12.3 / §4.12.1 / §4.7 |
 | 可选 | 配方件三件：令牌板 / 金额输入 / 图标选择（**随 `assets/core/` 一并拷入即已在位**，接不接线由业务页决定） | §11.1 表 |
+| 可选 | 框架 AI 助手浮窗（受后端 `AISwitch` 门控，非业务必需；关时整组件不渲染） | §4.24 / `references/ai-assistant.md` |
 | 可选 | `category` 分 tab、多租户头、审计字段排除等精细化 | §4.19 / §4.9 |
 
 ## 一、核心哲学：继承式（配置式）页面
@@ -1001,7 +1003,22 @@ MVC ↔ 前端对应：`List.cshtml`→`ListPage`；`_List_Navbar/_Search/_Toolb
 **已知扩展端点接线（🧩 配方全在 page-catalog §5）**：角色权限树（`Role/PermissionTree`+`SavePermission`）、
 强制下线（`UserOnline/Kick`）、吊销令牌（`User/RevokeTokens`）、立即执行（`CronJob/ExecuteNow`）、
 统计图表（`GetChartData`）、值集四子表（`Lov/BatchSave*`）、订单指令（`OrderManager/GetInfo`）、
-地区地图（`Area/Map`）、AI 助手浮窗（`/Ai/AiChat` SSE + `/Ai/OperationResult`）、安全中心（User/Mfa/Sso 组合）。
+地区地图（`Area/Map`）、AI 助手浮窗（`/Ai/AiChat` SSE + `/Ai/OperationResult`，**配方 §4.24**）、安全中心（User/Mfa/Sso 组合）。
+
+### 4.24 框架 AI 助手浮窗（全局 SSE 对话 + 浏览器工具）
+
+**完整配方见 [`references/ai-assistant.md`](references/ai-assistant.md)**（契约取证路径、请求体逐字段语义、SSE 事件表、打字机参数、`run_js` 安全边界、验收清单、反模式）。此处只列会踩到的硬事实：
+
+| 事实 | 内容 |
+|---|---|
+| 端点 | `GET /Cube/GetAiConfig`（开关+配色）/ `POST /Ai/AiChat`（SSE）/ `POST /Ai/OperationResult`（浏览器工具回传），**根族无 `/api`** |
+| 鉴权 | `/Ai/*` 需 `[EntityAuthorize(Detail)]` ⇒ Bearer ⇒ **`EventSource` 不可用**，只能 `fetch` + `ReadableStream`（H1 的唯一豁免点，须在注释里写明理由） |
+| 开关 | 真源 `CubeSetting.AISwitch`；`aiSwitch`/`AISwitch` 两种键名都认；非 `true` 一律不渲染（fail-closed）。未开启则端到端无法验证，交付须声明缺口 |
+| `page` | **是页面类型 `list`/`form`/`detail`，不是路由名**。写错 → 服务端当非法类型 → 实体工具全丢 → 助手「答非所问」且不报错 |
+| `area` / `controller` | 取自 `route.meta.menuUrl`（`/Scm/SaleOrder` 拆段）；传错同上后果。`url` 传 `route.path`（勿 `fullPath`，会污染会话键） |
+| 事件 | `content_delta` 打字机；`thinking_*` 折叠；`tool_call_*` 轨迹；`run_js` 浏览器工具；`error`/`heartbeat`；**未知事件必须忽略**（向前兼容） |
+| `run_js` | 前端执行后**须回传** `OperationResult`，否则服务端工具调用挂 30s；回传体 `{ok,value,error}`，序列化须查环兜底 |
+| 两条静默失败 | ① vite 代理漏 `/Cube` → 返回 `200 text/html`，入口永不显示且无报错；② `t-drawer :footer="false"` 连 `#footer` 插槽一起禁用 → 输入区不渲染 |
 
 ## 四、字段类型 → 组件映射速查
 
